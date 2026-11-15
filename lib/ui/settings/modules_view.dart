@@ -12,6 +12,7 @@ import '../../models.dart';
 import '../../source_modules.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
@@ -365,8 +366,9 @@ class _CatalogPageState extends State<_CatalogPage> with _ModuleActions {
   Widget build(BuildContext context) {
     final bundled = widget.bundled;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(bundled ? '内置模块' : '模块商店'),
+      extendBodyBehindAppBar: true,
+      appBar: glassAppBar(
+        title: bundled ? '内置模块' : '模块商店',
         actions: [
           if (!bundled)
             BarButton(
@@ -397,7 +399,12 @@ class _CatalogPageState extends State<_CatalogPage> with _ModuleActions {
                 ),
               );
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              MediaQuery.paddingOf(context).top + kToolbarHeight + 8,
+              16,
+              24,
+            ),
             children: [
               if (warning.isNotEmpty) _Note(warning),
               if (_indexError ?? _error case final error?)

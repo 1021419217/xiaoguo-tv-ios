@@ -12,6 +12,7 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/follow_button.dart';
 import '../widgets/focus_ring.dart';
@@ -148,14 +149,21 @@ class _SearchPageState extends State<SearchPage> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
+      extendBodyBehindAppBar: true,
+      appBar: glassAppBar(
         titleSpacing: 0,
-        title: Padding(padding: const EdgeInsets.only(right: 16), child: field),
+        titleWidget: Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: field,
+        ),
       ),
       body: SafeArea(
-        top: false,
+        top: true,
         bottom: false,
-        child: FadeSwitcher(child: _body(context)),
+        child: Padding(
+          padding: const EdgeInsets.only(top: kToolbarHeight),
+          child: FadeSwitcher(child: _body(context)),
+        ),
       ),
     );
   }

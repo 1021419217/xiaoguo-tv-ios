@@ -121,6 +121,19 @@ abstract final class AppTheme {
         space: 1,
         thickness: 1,
       ),
+      // 分段标签栏（下载页等）也走黑白反色，不用主题蓝。
+      tabBarTheme: TabBarThemeData(
+        labelColor: dark ? Colors.white : scheme.primary,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        indicatorColor: dark ? Colors.white : scheme.primary,
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: Colors.transparent,
+        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surfaceContainerHigh,
         elevation: 0,
@@ -160,6 +173,26 @@ abstract final class AppTheme {
         iconColor: scheme.onSurfaceVariant,
         textColor: scheme.onSurface,
         minVerticalPadding: 8,
+      ),
+      // 全局提示条：与首页「切换分类」的玻璃胶囊同一套语言——
+      // 深色半透底 + 极细白描边 + 大圆角，悬浮在底栏之上。
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.black.withValues(alpha: dark ? 0.72 : 0.80),
+        elevation: 0,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          height: 1.3,
+        ),
+        actionTextColor: const Color(0xFF8EC5FF),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        dismissDirection: DismissDirection.down,
       ),
     );
 

@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../player/episode_grid.dart';
 import '../theme/motion.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/motion/motion_widgets.dart';
 import 'download_actions.dart';
 
@@ -189,14 +190,18 @@ class _DownloadPickerPageState extends State<DownloadPickerPage> {
     final form = AppScope.formFactorOf(context);
     if (form == FormFactor.phone) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('下载选集'),
+        extendBodyBehindAppBar: true,
+        appBar: glassAppBar(
+          title: '下载选集',
           actions: [_selectAllButton(), const SizedBox(width: 8)],
         ),
         body: SafeArea(
-          top: false,
+          top: true,
           bottom: false,
-          child: _grid(inset: 16, minCellWidth: 60, touch: true),
+          child: Padding(
+            padding: const EdgeInsets.only(top: kToolbarHeight),
+            child: _grid(inset: 16, minCellWidth: 60, touch: true),
+          ),
         ),
         bottomNavigationBar: SafeArea(
           child: Padding(

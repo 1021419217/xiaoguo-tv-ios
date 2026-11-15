@@ -5,6 +5,7 @@ import '../../models.dart';
 import '../search/search_page.dart';
 import '../settings/sources_view.dart';
 import '../shell/app_shell.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/choice_panel.dart';
 
 Future<void> pickSource(BuildContext anchor, LocalStore store) async {
@@ -23,8 +24,15 @@ Future<void> pickSource(BuildContext anchor, LocalStore store) async {
             onPressed: () => openPage<void>(
               anchor,
               (_) => Scaffold(
-                appBar: AppBar(title: const Text('站源管理')),
-                body: SourcesView(store: store),
+                extendBodyBehindAppBar: true,
+                appBar: glassAppBar(title: '站源管理'),
+                body: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: kToolbarHeight),
+                    child: SourcesView(store: store),
+                  ),
+                ),
               ),
             ),
           )

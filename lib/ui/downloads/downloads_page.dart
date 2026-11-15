@@ -10,6 +10,7 @@ import '../../source_modules.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
@@ -398,9 +399,10 @@ class _DownloadsPageState extends State<DownloadsPage>
   Widget _phone(BuildContext context, _View view, Widget body) {
     final selection = view.selection;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: selection == null
-          ? AppBar(
-              title: const Text('下载'),
+          ? glassAppBar(
+              title: '下载',
               actions: [
                 if (_pendingTab && view.pending.isNotEmpty) ...[
                   IconButton(
@@ -436,24 +438,29 @@ class _DownloadsPageState extends State<DownloadsPage>
                 child: _tabBar(4),
               ),
             )
-          : AppBar(
+          : glassAppBar(
+              title: _selectedTitle(selection),
               leading: IconButton(
                 tooltip: '退出编辑',
                 onPressed: () => setState(() => _selection = null),
                 icon: const Icon(Icons.close_rounded),
               ),
-              title: Text(_selectedTitle(selection)),
               actions: [_selectAll(view), const SizedBox(width: 8)],
             ),
       body: SafeArea(
-        top: false,
+        top: true,
         bottom: false,
-        child: Column(
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: kToolbarHeight + (selection == null ? 48 : 0),
+          ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
             Expanded(child: body),
           ],
+        ),
         ),
       ),
       bottomNavigationBar: selection == null

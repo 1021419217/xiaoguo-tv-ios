@@ -9,11 +9,12 @@ import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../widgets/frosted_header.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
-import '../widgets/page_header.dart';
 import '../widgets/search_field.dart';
 import '../widgets/status_view.dart';
 
@@ -312,70 +313,57 @@ class _HistoryPageState extends State<HistoryPage> {
     final selection = view.selection;
     final root = widget.root;
     return Scaffold(
-      appBar: root
-          ? null
-          : AppBar(
-              leading: selection == null
-                  ? null
-                  : IconButton(
-                      tooltip: '退出编辑',
-                      onPressed: _finishEditing,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-              title: FadeSwitcher(
-                duration: Motion.short,
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  key: ValueKey(selection == null),
-                  selection == null ? '观看记录' : '已选择 ${selection.length} 部',
-                ),
+      extendBodyBehindAppBar: true,
+      appBar: glassAppBar(
+        leading: !root
+            ? null
+            : selection == null
+            ? null
+            : IconButton(
+                tooltip: '退出编辑',
+                onPressed: _finishEditing,
+                icon: const Icon(Icons.close_rounded),
               ),
-              actions: [
-                FadeSwitcher(
-                  duration: Motion.short,
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: Row(
-                    key: ValueKey(selection == null),
-                    mainAxisSize: MainAxisSize.min,
-                    children: selection == null
-                        ? _browseActions(view, icons: false)
-                        : [_selectAll(view)],
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
+        titleWidget: FadeSwitcher(
+          duration: Motion.short,
+          alignment: AlignmentDirectional.centerStart,
+          child: GlassTitle(
+            key: ValueKey(selection == null),
+            title: selection == null ? '观看记录' : '已选择 ${selection.length} 部',
+          ),
+        ),
+        actions: [
+          FadeSwitcher(
+            duration: Motion.short,
+            alignment: AlignmentDirectional.centerEnd,
+            child: Row(
+              key: ValueKey(selection == null),
+              mainAxisSize: MainAxisSize.min,
+              children: selection == null
+                  ? _browseActions(view, icons: true)
+                  : [_selectAll(view)],
             ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
-        top: root,
+        top: true,
         bottom: false,
-        child: _content(
+        child: Padding(
+          padding: const EdgeInsets.only(top: kToolbarHeight),
+          child: _content(
           context,
           view,
           inset: 16,
           header: [
-            if (root)
-              FadeSwitcher(
-                child: selection == null
-                    ? PageHeader(
-                        key: const ValueKey(false),
-                        title: '观看记录',
-                        actions: _browseActions(view, icons: false),
-                      )
-                    : PageHeader(
-                        key: const ValueKey(true),
-                        title: '已选择 ${selection.length} 部',
-                        actions: [
-                          _selectAll(view),
-                          _textButton('完成', _finishEditing),
-                        ],
-                      ),
-              ),
             Padding(
               padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
               child: _search(),
             ),
             ?_sources(view, inset: 16, scroll: true),
           ],
+        ),
         ),
       ),
       bottomNavigationBar: selection == null

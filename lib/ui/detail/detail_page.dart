@@ -12,6 +12,7 @@ import '../downloads/download_picker_page.dart';
 import '../player/playback_handle.dart';
 import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_backdrop.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/focus_ring.dart';
@@ -463,14 +464,8 @@ class _DetailPageState extends State<DetailPage> {
   );
 
   PreferredSizeWidget _appBar(DramaDetails details, double height) {
-    final colors = Theme.of(context).colorScheme;
-    return AppBar(
+    return glassAppBar(
       toolbarHeight: height,
-      backgroundColor: WidgetStateColor.resolveWith(
-        (states) => states.contains(WidgetState.scrolledUnder)
-            ? colors.surfaceContainer
-            : Colors.transparent,
-      ),
       actions: [
         IconButton(
           tooltip: '更新剧集信息',

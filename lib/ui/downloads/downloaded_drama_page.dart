@@ -20,6 +20,7 @@ import '../player/playback_handle.dart';
 import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
@@ -330,22 +331,23 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
   ) {
     final drama = item?.drama ?? widget.drama;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: selection == null || item == null
-          ? AppBar(
-              title: Text(drama.title),
+          ? glassAppBar(
+              title: drama.title,
               actions: [
                 _textButton('详情', () => _openDetail(drama)),
                 _editButton(item, icon: false),
                 const SizedBox(width: 8),
               ],
             )
-          : AppBar(
+          : glassAppBar(
+              title: '已选择 ${selection.length} 集',
               leading: IconButton(
                 tooltip: '退出编辑',
                 onPressed: () => setState(() => _selection = null),
                 icon: const Icon(Icons.close_rounded),
               ),
-              title: Text('已选择 ${selection.length} 集'),
               actions: [
                 _fillButton(drama, icon: false),
                 _selectAll(item, selection),
@@ -353,9 +355,12 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
               ],
             ),
       body: SafeArea(
-        top: false,
+        top: true,
         bottom: false,
-        child: _content(context, item, selection, inset: 16),
+        child: Padding(
+          padding: const EdgeInsets.only(top: kToolbarHeight),
+          child: _content(context, item, selection, inset: 16),
+        ),
       ),
       bottomNavigationBar: selection == null || item == null
           ? null
