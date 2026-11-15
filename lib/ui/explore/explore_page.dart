@@ -12,6 +12,7 @@ import '../cover_blur.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../detail/detail_page.dart';
+import '../history/history_page.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/category_tabs.dart';
 import '../widgets/choice_panel.dart';
@@ -39,6 +40,10 @@ class ExplorePageState extends State<ExplorePage> {
   final _search = TextEditingController();
   final _tabsKey = GlobalKey();
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
+
+  /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
+  final _headerKey = GlobalKey();
+  double _headerH = 0;
   String _shown = '';
 
   @override
@@ -55,6 +60,17 @@ class ExplorePageState extends State<ExplorePage> {
     super.dispose();
   }
 
+
+  void _measureHeader() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = _headerKey.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      final height = box.size.height;
+      if ((height - _headerH).abs() < 0.5) return;
+      setState(() => _headerH = height);
+    });
+  }
 
   Future<void> refresh() async {
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -217,24 +233,48 @@ class ExplorePageState extends State<ExplorePage> {
           if (!television || explore.feed!.items.isEmpty) tabs,
         ],
       );
+      // 手机端：顶栏浮在内容之上做磨砂，内容延伸到屏幕顶（含状态栏），
+      // 初始用留白让开顶栏，滚动后卡片从顶栏背后经过并被模糊透出，
+      // 与底栏导航的「内容透过模糊」完全同一套逻辑。
+      if (form == FormFactor.phone) {
+        final topPad = MediaQuery.paddingOf(context).top;
+        final topInset = _headerH > 0 ? _headerH : topPad + 112;
+        _measureHeader();
+        return Scaffold(
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: _swipeTabs(
+                  explore,
+                  form,
+                  _content(explore, inset, false, tabs, topInset: topInset),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: FrostedHeader(
+                  key: _headerKey,
+                  child: SafeArea(bottom: false, child: header),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return Scaffold(
         body: SafeArea(
           bottom: false,
-          child: Stack(
+          child: Column(
             children: [
-              Positioned.fill(
-                child: Column(
-                  children: [
-                    // 顶栏整体铺一层磨砂玻璃；电视端保留原本的实心顶栏。
-                    if (television) header else FrostedHeader(child: header),
-                    Expanded(
-                      child: _swipeTabs(
-                        explore,
-                        form,
-                        _content(explore, inset, television, tabs),
-                      ),
-                    ),
-                  ],
+              // 顶栏整体铺一层磨砂玻璃；电视端保留原本的实心顶栏。
+              if (television) header else FrostedHeader(child: header),
+              Expanded(
+                child: _swipeTabs(
+                  explore,
+                  form,
+                  _content(explore, inset, television, tabs),
                 ),
               ),
             ],
@@ -270,13 +310,18 @@ class ExplorePageState extends State<ExplorePage> {
     ExploreFeed explore,
     double inset,
     bool television,
-    Widget tabs,
-  ) {
+    Widget tabs, {
+    // 手机端顶栏是浮层时，内容首部留出的空白，避免初始内容被磨砂顶栏压住。
+    double topInset = 0,
+  }) {
     final feed = explore.feed!;
     final hero = _hero(explore);
     final items = explore.items;
     if (feed.items.isEmpty) {
-      return FadeSwitcher(child: _status(feed));
+      final status = FadeSwitcher(child: _status(feed));
+      return topInset > 0
+          ? Padding(padding: EdgeInsets.only(top: topInset), child: status)
+          : status;
     }
     final phone = AppScope.formFactorOf(context) == FormFactor.phone;
     final desktop = AppScope.formFactorOf(context) == FormFactor.window;
@@ -290,6 +335,7 @@ class ExplorePageState extends State<ExplorePage> {
       tabs,
       phone,
       desktop,
+      topInset,
     );
   }
 
@@ -327,6 +373,7 @@ class ExplorePageState extends State<ExplorePage> {
     Widget tabs,
     bool phone,
     bool desktop,
+    double topInset,
   ) {
     final heroSection = hero == null
         ? const SizedBox(key: ValueKey('none'), width: double.infinity)
@@ -341,6 +388,9 @@ class ExplorePageState extends State<ExplorePage> {
           controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // 顶栏留白：随内容一起滚动，滚动后卡片进入顶栏背后被模糊透出。
+            if (topInset > 0)
+              SliverToBoxAdapter(child: SizedBox(height: topInset)),
             if (television)
               SliverPadding(
                 padding: const EdgeInsets.only(top: 8),
@@ -381,7 +431,8 @@ class ExplorePageState extends State<ExplorePage> {
                 inset,
                 8,
                 inset,
-                television ? 27 : 16,
+                // 底部留出悬浮胶囊导航的空间。
+                television ? 27 : (phone ? 100 : 16),
               ),
               sliver: SliverToBoxAdapter(child: FeedFooter(feed: feed)),
             ),
@@ -426,21 +477,18 @@ class ExplorePageState extends State<ExplorePage> {
 
   /// 「继续观看 / 今日推荐」不再首屏铺大封面，只留一条轻量入口，
   /// 点进去（二级详情页）才显示大封面和内容。
+  /// 「最近观看」在首页只留一个不含任何内容的入口，不显示剧名、集数与封面，
+  /// 避免别人拿到手机就能看出在看什么；点进去（历史页）才展示具体内容。
   Widget? _hero(ExploreFeed explore) {
-    if (explore.resume case final entry?) {
-      final drama = entry.drama;
-      final total = drama.episodes;
-      final next = entry.finished && entry.episode < total
-          ? entry.episode + 1
-          : entry.episode;
+    if (explore.resume != null) {
       return _ResumeBar(
-        key: ValueKey(('resume', drama.id)),
-        title: '继续观看 · ${drama.title}',
-        meta: total > 0
-            ? '看到第 ${entry.episode} 集 · 共 $total 集 · 续看第 $next 集'
-            : '看到第 ${entry.episode} 集',
-        onTap: () => _open(drama),
-        onPlay: () => _open(drama, autoplay: true),
+        key: const ValueKey('resume-entry'),
+        title: '最近观看',
+        meta: '',
+        onTap: () => openPage<void>(
+          context,
+          (_) => HistoryPage(store: widget.store),
+        ),
       );
     }
     if (explore.featured case final drama?) {
@@ -459,20 +507,20 @@ class ExplorePageState extends State<ExplorePage> {
   }
 }
 
-/// 轻量入口条：点整条进详情页（大封面在二级显示），右侧播放键直接续播。
+/// 轻量入口条：不展示任何封面与剧集信息，点整条进二级页查看内容。
 class _ResumeBar extends StatelessWidget {
   const _ResumeBar({
     super.key,
     required this.title,
     required this.meta,
     required this.onTap,
-    required this.onPlay,
+    this.onPlay,
   });
 
   final String title;
   final String meta;
   final VoidCallback onTap;
-  final VoidCallback onPlay;
+  final VoidCallback? onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -518,20 +566,27 @@ class _ResumeBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              SizedBox(
-                width: 34,
-                height: 34,
-                child: IconButton(
-                  onPressed: onPlay,
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.play_circle_fill_rounded,
-                    size: 28,
-                    color: Colors.white,
+              if (onPlay case final play?)
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: IconButton(
+                    onPressed: play,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.play_circle_fill_rounded,
+                      size: 28,
+                      color: Colors.white,
+                    ),
+                    tooltip: '播放',
                   ),
-                  tooltip: '播放',
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 22,
+                  color: Colors.white.withValues(alpha: 0.5),
                 ),
-              ),
             ],
           ),
         ),
