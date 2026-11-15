@@ -153,6 +153,22 @@ type SeasonProvider interface {
 	Seasons(ctx context.Context, sourceID string) ([]Season, error)
 }
 
+// AuthorRef 描述一位内容作者（上传者）。ID 与 Name 至少有一个可用。
+type AuthorRef struct {
+	Source string `json:"source,omitempty"`
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name,omitempty"`
+	URL    string `json:"url,omitempty"`
+}
+
+// AuthorPager 由支持「按作者取作品」的站源实现。模块源可选导出 author 函数，
+// 未导出时内核会退回「用作者名搜索并过滤」的通用路径。
+type AuthorPager interface {
+	AuthorPage(ctx context.Context, author AuthorRef, page int) ([]Drama, bool, error)
+}
+
+var ErrAuthorUnsupported = errors.New("该站源不支持作者主页")
+
 var ErrCategoriesIncomplete = errors.New("categories incomplete")
 
 type ProviderFactory func(host Host) Provider

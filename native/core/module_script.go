@@ -30,6 +30,10 @@ var moduleInvoker = goja.MustCompile("module-invoker", `(function(exports) {
 	};
 })`, true)
 
+var moduleProbe = goja.MustCompile("module-probe", `(function(exports, name) {
+	return typeof exports[name] === "function";
+})`, true)
+
 type jsProvider struct {
 	module    *jsModule
 	host      Host
@@ -43,6 +47,8 @@ type jsProvider struct {
 type jsInstance struct {
 	vm        *goja.Runtime
 	invoke    goja.Callable
+	has       goja.Callable
+	exports   goja.Value
 	ctx       context.Context
 	exclusive bool
 }
@@ -259,6 +265,42 @@ func (p *jsProvider) ResolveMedia(ctx context.Context, task Task) (ProviderMedia
 	return media.providerMedia(), nil
 }
 
+// hasExport 判断模块是否导出了指定函数，用于可选能力的探测（不写进 manifest 也能用）。
+func (p *jsProvider) hasExport(ctx context.Context, name string) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	instance, err := p.acquire(ctx)
+	if err != nil {
+		return false
+	}
+	defer func() { p.idle <- instance }()
+	if instance.has == nil || instance.exports == nil {
+		return false
+	}
+	value, err := instance.has(goja.Undefined(), instance.exports, instance.vm.ToValue(name))
+	if err != nil || value == nil {
+		return false
+	}
+	return value.ToBoolean()
+}
+
+// AuthorPage 走模块可选的 author(authorId, authorName, page) 导出。
+// 模块没写这个函数时返回 ErrAuthorUnsupported，由内核退回到关键词搜索。
+func (p *jsProvider) AuthorPage(ctx context.Context, author AuthorRef, page int) ([]Drama, bool, error) {
+	if !p.hasExport(ctx, "author") {
+		return nil, false, ErrAuthorUnsupported
+	}
+	var result jsDramaPage
+	if err := p.call(ctx, "author", &result, author.ID, author.Name, page); err != nil {
+		return nil, false, err
+	}
+	if result.Warning != "" && len(result.Items) == 0 {
+		return result.Items, result.HasMore, errors.New(result.Warning)
+	}
+	return result.Items, result.HasMore, nil
+}
+
 func (p *jsProvider) call(ctx context.Context, function string, result any, arguments ...any) error {
 	ctx, cancel := context.WithTimeout(ctx, moduleCallTimeout)
 	defer cancel()
@@ -357,6 +399,11 @@ func (p *jsProvider) newInstance() (*jsInstance, error) {
 		return nil, moduleError(instance.ctx, err)
 	}
 	instance.invoke, _ = goja.AssertFunction(bound)
+	instance.exports = module.Get("exports")
+	if probe, err := vm.RunProgram(moduleProbe); err == nil {
+		check, _ := goja.AssertFunction(probe)
+		instance.has = check
+	}
 	return instance, nil
 }
 

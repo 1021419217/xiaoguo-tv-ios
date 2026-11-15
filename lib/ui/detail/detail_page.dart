@@ -22,6 +22,7 @@ import '../widgets/choice_panel.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
 import '../widgets/swipe_switch.dart';
+import 'author_page.dart';
 
 class _Metrics {
   const _Metrics({
@@ -219,6 +220,12 @@ class _DetailPageState extends State<DetailPage> {
   PlaybackHandle? _watched;
   late bool _autoplayPending = widget.autoplay;
   late bool _curtain = widget.autoplay;
+  static final _qualityCache =
+      <String, ({QualityProbe probe, DateTime at})>{};
+  QualityProbe? _probe;
+  String _probeKey = '';
+  bool _probing = false;
+  Timer? _probeDelay;
 
   @override
   void didChangeDependencies() {
@@ -232,6 +239,7 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   void dispose() {
+    _probeDelay?.cancel();
     _handle?.dispose();
     _details?.dispose();
     for (final node in [
@@ -303,6 +311,75 @@ class _DetailPageState extends State<DetailPage> {
     _watched?.session.syncSeasons(seasons);
     _preopen();
     unawaited(_autoplay());
+    _scheduleQualityProbe();
+  }
+
+  /// 详情就绪后晚一点再探测清晰度，避免和详情请求抢线路；
+  /// 只有源真的给了多个码率才显示「画质」区块。结果缓存 15 分钟。
+  void _scheduleQualityProbe() {
+    final details = _details;
+    if (details == null || details.episodes.isEmpty || _probeDelay != null) {
+      return;
+    }
+    final index = details.currentIndex ?? 0;
+    if (index < 0 || index >= details.episodes.length) return;
+    final episode = details.episodes[index];
+    final key = '${details.drama.id}\u0000${episode.number}';
+    if (_probeKey == key && _probe != null) return;
+    final cached = _qualityCache[key];
+    if (cached != null &&
+        DateTime.now().difference(cached.at) < const Duration(minutes: 15)) {
+      if (!mounted) return;
+      setState(() {
+        _probeKey = key;
+        _probe = cached.probe;
+      });
+      return;
+    }
+    _probeDelay = Timer(const Duration(milliseconds: 700), () {
+      _probeDelay = null;
+      unawaited(_probeQualities(details, episode, key));
+    });
+  }
+
+  Future<void> _probeQualities(
+    DramaDetails details,
+    Episode episode,
+    String key,
+  ) async {
+    if (_probing || !mounted) return;
+    _probing = true;
+    try {
+      final probe = await AppScope.of(context).repository
+          .qualities(details.drama, episode)
+          .timeout(const Duration(seconds: 12));
+      if (!mounted) return;
+      _qualityCache[key] = (probe: probe, at: DateTime.now());
+      setState(() {
+        _probeKey = key;
+        _probe = probe;
+      });
+    } catch (_) {
+      // 解析不出来就当这个源没给清晰度，区块留空；同样缓存一段时间，
+      // 免得每次刷新详情都去敲一次站源。
+      if (mounted) {
+        _qualityCache[key] = (
+          probe: const QualityProbe(),
+          at: DateTime.now(),
+        );
+      }
+    } finally {
+      _probing = false;
+    }
+  }
+
+  Future<void> _selectQuality(int value) async {
+    if (widget.store.playbackPreferences.quality == value) return;
+    await widget.store.setPlaybackPreferences(
+      widget.store.playbackPreferences.copyWith(quality: value),
+    );
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _autoplay() async {
@@ -559,10 +636,20 @@ class _DetailPageState extends State<DetailPage> {
                           padding: const EdgeInsets.only(top: 10),
                           child: _enter(2, tags),
                         ),
+                      if (_infoSheet(drama, m) case final info?)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _enter(4, info),
+                        ),
                       if (drama.description.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: _enter(3, _description(drama, m)),
+                        ),
+                      if (_qualitySection(m) case final quality?)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: _enter(5, quality),
                         ),
                       if (details.warning.isNotEmpty)
                         Padding(
@@ -678,6 +765,11 @@ class _DetailPageState extends State<DetailPage> {
             padding: const EdgeInsets.only(top: 10),
             child: _enter(2, tags),
           ),
+        if (_infoSheet(drama, m) case final info?)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _enter(4, info),
+          ),
         Padding(
           padding: EdgeInsets.only(top: desktop ? 22 : 20),
           child: Row(
@@ -688,6 +780,11 @@ class _DetailPageState extends State<DetailPage> {
             ],
           ),
         ),
+        if (_qualitySection(m) case final quality?)
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: _enter(5, quality),
+          ),
         if (drama.description.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(top: desktop ? 22 : 20),
@@ -1035,6 +1132,11 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                     if (drama.onlineDate.isNotEmpty)
                       Text('${drama.onlineDate} 上线', style: sub),
+                    if (drama.hasAuthor)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _authorEntry(drama, m),
+                      ),
                     if (drama.tags.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
@@ -1075,6 +1177,11 @@ class _DetailPageState extends State<DetailPage> {
             ),
           ],
         ),
+        if (_infoSheet(drama, m) case final info?)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: _enter(4, info),
+          ),
         Padding(
           padding: const EdgeInsets.only(top: 24),
           child: Row(
@@ -1090,6 +1197,11 @@ class _DetailPageState extends State<DetailPage> {
             ],
           ),
         ),
+        if (_qualitySection(m) case final quality?)
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: _enter(5, quality),
+          ),
         if (drama.description.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 18),
@@ -1253,6 +1365,7 @@ class _DetailPageState extends State<DetailPage> {
           ),
         ),
         Text(meta.join(' · '), style: sub(m.meta)),
+        if (drama.hasAuthor) _authorEntry(drama, m),
         if (drama.score.isNotEmpty)
           Text('评分 ${drama.score}', style: sub(m.meta)),
         if (drama.category.isNotEmpty) Text(drama.category, style: sub(m.meta)),
@@ -1270,8 +1383,66 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
-  Widget _followingHeadline(DramaDetails details, _Metrics m, double top) =>
-      ConstrainedBox(
+  /// 作者入口：站源拿到作者信息就显示，点进去看同一作者在本源的其它作品。
+  /// 取数由原生 authorCatalog 统一兜底，不挑源。
+  Widget _authorEntry(Drama drama, _Metrics m) {
+    final colors = Theme.of(context).colorScheme;
+    final name = drama.author.trim().isEmpty ? '作者' : drama.author.trim();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FocusRing(
+        radius: 999,
+        child: Material(
+          color: colors.onSurface.withValues(alpha: 0.055),
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openAuthor(drama),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 5,
+                children: [
+                  Icon(
+                    Icons.person_outline_rounded,
+                    size: 15,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: m.tag,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 15,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openAuthor(Drama drama) => openPage<void>(
+    context,
+    (_) => AuthorPage(
+      store: widget.store,
+      source: drama.source,
+      author: drama.author,
+      authorId: drama.authorId,
+      authorUrl: drama.authorUrl,
+    ),
+  );
+
+  Widget _followingHeadline(DramaDetails details, _Metrics m, double top) =>      ConstrainedBox(
         constraints: BoxConstraints(minHeight: m.cover.height - top),
         child: IntrinsicHeight(
           child: Column(
@@ -1326,6 +1497,204 @@ class _DetailPageState extends State<DetailPage> {
             ),
           ),
       ],
+    );
+  }
+
+  /// 作品资料表：源给什么就列什么，一项都没有就整段不出现。
+  Widget? _infoSheet(Drama drama, _Metrics m) {
+    final rows = <(String, String, bool)>[
+      if (drama.serial.isNotEmpty) ('番号', drama.serial, true),
+      if (drama.actors.isNotEmpty) ('主演', drama.actors.join(' / '), false),
+      if (drama.releaseDate.isNotEmpty) ('发行', drama.releaseDate, false),
+      if (drama.durationText.isNotEmpty) ('时长', drama.durationText, false),
+      if (drama.maker.isNotEmpty) ('片商', drama.maker, false),
+      if (drama.director.isNotEmpty) ('导演', drama.director, false),
+      ..._metaRows(drama.meta),
+    ];
+    if (rows.isEmpty) return null;
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (label, value, copyable) in rows)
+          _infoRow(label, value, m, colors, copyable: copyable),
+      ],
+    );
+  }
+
+  Widget _infoRow(
+    String label,
+    String value,
+    _Metrics m,
+    ColorScheme colors, {
+    bool copyable = false,
+  }) {
+    final text = Text(
+      value,
+      style: TextStyle(fontSize: m.note, height: 1.55),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: m.note,
+                height: 1.55,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: copyable
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _copyValue(value),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 6,
+                      children: [
+                        Flexible(child: text),
+                        Icon(
+                          Icons.copy_rounded,
+                          size: m.tag,
+                          color: colors.onSurfaceVariant.withValues(alpha: .7),
+                        ),
+                      ],
+                    ),
+                  )
+                : text,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyValue(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1400),
+        content: Text('已复制 $value'),
+      ),
+    );
+  }
+
+  List<(String, String, bool)> _metaRows(Map<String, String> meta) {
+    final rows = <(String, String, bool)>[];
+    for (final entry in meta.entries) {
+      if (entry.value.trim().isEmpty) continue;
+      final label = metaLabel(entry.key);
+      if (label.isEmpty) continue;
+      rows.add((label, entry.value.trim(), false));
+      if (rows.length >= 8) break;
+    }
+    return rows;
+  }
+
+  /// 画质选择：只有源真的返回多档码率时才出现，否则这一段留空。
+  Widget? _qualitySection(_Metrics m) {
+    final probe = _probe;
+    if (probe == null || probe.qualities.length < 2) return null;
+    final colors = Theme.of(context).colorScheme;
+    final selected = widget.store.playbackPreferences.quality;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          spacing: 8,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '画质',
+              style: TextStyle(fontSize: m.meta, fontWeight: FontWeight.w700),
+            ),
+            if (probe.hls)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  'HLS 自适应',
+                  style: TextStyle(
+                    fontSize: m.tag - 1,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final quality in probe.qualities)
+              _qualityChip(quality, '${quality}P', selected == quality, m),
+            _qualityChip(0, '自动', selected == 0, m, trailing: probe.hls ? 'HLS' : ''),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _qualityChip(
+    int value,
+    String label,
+    bool selected,
+    _Metrics m, {
+    String trailing = '',
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return FocusRing(
+      radius: 12,
+      child: Material(
+        color: selected
+            ? colors.primary.withValues(alpha: .16)
+            : colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _selectQuality(value),
+          child: Container(
+            width: 96,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected
+                    ? colors.primary.withValues(alpha: .55)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 1,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: m.note,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? colors.primary : colors.onSurface,
+                  ),
+                ),
+                if (trailing.isNotEmpty)
+                  Text(
+                    trailing,
+                    style: TextStyle(
+                      fontSize: m.tag - 1,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2202,4 +2571,57 @@ class _DescriptionDialogState extends State<_DescriptionDialog> {
       ],
     ),
   );
+}
+
+/// 站源资料字段的常见键名 → 中文标签。命中不了的键按原样美化显示，
+/// 这样没适配过的源也能把「番号 / 发行 / 地区」这类信息列出来。
+const _metaLabels = <String, String>{
+  'area': '地区',
+  'country': '地区',
+  'region': '地区',
+  'nation': '地区',
+  'language': '语言',
+  'lang': '语言',
+  'year': '年份',
+  'pubyear': '年份',
+  'series': '系列',
+  'seriesname': '系列',
+  'quality': '画质',
+  'resolution': '画质',
+  'definition': '画质',
+  'status': '状态',
+  'state': '状态',
+  'playcount': '播放',
+  'hot': '热度',
+  'popularity': '热度',
+  'likes': '点赞',
+  'favorites': '收藏',
+  'collectcount': '收藏',
+  'rating': '评分',
+  'rate': '评分',
+  'remark': '备注',
+  'note': '说明',
+  'version': '版本',
+  'episode': '集数',
+  'currentepisode': '当前集',
+  'size': '大小',
+  'filesize': '大小',
+  'format': '格式',
+  'type': '类型',
+  'genre': '类型',
+  'company': '公司',
+  'distributor': '发行方',
+  'actress': '演员',
+  'actresses': '演员',
+  'url2': '',
+};
+
+String metaLabel(String key) {
+  final normalized = key.replaceAll('_', '').replaceAll('-', '').toLowerCase();
+  final known = _metaLabels[normalized];
+  if (known != null) return known;
+  if (RegExp(r'[\u4e00-\u9fa5]').hasMatch(key)) return key;
+  if (!RegExp(r'^[A-Za-z][A-Za-z0-9_\- ]{1,23}$').hasMatch(key)) return '';
+  final spaced = key.replaceAll('_', ' ');
+  return spaced[0].toUpperCase() + spaced.substring(1);
 }

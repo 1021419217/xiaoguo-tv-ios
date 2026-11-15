@@ -62,6 +62,17 @@ type LibraryDrama struct {
 	Tags           []string `json:"tags,omitempty"`
 	ReleaseStatus  string   `json:"releaseStatus,omitempty"`
 	Badge          string   `json:"badge,omitempty"`
+	Author         string   `json:"author,omitempty"`
+	AuthorID       string   `json:"authorId,omitempty"`
+	AuthorURL      string   `json:"authorUrl,omitempty"`
+	Actors         []string `json:"actors,omitempty"`
+	Serial         string   `json:"serial,omitempty"`
+	ReleaseDate    string   `json:"releaseDate,omitempty"`
+	DurationText   string   `json:"durationText,omitempty"`
+	Maker          string   `json:"maker,omitempty"`
+	Director       string   `json:"director,omitempty"`
+
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
 type nativeInput struct {
@@ -83,6 +94,9 @@ type nativeInput struct {
 	Page            int                     `json:"page"`
 	Query           string                  `json:"query"`
 	Category        string                  `json:"category"`
+	Author          string                  `json:"author"`
+	AuthorID        string                  `json:"authorId"`
+	AuthorURL       string                  `json:"authorUrl"`
 	Drama           LibraryDrama            `json:"drama"`
 	Chapter         Chapter                 `json:"chapter"`
 	Index           int                     `json:"index"`
@@ -209,7 +223,12 @@ func NativeNormalize(drama Drama) LibraryDrama {
 		Description: FirstNonEmpty(drama.Desc, drama.Intro), Cover: cover, Episodes: episodes,
 		Category: nativeDramaCategory(drama), VIP: drama.VIP,
 		Heat: drama.Heat, Views: drama.Views, OnlineDate: ProviderReleaseDate(drama.OnlineDate), Score: NativeDramaScore(drama.Score),
-		Tags: append([]string(nil), drama.Tags...), ReleaseStatus: drama.ReleaseStatus, Badge: drama.Badge}
+		Tags: append([]string(nil), drama.Tags...), ReleaseStatus: drama.ReleaseStatus, Badge: drama.Badge,
+		Author: strings.TrimSpace(drama.Author), AuthorID: strings.TrimSpace(drama.AuthorID), AuthorURL: strings.TrimSpace(drama.AuthorURL),
+		Actors: append([]string(nil), drama.Actors...), Serial: strings.TrimSpace(drama.Serial),
+		ReleaseDate: FirstNonEmpty(strings.TrimSpace(drama.ReleaseDate), ProviderReleaseDate(drama.OnlineDate)),
+		DurationText: strings.TrimSpace(drama.DurationText), Maker: strings.TrimSpace(drama.Maker),
+		Director: strings.TrimSpace(drama.Director), Meta: drama.Meta}
 }
 
 func NativeDramaScore(score string) string {
@@ -435,6 +454,10 @@ func nativeDispatch(input nativeInput) (any, error) {
 		return plan, err
 	case "catalog":
 		return engine.nativeCatalog(ctx, input)
+	case "authorCatalog":
+		return engine.nativeAuthorCatalog(ctx, input)
+	case "qualities":
+		return engine.nativeQualities(ctx, input)
 	case "cached":
 		if !ValidNativeCategory(canonicalProviderSource(input.Source), input.Category) {
 			return nil, errors.New("内容分类无效")
@@ -617,12 +640,23 @@ func (engine *nativeEngine) nativeDetail(ctx context.Context, drama LibraryDrama
 	if len(chapters) == 0 {
 		return nil, errors.New("该剧暂时没有可播放的分集")
 	}
+	normalized := NativeNormalize(raw)
 	if raw.ID == drama.ID {
-		drama = MergeNativeDrama(drama, NativeNormalize(raw))
+		drama = MergeNativeDrama(drama, normalized)
 	}
 	drama.Source, drama.SourceID, drama.Episodes = source, sourceID, len(chapters)
 	if p.Descriptor().KeepDetailEpisodes {
-		drama.Episodes = max(drama.Episodes, NativeNormalize(raw).Episodes)
+		drama.Episodes = max(drama.Episodes, normalized.Episodes)
+	}
+	// 详情页是拿作者信息最可靠的时机：列表里没有作者，详情里往往有。
+	if drama.Author == "" {
+		drama.Author = normalized.Author
+	}
+	if drama.AuthorID == "" {
+		drama.AuthorID = normalized.AuthorID
+	}
+	if drama.AuthorURL == "" {
+		drama.AuthorURL = normalized.AuthorURL
 	}
 	warning := ""
 	if err := engine.saveDetailMetadata(drama); err != nil {

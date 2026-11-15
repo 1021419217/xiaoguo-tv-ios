@@ -204,9 +204,20 @@ abstract class AppRepository {
     bool force = false,
   });
   Future<CatalogPage> cached(String source, {String category = ''});
+  /// 取某位作者在该站源里的其它作品。站源不支持时抛 AppFailure。
+  Future<CatalogPage> authorCatalog(
+    String source, {
+    String author = '',
+    String authorId = '',
+    String authorUrl = '',
+    int page = 1,
+  }) async => throw AppFailure('该站源暂不支持作者主页');
   Future<String> cover(Drama drama, {bool force = false});
   bool coverCached(Drama drama) => false;
   Future<DramaDetail> detail(Drama drama);
+  /// 探测某一集的可用清晰度（只解析播放地址，不建会话、不预取）。
+  Future<QualityProbe> qualities(Drama drama, Episode episode) async =>
+      const QualityProbe();
   Future<PlaybackPlan> resolve(Drama drama, Episode episode, {int quality = 0});
   Future<PlaybackPlan> fallback(PlaybackPlan current);
   Future<void> cancelPlayback();
@@ -656,6 +667,7 @@ class NativeRepository extends AppRepository {
             'detail',
             'seasons',
             'metadata',
+            'qualities',
             'resolve',
             'preload',
             'enqueueDownloads',
@@ -910,6 +922,26 @@ class NativeRepository extends AppRepository {
         }),
       );
   @override
+  Future<CatalogPage> authorCatalog(
+    String source, {
+    String author = '',
+    String authorId = '',
+    String authorUrl = '',
+    int page = 1,
+  }) async {
+    _authorize(source);
+    return CatalogPage.fromJson(
+      await _read('author-$source-$authorId-$author', {
+        'action': 'authorCatalog',
+        'source': source,
+        'author': author,
+        'authorId': authorId,
+        'authorUrl': authorUrl,
+        'page': page,
+      }),
+    );
+  }
+  @override
   bool coverCached(Drama drama) =>
       _coverPaths.containsKey('${drama.id}\u0000${drama.cover}');
 
@@ -961,6 +993,17 @@ class NativeRepository extends AppRepository {
         DramaSeason.fromJson(Map<String, dynamic>.from(row as Map)),
     ];
   }
+
+  @override
+  Future<QualityProbe> qualities(Drama drama, Episode episode) async =>
+      QualityProbe.fromJson(
+        await _read('qualities-${drama.id}-${episode.number}', {
+          'action': 'qualities',
+          'drama': drama.toJson(),
+          'chapter': episode.raw,
+          'index': episode.number,
+        }),
+      );
 
   @override
   Future<PlaybackPlan> resolve(

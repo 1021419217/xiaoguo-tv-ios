@@ -54,7 +54,7 @@ func nativeAuthorizeInput(input nativeInput) error {
 		if !found || !nativeSourceAvailable(board.Source) {
 			return errNativeBuildSource
 		}
-	case "catalog", "cached", "categories":
+	case "catalog", "cached", "categories", "authorCatalog":
 		if !nativeSourceAvailable(input.Source) {
 			return errNativeBuildSource
 		}
@@ -62,11 +62,11 @@ func nativeAuthorizeInput(input nativeInput) error {
 		if input.Command == "play" && !nativeChapterAvailable(input.Drama, input.Chapter) {
 			return errNativeBuildSource
 		}
-	case "cover", "prepareCover", "detail", "seasons", "metadata", "followCheck", "resolve", "preload", "enqueueDownloads", "localPlayback":
+	case "cover", "prepareCover", "detail", "seasons", "metadata", "followCheck", "resolve", "preload", "qualities", "enqueueDownloads", "localPlayback":
 		if !nativeDramaAvailable(input.Drama) {
 			return errNativeBuildSource
 		}
-		if (input.Action == "resolve" || input.Action == "preload") && !nativeChapterAvailable(input.Drama, input.Chapter) {
+		if (input.Action == "resolve" || input.Action == "preload" || input.Action == "qualities") && !nativeChapterAvailable(input.Drama, input.Chapter) {
 			return errNativeBuildSource
 		}
 	}

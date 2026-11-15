@@ -134,6 +134,16 @@ class Drama {
     this.tags = const [],
     this.releaseStatus = '',
     this.badge = '',
+    this.author = '',
+    this.authorId = '',
+    this.authorUrl = '',
+    this.actors = const [],
+    this.serial = '',
+    this.releaseDate = '',
+    this.durationText = '',
+    this.maker = '',
+    this.director = '',
+    this.meta = const {},
   }) : vipStatus = vip;
   final String id;
   final String source;
@@ -152,6 +162,27 @@ class Drama {
   final List<String> tags;
   final String releaseStatus;
   final String badge;
+  /// 作者（上传者）名称，各站源字段名不一，原生层已统一收敛。
+  final String author;
+  /// 作者标识，用于在该源里精确翻该作者的作品。
+  final String authorId;
+  /// 作者主页地址，部分源只给地址不给 ID。
+  final String authorUrl;
+  bool get hasAuthor => author.isNotEmpty || authorId.isNotEmpty;
+  /// 主演，多来源字段名不同，原生层已统一。
+  final List<String> actors;
+  /// 番号 / 品番。
+  final String serial;
+  /// 发行日期。
+  final String releaseDate;
+  /// 时长展示文本。
+  final String durationText;
+  /// 片商 / 制作方。
+  final String maker;
+  /// 导演。
+  final String director;
+  /// 源返回的其它资料字段，键为原始字段名。
+  final Map<String, String> meta;
   String get releaseLabel => switch (releaseStatus) {
     'finished' || 'completed' => '已完结',
     'ongoing' => '连载中',
@@ -181,6 +212,21 @@ class Drama {
     tags: (json['tags'] as List? ?? const []).whereType<String>().toList(),
     releaseStatus: json['releaseStatus'] as String? ?? '',
     badge: json['badge'] as String? ?? '',
+    author: json['author'] as String? ?? '',
+    authorId: json['authorId'] as String? ?? '',
+    authorUrl: json['authorUrl'] as String? ?? '',
+    actors: (json['actors'] as List? ?? const [])
+        .whereType<String>()
+        .where((name) => name.trim().isNotEmpty)
+        .toList(),
+    serial: json['serial'] as String? ?? '',
+    releaseDate: json['releaseDate'] as String? ?? '',
+    durationText: json['durationText'] as String? ?? '',
+    maker: json['maker'] as String? ?? '',
+    director: json['director'] as String? ?? '',
+    meta: (json['meta'] as Map? ?? const {}).map(
+      (key, value) => MapEntry(key.toString(), value.toString()),
+    ),
   );
   Map<String, dynamic> toJson() => {
     'metadataSchema': 1,
@@ -200,6 +246,16 @@ class Drama {
     'tags': tags,
     'releaseStatus': releaseStatus,
     'badge': badge,
+    if (author.isNotEmpty) 'author': author,
+    if (authorId.isNotEmpty) 'authorId': authorId,
+    if (authorUrl.isNotEmpty) 'authorUrl': authorUrl,
+    if (actors.isNotEmpty) 'actors': actors,
+    if (serial.isNotEmpty) 'serial': serial,
+    if (releaseDate.isNotEmpty) 'releaseDate': releaseDate,
+    if (durationText.isNotEmpty) 'durationText': durationText,
+    if (maker.isNotEmpty) 'maker': maker,
+    if (director.isNotEmpty) 'director': director,
+    if (meta.isNotEmpty) 'meta': meta,
   };
 
   Drama merge(Drama fresh) {
@@ -241,6 +297,16 @@ class Drama {
           ? releaseStatus
           : fresh.releaseStatus,
       badge: fresh.badge.isEmpty ? badge : fresh.badge,
+      author: fresh.author.isEmpty ? author : fresh.author,
+      authorId: fresh.authorId.isEmpty ? authorId : fresh.authorId,
+      authorUrl: fresh.authorUrl.isEmpty ? authorUrl : fresh.authorUrl,
+      actors: fresh.actors.isEmpty ? actors : fresh.actors,
+      serial: fresh.serial.isEmpty ? serial : fresh.serial,
+      releaseDate: fresh.releaseDate.isEmpty ? releaseDate : fresh.releaseDate,
+      durationText: fresh.durationText.isEmpty ? durationText : fresh.durationText,
+      maker: fresh.maker.isEmpty ? maker : fresh.maker,
+      director: fresh.director.isEmpty ? director : fresh.director,
+      meta: fresh.meta.isEmpty ? meta : {...meta, ...fresh.meta},
     );
   }
 }
@@ -342,6 +408,30 @@ class CatalogPage {
     warning: json['warning'] as String? ?? '',
     page: intValue(json['page']) > 0 ? intValue(json['page']) : 1,
     fresh: json['fresh'] == true,
+  );
+}
+
+/// 某一集可选的清晰度。源只给单一直链时 qualities 为空。
+class QualityProbe {
+  const QualityProbe({
+    this.qualities = const [],
+    this.hls = false,
+    this.warning = '',
+  });
+
+  final List<int> qualities;
+  final bool hls;
+  final String warning;
+
+  factory QualityProbe.fromJson(Map<String, dynamic> json) => QualityProbe(
+    qualities: (json['qualities'] as List? ?? const [])
+        .map(intValue)
+        .where((value) => value > 0)
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a)),
+    hls: json['hls'] == true,
+    warning: json['warning'] as String? ?? '',
   );
 }
 

@@ -248,6 +248,43 @@ func MergeNativeDrama(previous, fresh LibraryDrama) LibraryDrama {
 	if fresh.Badge == "" {
 		fresh.Badge = previous.Badge
 	}
+	if fresh.Author == "" {
+		fresh.Author = previous.Author
+	}
+	if fresh.AuthorID == "" {
+		fresh.AuthorID = previous.AuthorID
+	}
+	if fresh.AuthorURL == "" {
+		fresh.AuthorURL = previous.AuthorURL
+	}
+	if len(fresh.Actors) == 0 {
+		fresh.Actors = previous.Actors
+	}
+	if fresh.Serial == "" {
+		fresh.Serial = previous.Serial
+	}
+	if fresh.ReleaseDate == "" {
+		fresh.ReleaseDate = previous.ReleaseDate
+	}
+	if fresh.DurationText == "" {
+		fresh.DurationText = previous.DurationText
+	}
+	if fresh.Maker == "" {
+		fresh.Maker = previous.Maker
+	}
+	if fresh.Director == "" {
+		fresh.Director = previous.Director
+	}
+	if len(previous.Meta) > 0 {
+		merged := make(map[string]string, len(previous.Meta)+len(fresh.Meta))
+		for key, value := range previous.Meta {
+			merged[key] = value
+		}
+		for key, value := range fresh.Meta {
+			merged[key] = value
+		}
+		fresh.Meta = merged
+	}
 	return fresh
 }
 
