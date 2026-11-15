@@ -9,7 +9,9 @@ import '../../playback_session.dart';
 Player _player() => Player(
   configuration: const PlayerConfiguration(
     bufferSize: 32 * 1024 * 1024,
-    logLevel: MPVLogLevel.error,
+    // 诊断用：error 级会把 libmpv 的具体原因吞掉，日志里只剩 Failed to open。
+    // 提到 warn 后 playback_session 会把原生报错抄进「播放调试日记」。
+    logLevel: MPVLogLevel.warn,
   ),
 );
 

@@ -93,6 +93,7 @@ class PlaybackSession extends ChangeNotifier {
     final stream = player.stream;
     _subscriptions.addAll([
       stream.error.listen(_playerError),
+      stream.log.listen(_playerLog),
       stream.completed.listen(_completed),
       stream.position.listen((position) {
         if (!_closed && _openedIndex == _index && position > Duration.zero) {
@@ -121,6 +122,31 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   String _videoOutput = '';
+
+  /// libmpv 原始日志条数。warn 之后噪音明显变多，每个会话只留前 120 条，
+  /// 免得把「播放调试日记」里真正有用的 Play 记录挤掉。
+  int _mpvLogs = 0;
+  String _mpvLogLast = '';
+
+  /// 把 libmpv 的 warn / error 抄进日记：「Failed to open」这类提示背后
+  /// 真正的原因（无法识别文件格式、TLS 失败、4xx/5xx）只在原生日志里有。
+  void _playerLog(PlayerLog event) {
+    if (_closed) return;
+    final level = event.level.toLowerCase();
+    if (level != 'error' && level != 'warn') return;
+    final text = event.text.trim();
+    if (text.isEmpty || text == _mpvLogLast) return;
+    if (_mpvLogs >= 120) {
+      if (_mpvLogs == 120) {
+        _mpvLogs++;
+        DiaryService.add('[mpv] 日志已达 120 条上限，后续同类输出省略');
+      }
+      return;
+    }
+    _mpvLogs++;
+    _mpvLogLast = text;
+    DiaryService.add('[mpv/${event.prefix}] $text');
+  }
 
   Future<void> _logVideoOutput(VideoParams parameters) async {
     final platform = player.platform;
