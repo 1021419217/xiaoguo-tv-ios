@@ -248,6 +248,7 @@ class ExplorePageState extends State<ExplorePage> {
                   explore,
                   form,
                   _content(explore, inset, false, tabs, topInset: topInset),
+                  hintTop: topInset + 4,
                 ),
               ),
               Positioned(
@@ -287,7 +288,12 @@ class ExplorePageState extends State<ExplorePage> {
   bool _swipes(FormFactor form) =>
       form == FormFactor.phone || form == FormFactor.pad;
 
-  Widget _swipeTabs(ExploreFeed explore, FormFactor form, Widget child) {
+  Widget _swipeTabs(
+    ExploreFeed explore,
+    FormFactor form,
+    Widget child, {
+    double hintTop = 12,
+  }) {
     final tabs = explore.tabs;
     final index = tabs.indexWhere((tab) => tab.id == explore.tab.id);
     if (!_swipes(form) || index < 0) return child;
@@ -297,7 +303,7 @@ class ExplorePageState extends State<ExplorePage> {
       index: index,
       labels: [for (final tab in tabs) tab.name],
       onIndexChanged: (index) => explore.select(tabs[index].id),
-      hintBottom: 96,
+      hintTop: hintTop,
       child: child,
     );
   }

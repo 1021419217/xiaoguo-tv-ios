@@ -21,7 +21,6 @@ class SwipeCategoryLayer extends StatefulWidget {
     required this.onIndexChanged,
     required this.child,
     this.hintTop = 12,
-    this.hintBottom = 0,
   });
 
   final int itemCount;
@@ -29,10 +28,9 @@ class SwipeCategoryLayer extends StatefulWidget {
   final List<String> labels;
   final ValueChanged<int> onIndexChanged;
   final Widget child;
-  final double hintTop;
 
-  /// >0 时提示胶囊固定在内容区底部（首页同款），否则用 [hintTop]。
-  final double hintBottom;
+  /// 提示胶囊距内容区顶部的距离（全剧TV 同款：贴在磨砂顶栏下方）。
+  final double hintTop;
 
   @override
   State<SwipeCategoryLayer> createState() => _SwipeCategoryLayerState();
@@ -109,15 +107,7 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
               },
             ),
           ),
-          if (widget.hintBottom > 0)
-            Positioned(
-              bottom: widget.hintBottom,
-              left: 0,
-              right: 0,
-              child: _badge(),
-            )
-          else
-            Positioned(top: widget.hintTop, left: 0, right: 0, child: _badge()),
+          Positioned(top: widget.hintTop, left: 0, right: 0, child: _badge()),
         ],
       ),
     );
