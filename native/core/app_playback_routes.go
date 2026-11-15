@@ -58,6 +58,20 @@ func nativePlaybackChoices(media ProviderMedia, quality int) nativePlaybackChoic
 
 func (engine *nativeEngine) streamServer() (*nativeStreamServer, error) {
 	engine.mu.Lock()
+	current := engine.stream
+	engine.mu.Unlock()
+	// 代理可能还指着那个被 iOS 挂起时掐掉的监听端口。只判 nil 会一直
+	// 返回死实例，用户只能杀 App；这里先探活再决定是否重建。
+	// 探测本身不持锁：alive() 最长等 800ms，别把别的请求堵在这儿。
+	if current != nil && !current.alive() {
+		current.shutdown()
+		engine.mu.Lock()
+		if engine.stream == current {
+			engine.stream = nil
+		}
+		engine.mu.Unlock()
+	}
+	engine.mu.Lock()
 	defer engine.mu.Unlock()
 	if engine.stream == nil {
 		stream, err := newNativeStreamServer(engine.downloader)

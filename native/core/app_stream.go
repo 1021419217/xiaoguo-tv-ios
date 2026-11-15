@@ -89,6 +89,52 @@ func (stream *nativeStreamServer) lanClose() {
 	}
 }
 
+// alive 用一次 HTTP 探测判断本地播放代理是否还在工作。
+// iOS 在 App 进后台挂起时会掐掉监听端口，回到前台不会自动恢复；
+// 而纯 TCP 探测在这种情况下仍会「连上」（握手由内核 SYN 队列代答），
+// 所以必须发一个真的 HTTP 请求，看有没有人回应。
+func (stream *nativeStreamServer) alive() bool {
+	parsed, err := url.Parse(stream.address)
+	if err != nil || parsed.Host == "" || stream.server == nil {
+		return false
+	}
+	// 探两次：偶发的一次调度抖动不该把正在播的会话砍掉。
+	for _, timeout := range []time.Duration{800 * time.Millisecond, 500 * time.Millisecond} {
+		if stream.probe(parsed.Host, timeout) {
+			return true
+		}
+	}
+	return false
+}
+
+func (stream *nativeStreamServer) probe(host string, timeout time.Duration) bool {
+	client := &http.Client{Timeout: timeout}
+	defer client.CloseIdleConnections()
+	response, err := client.Get("http://" + host + "/__alive")
+	if err != nil {
+		return false
+	}
+	_ = response.Body.Close()
+	// /__alive 不匹配任何资源路径，代理会直接回 404；
+	// 只要拿到响应就说明进程没被挂起。
+	return true
+}
+
+// shutdown 关掉监听端口并取消仍在进行的分片会话，供代理重建时使用。
+func (stream *nativeStreamServer) shutdown() {
+	if stream.server != nil {
+		_ = stream.server.Close()
+	}
+	stream.lanClose()
+	stream.mu.Lock()
+	sessions := stream.sessions
+	stream.sessions = map[string]*nativeStreamSession{}
+	stream.mu.Unlock()
+	for _, session := range sessions {
+		stream.nativeCancel(session, "server_restart")
+	}
+}
+
 func (stream *nativeStreamServer) lanPlaylist(request *http.Request, body string) string {
 	if origin := "http://" + request.Host; origin != stream.address {
 		return strings.ReplaceAll(body, stream.address+"/", origin+"/")

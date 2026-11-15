@@ -16,8 +16,9 @@ func mediaRequestHeaders(request *http.Request, referer string) {
 	request.Header.Set("Referer", referer)
 	request.Header.Set("Accept", "*/*")
 	request.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
-	request.Header.Set("Sec-Fetch-Mode", "cors")
-	request.Header.Set("Sec-Fetch-Dest", "empty")
+	// 千万不要加 Sec-Fetch-Mode：部分站的 CDN（如 91porn 的 la.btc620.com）
+	// 的 WAF 只要看到这个头就 RST 连接，导致黑屏几秒后报错。
+	// iOS Safari 播 <video> 时也不发它，所以去掉才是「像浏览器」。
 	if origin, err := url.Parse(referer); err == nil && origin.Host != "" {
 		request.Header.Set("Origin", origin.Scheme+"://"+origin.Host)
 	}
