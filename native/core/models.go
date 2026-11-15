@@ -70,24 +70,83 @@ type Drama struct {
 // 不同站源给作者字段起的名字五花八门（author / uploader / user / actor …），
 // 这里统一收敛到 Author / AuthorID / AuthorURL，让详情页与作者主页对所有源通用。
 func (d *Drama) UnmarshalJSON(data []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	// tags / actors 有的源给数组、有的直接给「张三,李四」这种字符串，
+	// 按 []string 硬解会让整条详情解析失败，先摘出来单独宽松处理。
+	tags, hasTags := raw["tags"]
+	actors, hasActors := raw["actors"]
+	delete(raw, "tags")
+	delete(raw, "actors")
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
 	type plain Drama
 	var value plain
-	if err := json.Unmarshal(data, &value); err != nil {
+	if err := json.Unmarshal(encoded, &value); err != nil {
 		return err
 	}
 	*d = Drama(value)
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil
+	if hasTags {
+		d.Tags = stringList(tags)
+	}
+	if hasActors {
+		d.Actors = actorList(actors)
 	}
 	d.absorbAuthor(raw)
 	d.absorbMetadata(raw)
 	return nil
 }
 
+// stringList 只把数组/单值收成 []string，不拆分隔符（标签里的斜杠有意义）。
+func stringList(value any) []string {
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case []any:
+		list := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text := strings.TrimSpace(authorValueText(item)); text != "" {
+				list = append(list, text)
+			}
+		}
+		return list
+	default:
+		if text := strings.TrimSpace(authorValueText(value)); text != "" {
+			return []string{text}
+		}
+		return nil
+	}
+}
+
+// actorList 把「张三,李四」「张三、李四」这类字符串拆成数组。
+func actorList(value any) []string {
+	text, single := value.(string)
+	if !single {
+		return stringList(value)
+	}
+	parts := strings.FieldsFunc(text, func(r rune) bool {
+		switch r {
+		case ',', '，', '、', ';', '；', '|', '/':
+			return true
+		}
+		return false
+	})
+	list := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			list = append(list, trimmed)
+		}
+	}
+	return list
+}
+
 func (d *Drama) absorbAuthor(raw map[string]any) {
 	if d.Author == "" {
-		d.Author = authorFieldText(raw, dramaAuthorNameKeys)
+		d.Author = authorNameFieldText(raw, dramaAuthorNameKeys)
 	}
 	if d.AuthorURL == "" {
 		d.AuthorURL = authorFieldText(raw, dramaAuthorURLKeys)
@@ -98,15 +157,50 @@ func (d *Drama) absorbAuthor(raw map[string]any) {
 	if d.AuthorID == "" && d.AuthorURL != "" {
 		d.AuthorID = authorIDFromURL(d.AuthorURL)
 	}
+	// actors 在反序列化时已被摘出来单独宽松解析，raw 里没有它了。
+	if d.Author == "" && len(d.Actors) > 0 {
+		d.Author = authorNameText(d.Actors[0])
+	}
+	// 多数模块不单独给作者字段，只把「主演 xxx / UP主 xxx」写进标签，
+	// 这里再兜一层，否则详情页永远没有作者入口。
+	d.absorbAuthorFromTags()
 }
 
 var dramaAuthorNameKeys = []string{
 	"author", "authorName", "author_name", "authors",
-	"uploader", "uploaderName", "uploader_name", "upName", "up_name",
+	"uploader", "uploaderName", "uploader_name", "upName", "up_name", "up", "upMaster",
 	"creator", "creatorName", "creator_name", "maker", "studio",
 	"artist", "artistName", "star", "performer", "performerName",
 	"userName", "user_name", "username", "nickname", "screenName", "screen_name",
 	"user", "member", "owner", "channelName2", "actor", "actors", "cast",
+	// maccms 原始字段：模块若直接透传站点数据，键名会是 vod_ 前缀。
+	"vod_actor", "vodActor", "vod_up", "vodUp", "vod_writer",
+}
+
+// 标签里用来标记「谁的作品」的常见前缀。
+var dramaAuthorTagPrefixes = []string{
+	"主演", "作者", "演员", "UP主", "up主", "上传者", "上传", "创作者", "模特", "女优",
+}
+
+func (d *Drama) absorbAuthorFromTags() {
+	if d.Author != "" {
+		return
+	}
+	for _, tag := range d.Tags {
+		text := strings.TrimSpace(tag)
+		for _, prefix := range dramaAuthorTagPrefixes {
+			if !strings.HasPrefix(text, prefix) {
+				continue
+			}
+			name := strings.TrimLeft(strings.TrimSpace(text[len(prefix):]), " :：·-—")
+			name = authorNameText(name)
+			if name == "" || len([]rune(name)) > 48 {
+				continue
+			}
+			d.Author = name
+			return
+		}
+	}
 }
 
 var dramaAuthorIDKeys = []string{
@@ -131,7 +225,58 @@ func authorFieldText(raw map[string]any, keys []string) string {
 			return text
 		}
 	}
+	// 不同模块的大小写习惯不一样（Author / AUTHOR / UserName），
+	// 精确匹配落空后再忽略大小写扫一遍。
+	for _, key := range keys {
+		for actual, value := range raw {
+			if !strings.EqualFold(actual, key) {
+				continue
+			}
+			if text := authorValueText(value); text != "" {
+				return text
+			}
+		}
+	}
 	return ""
+}
+
+func authorNameFieldText(raw map[string]any, keys []string) string {
+	for _, key := range keys {
+		value, found := raw[key]
+		if !found {
+			continue
+		}
+		if text := authorNameText(value); text != "" {
+			return text
+		}
+	}
+	for _, key := range keys {
+		for actual, value := range raw {
+			if !strings.EqualFold(actual, key) {
+				continue
+			}
+			if text := authorNameText(value); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+// authorNameText 取「一个人」的名字：多作者字段（"张三,李四"）只留第一个，
+// 否则拿整串去搜索一个都匹配不上。
+func authorNameText(value any) string {
+	text := authorValueText(value)
+	if text == "" {
+		return ""
+	}
+	if cut := strings.IndexAny(text, ",，、;；"); cut > 0 {
+		text = strings.TrimSpace(text[:cut])
+	}
+	if len([]rune(text)) > 48 {
+		return ""
+	}
+	return text
 }
 
 func authorValueText(value any) string {
@@ -158,7 +303,9 @@ func authorValueText(value any) string {
 	return ""
 }
 
-// authorIDFromURL 从作者主页地址里取出用户标识，兼容常见的 UID/uid/user_id 写法。
+// authorIDFromURL 从作者主页地址里取出用户标识。站点写法差得很远：
+// 有的走 ?UID=123，有的走 /profiles/xxx、/users/xxx、/model/xxx、/@handle，
+// 这里两种都认，取不到 ID 时至少把 handle 当 ID 用。
 func authorIDFromURL(address string) string {
 	if address == "" {
 		return ""
@@ -171,6 +318,23 @@ func authorIDFromURL(address string) string {
 	for _, key := range []string{"UID", "uid", "userId", "user_id", "id", "authorId", "author_id", "mid"} {
 		if value := strings.TrimSpace(query.Get(key)); value != "" {
 			return value
+		}
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for index, segment := range segments {
+		segment = strings.TrimSpace(segment)
+		if segment == "" {
+			continue
+		}
+		if strings.HasPrefix(segment, "@") && len(segment) > 1 {
+			return segment[1:]
+		}
+		switch strings.ToLower(segment) {
+		case "profiles", "users", "user", "model", "models", "pornstar", "pornstars",
+			"channels", "channel", "amateur-channels", "members", "member", "author", "u":
+			if index+1 < len(segments) && strings.TrimSpace(segments[index+1]) != "" {
+				return strings.TrimSpace(segments[index+1])
+			}
 		}
 	}
 	return ""

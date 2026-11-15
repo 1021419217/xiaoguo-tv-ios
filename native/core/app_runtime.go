@@ -658,6 +658,9 @@ func (engine *nativeEngine) nativeDetail(ctx context.Context, drama LibraryDrama
 	if drama.AuthorURL == "" {
 		drama.AuthorURL = normalized.AuthorURL
 	}
+	if drama.Author == "" {
+		engine.logMissingAuthor(source, drama, raw, chapters)
+	}
 	warning := ""
 	if err := engine.saveDetailMetadata(drama); err != nil {
 		warning = err.Error()
