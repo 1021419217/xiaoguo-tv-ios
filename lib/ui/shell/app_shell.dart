@@ -75,7 +75,18 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
+  /// 底部 tab 切换过渡（全剧TV 同款）：easeOutCubic、方向性滑入 + 淡入 +
+  /// 轻微缩放，避免 IndexedStack 直接换页像卡了一下。
+  /// 初始停在完成态，切换时 forward(from: 0) 重播 320ms。
+  late final AnimationController _tabAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: 1.0,
+  );
+  int _tabDirection = 1;
+
   final _heroes = [
     for (final _ in AppTab.values) MaterialApp.createMaterialHeroController(),
   ];
@@ -148,6 +159,7 @@ class _AppShellState extends State<AppShell> {
     _merges?.dispose();
     _downloads?.dispose();
     _followUpdater?.dispose();
+    _tabAnim.dispose();
     super.dispose();
   }
 
@@ -156,13 +168,39 @@ class _AppShellState extends State<AppShell> {
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
-        AppTab.modules => widget.store.profile.admin,
+        // 模块入口并入 设置 → 站源 → 模块管理，不再占底栏。
+        AppTab.modules => false,
         AppTab.explore || AppTab.follow || AppTab.live || AppTab.mine => true,
       })
         tab,
   ];
 
-  void _select(AppTab tab) => setState(() => _tab = tab);
+  void _select(AppTab tab) {
+    if (tab == _tab) return;
+    // 按 tab 顺序决定新页从左侧还是右侧滑入，和首页滑分类的方向感一致。
+    _tabDirection = tab.index > _tab.index ? 1 : -1;
+    _tabAnim.forward(from: 0);
+    setState(() => _tab = tab);
+  }
+
+  /// 只包裹绘制层（全剧TV 同款）：IndexedStack 仍保留各 tab 独立的
+  /// Navigator 栈与页面状态，动画期间新页从反侧滑入 22px、淡入并轻微
+  /// 放大回原尺寸，底栏与顶栏不动。
+  Widget _animatedPages(Widget child) => AnimatedBuilder(
+    animation: _tabAnim,
+    child: child,
+    builder: (context, pages) {
+      final t = Curves.easeOutCubic.transform(_tabAnim.value);
+      final slide = (1 - t) * 22.0 * _tabDirection;
+      return Transform.translate(
+        offset: Offset(slide, 0),
+        child: Transform.scale(
+          scale: 0.99 + 0.01 * t,
+          child: Opacity(opacity: 0.6 + 0.4 * t, child: pages),
+        ),
+      );
+    },
+  );
 
   void _tap(AppTab tab) {
     if (tab != _tab) return _select(tab);
@@ -264,12 +302,13 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final stack = NotificationListener<NavigationNotification>(
-      onNotification: (_) {
-        setState(() {});
-        return false;
-      },
-      child: IndexedStack(
+    final stack = _animatedPages(
+      NotificationListener<NavigationNotification>(
+        onNotification: (_) {
+          setState(() {});
+          return false;
+        },
+        child: IndexedStack(
         index: _tab.index,
         children: [
           for (final tab in AppTab.values)
@@ -295,7 +334,7 @@ class _AppShellState extends State<AppShell> {
             ),
         ],
       ),
-    );
+    ));
     final pages = ShellForeground(
       foreground: ModalRoute.of(context)?.isCurrent ?? true,
       child: stack,

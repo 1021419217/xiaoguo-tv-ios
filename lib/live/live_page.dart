@@ -59,13 +59,19 @@ class _LivePageState extends State<LivePage> {
   void initState() {
     super.initState();
     widget.store.addListener(_storeChanged);
+    unawaited(_bootstrap());
+  }
+
+  /// 先加载外置直播源配置（live_sources.json），再决定是否拉取面板。
+  Future<void> _bootstrap() async {
+    await LiveSource.loadExternal();
+    if (!mounted) return;
     final sources = _sources;
-    if (sources.isNotEmpty) {
-      _source = sources.first;
-      unawaited(_loadPlatforms());
-    } else {
-      _loading = false;
-    }
+    setState(() {
+      _source = sources.isEmpty ? null : sources.first;
+      _loading = sources.isNotEmpty;
+    });
+    if (sources.isNotEmpty) unawaited(_loadPlatforms());
   }
 
   @override
@@ -232,9 +238,13 @@ class _LivePageState extends State<LivePage> {
   Widget _body(BuildContext context) {
     final sources = _sources;
     if (sources.isEmpty) {
-      return const StatusView(
+      final filtered = LiveSource.all.isNotEmpty;
+      return StatusView(
         title: '暂无可用的直播源',
-        message: '当前分级模式屏蔽了全部直播源，关闭后即可观看。',
+        message: filtered
+            ? '当前分级模式屏蔽了全部直播源，关闭后即可观看。'
+            : '尚未配置直播源：将 live_sources.json 放入应用文档目录后，'
+                '重新进入本页即可加载。',
         icon: Icons.live_tv_outlined,
       );
     }

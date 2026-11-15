@@ -21,9 +21,8 @@ import '../widgets/frosted_header.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/page_header.dart';
 import '../widgets/source_bar.dart';
+import '../widgets/swipe_category_layer.dart';
 import '../widgets/status_view.dart';
-import '../widgets/swipe_switch.dart';
-import 'explore_hero.dart';
 import 'source_actions.dart';
 
 class ExplorePage extends StatefulWidget {
@@ -42,18 +41,6 @@ class ExplorePageState extends State<ExplorePage> {
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
   String _shown = '';
 
-  /// 全剧TV 同款：切分类时顶部中央浮出的玻璃提示胶囊。
-  String? _hintText;
-  Timer? _hintTimer;
-
-  void _showHint(String name) {
-    _hintTimer?.cancel();
-    setState(() => _hintText = name);
-    _hintTimer = Timer(const Duration(milliseconds: 1100), () {
-      if (mounted) setState(() => _hintText = null);
-    });
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -62,49 +49,12 @@ class ExplorePageState extends State<ExplorePage> {
 
   @override
   void dispose() {
-    _hintTimer?.cancel();
     _explore?.dispose();
     _scroll.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  /// 切分类时顶部中央浮出的玻璃提示胶囊（全剧TV 同款）。
-  Widget _hintBadge() => IgnorePointer(
-    child: Center(
-      child: AnimatedOpacity(
-        opacity: _hintText == null ? 0 : 1,
-        duration: const Duration(milliseconds: 180),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.62),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.swap_horiz_rounded,
-                size: 16,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _hintText ?? '',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 
   Future<void> refresh() async {
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -128,14 +78,8 @@ class ExplorePageState extends State<ExplorePage> {
 
   void _selectTab(String id) {
     if (id != _explore!.tab.id) {
-      final tabs = _explore!.tabs;
-      final name = tabs
-          .where((tab) => tab.id == id)
-          .map((tab) => tab.name)
-          .firstOrNull;
       unawaited(HapticFeedback.selectionClick());
       _explore!.select(id);
-      if (name != null) _showHint(name);
       return;
     }
     if (!_scroll.hasClients || _scroll.offset <= 0) return;
@@ -165,11 +109,6 @@ class ExplorePageState extends State<ExplorePage> {
     if (value != null) {
       unawaited(HapticFeedback.selectionClick());
       explore.select(value);
-      final name = explore.tabs
-          .where((tab) => tab.id == value)
-          .map((tab) => tab.name)
-          .firstOrNull;
-      if (name != null) _showHint(name);
     }
   }
 
@@ -298,12 +237,6 @@ class ExplorePageState extends State<ExplorePage> {
                   ],
                 ),
               ),
-              Positioned(
-                top: 12,
-                left: 0,
-                right: 0,
-                child: _hintBadge(),
-              ),
             ],
           ),
         ),
@@ -318,19 +251,13 @@ class ExplorePageState extends State<ExplorePage> {
     final tabs = explore.tabs;
     final index = tabs.indexWhere((tab) => tab.id == explore.tab.id);
     if (!_swipes(form) || index < 0) return child;
-    return SwipeSwitch(
+    return SwipeCategoryLayer(
       key: ValueKey(explore.source?.id),
+      itemCount: tabs.length,
       index: index,
-      count: tabs.length,
-      ready: switch (explore.feed) {
-        final feed? => feed.items.isNotEmpty || !feed.loading,
-        null => true,
-      },
-      onSwitch: (index) {
-        explore.select(tabs[index].id);
-        _showHint(tabs[index].name);
-      },
-      onEnter: _toTop,
+      labels: [for (final tab in tabs) tab.name],
+      onIndexChanged: (index) => explore.select(tabs[index].id),
+      hintBottom: 96,
       child: child,
     );
   }
@@ -497,6 +424,8 @@ class ExplorePageState extends State<ExplorePage> {
     );
   }
 
+  /// 「继续观看 / 今日推荐」不再首屏铺大封面，只留一条轻量入口，
+  /// 点进去（二级详情页）才显示大封面和内容。
   Widget? _hero(ExploreFeed explore) {
     if (explore.resume case final entry?) {
       final drama = entry.drama;
@@ -504,33 +433,109 @@ class ExplorePageState extends State<ExplorePage> {
       final next = entry.finished && entry.episode < total
           ? entry.episode + 1
           : entry.episode;
-      return ExploreHero(
+      return _ResumeBar(
         key: ValueKey(('resume', drama.id)),
-        drama: drama,
-        kicker: '继续观看',
+        title: '继续观看 · ${drama.title}',
         meta: total > 0
-            ? '看到第 ${entry.episode} 集 · 共 $total 集'
+            ? '看到第 ${entry.episode} 集 · 共 $total 集 · 续看第 $next 集'
             : '看到第 ${entry.episode} 集',
-        progress: total > 0 ? entry.episode / total : null,
-        action: '继续第 $next 集',
+        onTap: () => _open(drama),
         onPlay: () => _open(drama, autoplay: true),
-        onDetail: () => _open(drama),
       );
     }
     if (explore.featured case final drama?) {
-      return ExploreHero(
+      return _ResumeBar(
         key: ValueKey(('featured', drama.id)),
-        drama: drama,
-        kicker: '今日推荐',
+        title: '今日推荐 · ${drama.title}',
         meta: [
           if (drama.category.isNotEmpty) drama.category,
           if (drama.episodes > 0) '共 ${drama.episodes} 集',
         ].join(' · '),
-        action: '立即观看',
+        onTap: () => _open(drama),
         onPlay: () => _open(drama, autoplay: true),
-        onDetail: () => _open(drama),
       );
     }
     return null;
+  }
+}
+
+/// 轻量入口条：点整条进详情页（大封面在二级显示），右侧播放键直接续播。
+class _ResumeBar extends StatelessWidget {
+  const _ResumeBar({
+    super.key,
+    required this.title,
+    required this.meta,
+    required this.onTap,
+    required this.onPlay,
+  });
+
+  final String title;
+  final String meta;
+  final VoidCallback onTap;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.08),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (meta.isNotEmpty)
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: IconButton(
+                  onPressed: onPlay,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.play_circle_fill_rounded,
+                    size: 28,
+                    color: Colors.white,
+                  ),
+                  tooltip: '播放',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

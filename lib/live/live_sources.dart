@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
+
 enum LiveProtocol { pingtai, list }
 
 class LiveSource {
@@ -51,6 +56,55 @@ class LiveSource {
 
   /// 运行时注入的外部直播源（由模块/设置页配置），与内置列表合并。
   static List<LiveSource> externalSources = <LiveSource>[];
+
+  static bool _externalLoaded = false;
+
+  /// 从应用文档目录的 live_sources.json 读取外置直播源（不随包内置）。
+  /// 支持两种格式：
+  ///   [{"id":"..","name":"..","endpoints":["地址1","地址2"],"adult":false}]
+  ///   {"sources":[ ... 同上 ... ]}
+  /// 文件缺失或损坏时静默跳过，只加载一次。
+  static Future<void> loadExternal() async {
+    if (_externalLoaded) return;
+    _externalLoaded = true;
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}live_sources.json',
+      );
+      if (!file.existsSync()) return;
+      final decoded = jsonDecode(file.readAsStringSync());
+      final list = switch (decoded) {
+        final List l => l,
+        final Map m => m['sources'] as List?,
+        _ => null,
+      };
+      if (list == null) return;
+      for (final item in list) {
+        if (item is! Map) continue;
+        final endpoints = [
+          for (final e in (item['endpoints'] as List? ?? const [])) '$e',
+        ].where((e) => e.trim().isNotEmpty).toList();
+        if (endpoints.isEmpty) continue;
+        final id = '${item['id'] ?? item['name'] ?? ''}'.trim();
+        if (id.isEmpty) continue;
+        final source = LiveSource(
+          id: id,
+          name: '${item['name'] ?? id}',
+          description: '${item['description'] ?? ''}',
+          protocol: LiveProtocol.pingtai,
+          endpoints: endpoints,
+          group: '${item['group'] ?? ''}',
+          adult: item['adult'] == true,
+          builtin: false,
+        );
+        externalSources.removeWhere((s) => s.id == id);
+        externalSources.add(source);
+      }
+    } catch (_) {
+      // 配置损坏时忽略，保持空态提示，不影响应用其它功能。
+    }
+  }
 
   static List<LiveSource> get all => <LiveSource>[...values, ...externalSources];
 

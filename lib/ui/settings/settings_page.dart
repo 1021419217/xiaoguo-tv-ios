@@ -5,17 +5,31 @@ import '../../local_store.dart';
 import '../../models.dart';
 import '../../resource_settings_editor.dart';
 import '../app_scope.dart';
+import '../history/history_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../users/users_view.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/frosted_header.dart';
 import '../widgets/group_card.dart';
 import 'appearance_settings.dart';
 import 'settings_rows.dart';
 import 'settings_sections.dart';
 
 typedef _Subpage = ({String title, WidgetBuilder body});
+
+// 设置项圆形图标的低饱和彩色，仅作视觉区分，不参与主题强调色。（全剧TV 同款）
+const _tileColors = <Color>[
+  Color(0xFFB06AF7),
+  Color(0xFFFF9F0A),
+  Color(0xFF63636B),
+  Color(0xFF32ADE6),
+  Color(0xFFB06AF7),
+  Color(0xFFFF9F0A),
+  Color(0xFF63636B),
+  Color(0xFF32ADE6),
+];
 
 void openUsers(BuildContext context, LocalStore store) => openPage<void>(
   context,
@@ -66,17 +80,38 @@ class _ProxySettingsPageState extends State<_ProxySettingsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(SettingsGroup.proxy.label)),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        SettingsSection(
-          group: SettingsGroup.proxy,
-          store: widget.store,
-          editor: _editor!,
-          open: (title, body) => _openFullPage(context, title, body),
+    // 与设置主页同款：磨砂顶栏 + 玻璃胶囊标题。
+    extendBodyBehindAppBar: true,
+    appBar: AppBar(
+      surfaceTintColor: Colors.transparent,
+      flexibleSpace: const FrostedHeader(fill: true),
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: BarButton(
+          icon: Icons.arrow_back_rounded,
+          tooltip: '返回',
+          onPressed: () => Navigator.pop(context),
         ),
-      ],
+      ),
+      title: GlassTitle(title: SettingsGroup.proxy.label),
+    ),
+    body: SafeArea(
+      top: true,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.only(top: kToolbarHeight),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            SettingsSection(
+              group: SettingsGroup.proxy,
+              store: widget.store,
+              editor: _editor!,
+              open: (title, body) => _openFullPage(context, title, body),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -154,7 +189,9 @@ class _SettingsPageState extends State<SettingsPage> {
       SettingsGroup.danmaku => '字号、颜色、显示区域与屏蔽词',
       SettingsGroup.download => '默认画质、目录与空间、同时下载数量',
       SettingsGroup.sources =>
-        SourceSite.values.length > 1 ? '模块、站源管理、目录请求间隔' : '模块、目录请求间隔',
+        SourceSite.values.length > 1
+            ? '模块、站源管理、目录请求间隔'
+            : '模块、目录请求间隔',
       SettingsGroup.proxy => '连接方式、代理地址',
       SettingsGroup.users => '当前：${store.profile.name}',
       SettingsGroup.about =>
@@ -168,6 +205,21 @@ class _SettingsPageState extends State<SettingsPage> {
     store: widget.store,
     editor: _editor!,
     open: _open,
+  );
+
+  /// 「最近观看」做成设置页顶部的独立快捷入口（全剧TV 同款）：
+  /// 与设置项同一套分组卡片，蓝色圆形图标统一视觉，点开是完整历史页。
+  Widget _historyShortcut() => GroupCard(
+    children: [
+      SettingsTile(
+        icon: Icons.schedule_rounded,
+        iconColor: const Color(0xFF32ADE6),
+        title: '最近观看',
+        subtitle: '继续播放没看完的剧集',
+        onTap: () =>
+            openPage<void>(context, (_) => HistoryPage(store: widget.store)),
+      ),
+    ],
   );
 
   void _open(String title, WidgetBuilder body) {
@@ -240,39 +292,141 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      settingsSplit(context) ? _split(context) : _phone(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final text = theme.textTheme;
+    // 设置页统一字体风格（全剧TV 同款）：整体加粗、放大一档，分组标题、
+    // 条目、说明文字形成一致层级，子页面与各分组详情自动继承这套字重。
+    final scoped = theme.copyWith(
+      textTheme: text.copyWith(
+        bodyLarge: text.bodyLarge?.copyWith(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        bodyMedium: text.bodyMedium?.copyWith(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.1,
+        ),
+        bodySmall: text.bodySmall?.copyWith(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w500,
+        ),
+        titleMedium: text.titleMedium?.copyWith(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
+        ),
+        titleSmall: text.titleSmall?.copyWith(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+        labelLarge: text.labelLarge?.copyWith(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+        labelMedium: text.labelMedium?.copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    return Theme(
+      data: scoped,
+      child: settingsSplit(context) ? _split(context) : _phone(context),
+    );
+  }
 
   Widget _phone(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('设置')),
-    body: ListenableBuilder(
-      listenable: widget.store,
-      builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          GroupCard(
-            children: [
-              for (final group in SettingsGroup.values)
-                SettingsTile(
-                  icon: group.icon,
-                  title: group.label,
-                  subtitle: _summary(group),
-                  onTap: () => _openGroup(group),
+    // 与首页同款：内容从磨砂顶栏背后透出，标题文字换成玻璃胶囊。
+    extendBodyBehindAppBar: true,
+    appBar: AppBar(
+      surfaceTintColor: Colors.transparent,
+      flexibleSpace: const FrostedHeader(fill: true),
+      title: const GlassTitle(title: '设置'),
+    ),
+    body: SafeArea(
+      top: true,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.only(top: kToolbarHeight),
+        child: ListenableBuilder(
+          listenable: widget.store,
+          builder: (context, _) {
+            final groups = SettingsGroup.values;
+            // 9 个分组按 3×3 分三段，段名按内容归组。
+            const sections = ['界面与播放', '内容与站源', '设备与数据'];
+            return ListView(
+              // 底部留出悬浮胶囊导航的空间，避免最后一项被遮住。
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
+              children: [
+                SectionHeader(
+                  title: '快捷入口',
+                  padding: const EdgeInsets.fromLTRB(4, 8, 8, 8),
                 ),
-            ],
-          ),
-        ],
+                _historyShortcut(),
+                for (var section = 0; section < sections.length; section++) ...[
+                  SectionHeader(
+                    title: sections[section],
+                    padding: const EdgeInsets.fromLTRB(4, 18, 8, 8),
+                  ),
+                  GroupCard(
+                    children: [
+                      for (
+                        var i = section * 3;
+                        i < groups.length && i < section * 3 + 3;
+                        i++
+                      )
+                        SettingsTile(
+                          icon: groups[i].icon,
+                          iconColor: _tileColors[i % _tileColors.length],
+                          title: groups[i].label,
+                          subtitle: _summary(groups[i]),
+                          onTap: () => _openGroup(groups[i]),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
       ),
     ),
   );
 
   void _openGroup(SettingsGroup group) => openPage<void>(
     context,
-    (_) => Scaffold(
-      appBar: AppBar(title: Text(group.label)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [_section(group)],
+    (pageContext) => Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        surfaceTintColor: Colors.transparent,
+        flexibleSpace: const FrostedHeader(fill: true),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: BarButton(
+            icon: Icons.arrow_back_rounded,
+            tooltip: '返回',
+            // 手机/电视形态下分组页被 push 到「根」Navigator，必须用本页
+            // 自己的 context 出栈。若误用设置主页的 context，pop 的会是
+            // 「设置」tab 自己的 Navigator，把它的初始页弹空，返回后底栏
+            // 还在、内容区却全黑（IndexedStack 那一格变空白）。
+            onPressed: () => Navigator.pop(pageContext),
+          ),
+        ),
+        title: GlassTitle(title: group.label),
+      ),
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: kToolbarHeight),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [_section(group)],
+          ),
+        ),
       ),
     ),
   );
@@ -357,6 +511,10 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(left, 12, 12, 0),
+          child: _historyShortcut(),
         ),
         Expanded(
           child: ScrollConfiguration(
@@ -456,6 +614,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+/// 分组详情切换动画（小果原有，保留）：淡入 + 轻微上滑。
 class _PaneSwitcher extends StatelessWidget {
   const _PaneSwitcher({
     required this.duration,
@@ -536,7 +695,8 @@ class _DetailHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
                 ),
               ),
             ),
@@ -572,8 +732,9 @@ class _GroupItem extends StatelessWidget {
       focusNode: focusNode,
       selected: selected,
       textStyle: theme.textTheme.titleSmall?.copyWith(
-        fontSize: 15,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        fontSize: 16,
+        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        letterSpacing: -0.2,
         color: theme.colorScheme.onSurface,
       ),
       child: InkWell(
