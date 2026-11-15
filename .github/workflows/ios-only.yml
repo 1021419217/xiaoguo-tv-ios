@@ -11,7 +11,7 @@ env:
   GOSUMDB: sum.golang.org
   PYTHONUTF8: '1'
   # 与上游 guoapp 完全一致的 Bundle ID：安装即可覆盖官方包并保留数据。
-  PACKAGE_NAME: com.guoapp.app
+  PACKAGE_NAME: com.yingshib.xg
 
 jobs:
   ios:
