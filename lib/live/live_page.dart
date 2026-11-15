@@ -243,8 +243,7 @@ class _LivePageState extends State<LivePage> {
         title: '暂无可用的直播源',
         message: filtered
             ? '当前分级模式屏蔽了全部直播源，关闭后即可观看。'
-            : '尚未配置直播源：将 live_sources.json 放入应用文档目录后，'
-                '重新进入本页即可加载。',
+            : '内置直播源未就绪，请完全退出应用后重新打开。',
         icon: Icons.live_tv_outlined,
       );
     }

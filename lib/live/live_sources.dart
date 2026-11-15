@@ -49,10 +49,20 @@ class LiveSource {
   /// 是否支持按页续载。整类一次返回的源不参与滚动加载。
   bool get paginated => protocol == LiveProtocol.list;
 
-  // 小果 2.0 起站源不再随安装包提供，改由「模块」页外置安装 / 配置。
-  // 这里保留数据模型与绿色模式能力，但不内置任何具体直播源地址。
-  // 需要接入时由宿主把配置好的 LiveSource 列表写入 externalSources。
-  static const values = <LiveSource>[];
+  /// 随包内置的直播源，直接从全剧TV 搬过来，装好即用、无需任何配置。
+  static const values = <LiveSource>[
+    LiveSource(
+      id: 'xiuguo',
+      name: '秀果',
+      description: '主播直播 · 实时开播',
+      protocol: LiveProtocol.pingtai,
+      endpoints: [
+        'http://api.vipmisss.com:81/xcdsw',
+        'http://api.hclyz.com:81/mf',
+      ],
+      adult: true,
+    ),
+  ];
 
   /// 运行时注入的外部直播源（由模块/设置页配置），与内置列表合并。
   static List<LiveSource> externalSources = <LiveSource>[];
