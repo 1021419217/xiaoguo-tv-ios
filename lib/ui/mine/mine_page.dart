@@ -10,6 +10,7 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../downloads/downloads_page.dart';
 import '../history/history_page.dart';
+import '../modules/modules_page.dart';
 import '../shell/app_shell.dart';
 import '../settings/settings_page.dart';
 import '../theme/motion.dart';
@@ -74,6 +75,24 @@ class MinePage extends StatelessWidget {
 
   Widget _settings(BuildContext context) => _SettingsEntry(
     onTap: () => openPage<void>(context, (_) => SettingsPage(store: store)),
+  );
+
+  /// 模块（站源模块安装 / 卸载）从设置里挪到「我的」，与设置并列成入口。
+  Widget _modules(BuildContext context) => _SettingsEntry(
+    icon: Icons.extension_outlined,
+    label: '模块',
+    onTap: () => openPage<void>(context, (_) => ModulesPage(store: store)),
+  );
+
+  Widget _entries(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (store.profile.admin) ...[
+        _modules(context),
+        const SizedBox(height: 10),
+      ],
+      _settings(context),
+    ],
   );
 
   Widget _poster(
@@ -149,7 +168,7 @@ class MinePage extends StatelessWidget {
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _settings(context),
+          child: _entries(context),
         ),
       ],
     );
@@ -179,7 +198,7 @@ class MinePage extends StatelessWidget {
               _DownloadCard(downloads: downloads),
             ],
             const SizedBox(height: 16),
-            _settings(context),
+            _entries(context),
           ],
         );
         final recent = Column(
@@ -306,6 +325,18 @@ class MinePage extends StatelessWidget {
                         onTap: () => openUsers(context, store),
                       ),
                     ),
+                    if (store.profile.admin)
+                      Expanded(
+                        child: _TelevisionEntry(
+                          icon: Icons.extension_outlined,
+                          title: '模块',
+                          subtitle: '安装或卸载站源模块',
+                          onTap: () => openPage<void>(
+                            context,
+                            (_) => ModulesPage(store: store),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: _TelevisionEntry(
                         icon: Icons.settings_outlined,
@@ -589,8 +620,14 @@ class _DownloadCard extends StatelessWidget {
 }
 
 class _SettingsEntry extends StatelessWidget {
-  const _SettingsEntry({required this.onTap});
+  const _SettingsEntry({
+    required this.onTap,
+    this.icon = Icons.settings_outlined,
+    this.label = '设置',
+  });
   final VoidCallback onTap;
+  final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -611,14 +648,14 @@ class _SettingsEntry extends StatelessWidget {
                 spacing: 14,
                 children: [
                   Icon(
-                    Icons.settings_outlined,
+                    icon,
                     size: 22,
                     color: colors.onSurfaceVariant,
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      '设置',
-                      style: TextStyle(
+                      label,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),

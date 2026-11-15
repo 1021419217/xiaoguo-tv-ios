@@ -16,7 +16,6 @@ import '../../window_on_top.dart';
 import '../app_scope.dart';
 import '../player/danmaku_settings.dart';
 import '../update_prompt.dart';
-import '../modules/modules_page.dart';
 import '../users/users_view.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
@@ -404,12 +403,6 @@ class SettingsSection extends StatelessWidget {
           title: '站源管理',
           subtitle: '开启或关闭站源',
           onTap: () => open('站源管理', (_) => SourcesView(store: store)),
-        ),
-      if (store.profile.admin)
-        SettingsTile(
-          title: '模块管理',
-          subtitle: '安装或卸载站源模块',
-          onTap: () => open('模块管理', (_) => ModulesPage(store: store)),
         ),
       if (soraniAccountAvailable())
         SettingsTile(
