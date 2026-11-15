@@ -66,6 +66,8 @@ class DiaryService {
             final name = event['event'] as String? ?? '';
             if (name.startsWith('stream.')) {
               lines.add(_nativeLine(event, name.substring('stream.'.length)));
+            } else if (name == 'module') {
+              lines.add(_moduleLine(event));
             }
           } catch (_) {}
         }
@@ -91,6 +93,16 @@ class DiaryService {
       event['responseType'],
       event['message'],
     ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
+  }
+
+  /// 模块自己打的日志（host.log），用来诊断站源解析问题。
+  static String _moduleLine(Map<String, dynamic> event) {
+    final rawTime = event['time'] as String?;
+    final time = rawTime == null ? null : DateTime.tryParse(rawTime)?.toLocal();
+    final source = event['source'] as String? ?? '';
+    final message = event['message'] as String? ?? '';
+    final stamp = time == null ? '--:--:--' : _clock(time);
+    return '[$stamp] [模块]${source.isEmpty ? '' : ' $source'} $message';
   }
 
   static String _clock(DateTime time) =>
