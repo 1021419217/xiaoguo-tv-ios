@@ -9,6 +9,7 @@ import 'package:media_kit/media_kit.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../playback_preferences.dart';
+import 'player_gestures.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
 import '../downloads/download_actions.dart';
@@ -24,7 +25,6 @@ import 'playback_sheets.dart';
 import 'playback_handle.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
-import 'swipe_controls.dart';
 
 const _maskHeight = 68.0;
 
@@ -79,6 +79,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   PlaybackSession get _session => widget.handle.session;
 
+  /// 与全剧TV 同一套手势：竖屏上下滑仍交给翻页切集，长按之后才接管亮度；
+  /// 右半屏竖滑不改音量（否则翻页会顺手改音量）。
+  late final _gestures = PlayerGestures(
+    session: _session,
+    requireHold: true,
+    volumeSwipe: false,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +114,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       );
     }
     _pages.dispose();
+    _gestures.dispose();
     super.dispose();
   }
 
@@ -351,20 +360,18 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _say(target == VideoFit.crop ? '画面比例：裁切，双指捏合恢复' : '画面比例：自动');
   }
 
-  void _pressStart(LongPressStartDetails details, double width) {
-    final x = details.localPosition.dx;
-    if (x < width / 5 || x > width * 4 / 5) {
-      if (!_session.boostLocked) _session.holdBoost();
-      unawaited(HapticFeedback.selectionClick());
-      setState(() {
-        _holding = true;
-        _heldIndex = _session.index;
-        _lockArmed = false;
-      });
-    } else {
-      unawaited(HapticFeedback.selectionClick());
-      unawaited(_openSettings());
-    }
+  /// 长按画面任意位置都是「按住倍速」，上滑到下半屏可锁定倍速——
+  /// 与全剧TV 完全一致；播放设置改为控制条上的独立按钮。
+  void _pressStart(LongPressStartDetails details) {
+    if (!_session.ready) return;
+    if (!_session.boostLocked) _session.holdBoost();
+    _gestures.setSeekSuspended(true);
+    unawaited(HapticFeedback.selectionClick());
+    setState(() {
+      _holding = true;
+      _heldIndex = _session.index;
+      _lockArmed = false;
+    });
   }
 
   void _pressMove(LongPressMoveUpdateDetails details) {
@@ -381,6 +388,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   void _pressEnd() {
     if (!_holding) return;
+    _gestures.setSeekSuspended(false);
     if (_lockArmed) {
       _session.setBoostLocked(!_session.boostLocked);
     } else if (!_session.boostLocked) {
@@ -521,22 +529,20 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               fit: session.videoFit,
               style: session.danmakuStyle,
             ),
-            SwipeControls(
+            PlayerGestureArea(
               key: const ValueKey('gestures'),
-              session: session,
-              enabled: !_pinching,
-              child: LayoutBuilder(
-                builder: (context, constraints) => GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _pinching ? null : session.togglePlayback,
-                  onLongPressStart: _pinching
-                      ? null
-                      : (details) => _pressStart(details, constraints.maxWidth),
-                  onLongPressMoveUpdate: _pressMove,
-                  onLongPressEnd: (_) => _pressEnd(),
-                  onLongPressCancel: _pressEnd,
-                ),
-              ),
+              gestures: _gestures,
+              swipeEnabled: !_pinching,
+              onTapUp: _pinching
+                  ? null
+                  : (_) {
+                      if (_gestures.suppressTap) return;
+                      session.togglePlayback();
+                    },
+              onLongPressStart: _pinching ? null : _pressStart,
+              onLongPressMoveUpdate: _pressMove,
+              onLongPressEnd: (_) => _pressEnd(),
+              onLongPressCancel: _pressEnd,
             ),
           ],
         ],
@@ -660,10 +666,35 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           key: const ValueKey('episodes'),
           left: 16,
-          right: widget.onFullscreen == null ? 16 : 68,
+          right: widget.onFullscreen == null ? 68 : 120,
           bottom: bottom + 16,
           height: 44,
           child: _chrome(_episodeStrip()),
+        ),
+        // 播放设置从「长按画面」挪到控制条，长按统一用于临时倍速。
+        Positioned(
+          key: const ValueKey('settings'),
+          right: widget.onFullscreen == null ? 16 : 68,
+          bottom: bottom + 16,
+          width: 44,
+          height: 44,
+          child: _chrome(
+            IconButton(
+              onPressed: () {
+                setState(_wake);
+                unawaited(_openSettings());
+              },
+              icon: const Icon(Icons.tune_rounded),
+              color: Colors.white,
+              tooltip: '播放设置',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: .14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
         ),
         if (widget.onFullscreen case final onFullscreen?)
           Positioned(

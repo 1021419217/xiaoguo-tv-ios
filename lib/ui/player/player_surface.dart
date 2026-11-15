@@ -17,8 +17,8 @@ import 'fade_presence.dart';
 import 'playback_handle.dart';
 import 'playback_sheets.dart';
 import 'player_status.dart';
+import 'player_gestures.dart';
 import 'player_video.dart';
-import 'swipe_controls.dart';
 
 String formatClock(Duration value) {
   final seconds = value.inSeconds;
@@ -77,6 +77,9 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   Player? _bound;
 
   PlaybackSession get _session => widget.handle.session;
+
+  /// 与全剧TV 同一套手势识别层（方向锁、抬手才 seek、长按倍速抑制快进）。
+  late final _gestures = PlayerGestures(session: _session);
 
   void _endSeek() {
     _seekTimer?.cancel();
@@ -207,6 +210,8 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   }
 
   void _tapUp(TapUpDetails details, double width) {
+    // 刚做完滑动 / 亮度手势时抬手的事件不应再被当成点按。
+    if (_gestures.suppressTap) return;
     widget.onSurface();
     final x = details.localPosition.dx;
     final side = !_session.store.playbackPreferences.doubleTapSeek
@@ -275,6 +280,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
 
   void _pressStart() {
     if (!_session.ready) return;
+    _gestures.setSeekSuspended(true);
     _session.holdBoost();
     unawaited(HapticFeedback.selectionClick());
     _holding = true;
@@ -284,6 +290,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     if (!_holding) return;
     _holding = false;
     _session.endBoost();
+    _gestures.setSeekSuspended(false);
   }
 
   Future<void> _change(Future<void> Function() change) async {
@@ -327,19 +334,15 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
               style: _session.danmakuStyle,
             ),
             if (widget.touch)
-              SwipeControls(
-                session: _session,
-                enabled: widget.fullscreen,
-                levels: _session.store.playbackPreferences.swipeLevels,
-                episodes: _session.store.playbackPreferences.swipeEpisodes,
-                child: LayoutBuilder(
-                  builder: (context, constraints) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (details) => _tapUp(details, constraints.maxWidth),
-                    onLongPressStart: (_) => _pressStart(),
-                    onLongPressEnd: (_) => _pressEnd(),
-                    onLongPressCancel: _pressEnd,
-                  ),
+              LayoutBuilder(
+                builder: (context, constraints) => PlayerGestureArea(
+                  gestures: _gestures,
+                  swipeEnabled: widget.fullscreen,
+                  onTapUp: (details) =>
+                      _tapUp(details, constraints.maxWidth),
+                  onLongPressStart: (_) => _pressStart(),
+                  onLongPressEnd: (_) => _pressEnd(),
+                  onLongPressCancel: _pressEnd,
                 ),
               )
             else

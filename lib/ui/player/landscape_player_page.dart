@@ -27,7 +27,7 @@ import 'player_status.dart';
 import 'fade_presence.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
-import 'swipe_controls.dart';
+import 'player_gestures.dart';
 import 'window_fullscreen.dart';
 
 enum _Panel { episodes, settings, speed, quality, fit }
@@ -84,6 +84,9 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
 
   PlaybackSession get _session => widget.handle.session;
 
+  /// 与全剧TV 同一套滑动 / 长按识别：方向锁、抬手才 seek、长按抑制快进。
+  late final _gestures = PlayerGestures(session: _session);
+
   @override
   void initState() {
     super.initState();
@@ -137,6 +140,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _clockTimer?.cancel();
     _seekTimer?.cancel();
     _tabs.dispose();
+    _gestures.dispose();
     if (_holding) _session.endBoost();
     if (widget.onFullscreen == null) {
       if (_full == true && desktopPlatform) {
@@ -234,6 +238,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _tapUp(TapUpDetails details, double width, bool full) {
+    // 刚做完滑动 / 亮度手势时抬手的事件不应再被当成点按。
+    if (_gestures.suppressTap) return;
     final x = details.localPosition.dx;
     final side =
         !full && widget.onFullscreen == null ||
@@ -303,6 +309,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
 
   void _pressStart() {
     if (!_session.ready) return;
+    _gestures.setSeekSuspended(true);
     _session.holdBoost();
     unawaited(HapticFeedback.selectionClick());
     setState(() => _holding = true);
@@ -311,6 +318,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   void _pressEnd() {
     if (!_holding) return;
     _session.endBoost();
+    _gestures.setSeekSuspended(false);
     setState(() => _holding = false);
   }
 
@@ -454,19 +462,15 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           fit: session.videoFit,
           style: session.danmakuStyle,
         ),
-        SwipeControls(
-          session: session,
-          enabled: full,
-          levels: session.store.playbackPreferences.swipeLevels,
-          episodes: session.store.playbackPreferences.swipeEpisodes,
-          child: LayoutBuilder(
-            builder: (context, constraints) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: (details) => _tapUp(details, constraints.maxWidth, full),
-              onLongPressStart: (_) => _pressStart(),
-              onLongPressEnd: (_) => _pressEnd(),
-              onLongPressCancel: _pressEnd,
-            ),
+        LayoutBuilder(
+          builder: (context, constraints) => PlayerGestureArea(
+            gestures: _gestures,
+            swipeEnabled: full,
+            onTapUp: (details) =>
+                _tapUp(details, constraints.maxWidth, full),
+            onLongPressStart: (_) => _pressStart(),
+            onLongPressEnd: (_) => _pressEnd(),
+            onLongPressCancel: _pressEnd,
           ),
         ),
         FadePresence(

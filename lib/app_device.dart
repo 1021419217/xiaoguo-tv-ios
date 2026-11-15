@@ -117,6 +117,16 @@ class AppDevice {
     } catch (_) {}
   }
 
+  /// 播放器手势的亮度调节能力：只有 Android 提供窗口级亮度覆盖。
+  static bool get brightnessSupported =>
+      defaultTargetPlatform == TargetPlatform.android;
+
+  /// 读取当前亮度（0~1）。非 Android 返回中性的 0.5。
+  static Future<double> getBrightness() async {
+    if (!brightnessSupported) return 0.5;
+    return (await brightness() ?? 0.5).clamp(0.0, 1.0);
+  }
+
   static Future<double?> brightness() async {
     try {
       return await channel.invokeMethod<double>('getBrightness');
