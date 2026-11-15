@@ -1,0 +1,536 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../drama_feed.dart';
+import '../../explore_feed.dart';
+import '../../local_store.dart';
+import '../../models.dart';
+import '../app_scope.dart';
+import '../cover_blur.dart';
+import '../shell/app_shell.dart';
+import '../theme/motion.dart';
+import '../detail/detail_page.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/category_tabs.dart';
+import '../widgets/choice_panel.dart';
+import '../widgets/drama_grid.dart';
+import '../widgets/follow_button.dart';
+import '../widgets/frosted_header.dart';
+import '../widgets/motion/motion_widgets.dart';
+import '../widgets/page_header.dart';
+import '../widgets/source_bar.dart';
+import '../widgets/status_view.dart';
+import '../widgets/swipe_switch.dart';
+import 'explore_hero.dart';
+import 'source_actions.dart';
+
+class ExplorePage extends StatefulWidget {
+  const ExplorePage({super.key, required this.store});
+  final LocalStore store;
+
+  @override
+  State<ExplorePage> createState() => ExplorePageState();
+}
+
+class ExplorePageState extends State<ExplorePage> {
+  ExploreFeed? _explore;
+  final _scroll = ScrollController();
+  final _search = TextEditingController();
+  final _tabsKey = GlobalKey();
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  String _shown = '';
+
+  /// 全剧TV 同款：切分类时顶部中央浮出的玻璃提示胶囊。
+  String? _hintText;
+  Timer? _hintTimer;
+
+  void _showHint(String name) {
+    _hintTimer?.cancel();
+    setState(() => _hintText = name);
+    _hintTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted) setState(() => _hintText = null);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _explore ??= ExploreFeed(AppScope.of(context).repository, widget.store);
+  }
+
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    _explore?.dispose();
+    _scroll.dispose();
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// 切分类时顶部中央浮出的玻璃提示胶囊（全剧TV 同款）。
+  Widget _hintBadge() => IgnorePointer(
+    child: Center(
+      child: AnimatedOpacity(
+        opacity: _hintText == null ? 0 : 1,
+        duration: const Duration(milliseconds: 180),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.62),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.swap_horiz_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _hintText ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> refresh() async {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    await _explore?.refresh();
+  }
+
+  void reselect() {
+    if (!_scroll.hasClients) return;
+    if (_scroll.offset <= 0) {
+      unawaited(_refreshKey.currentState?.show());
+      return;
+    }
+    unawaited(
+      _scroll.animateTo(
+        0,
+        duration: Motion.of(context, Motion.long),
+        curve: Motion.enter,
+      ),
+    );
+  }
+
+  void _selectTab(String id) {
+    if (id != _explore!.tab.id) {
+      final tabs = _explore!.tabs;
+      final name = tabs
+          .where((tab) => tab.id == id)
+          .map((tab) => tab.name)
+          .firstOrNull;
+      unawaited(HapticFeedback.selectionClick());
+      _explore!.select(id);
+      if (name != null) _showHint(name);
+      return;
+    }
+    if (!_scroll.hasClients || _scroll.offset <= 0) return;
+    unawaited(
+      _scroll.animateTo(
+        0,
+        duration: Motion.of(context, Motion.long),
+        curve: Motion.enter,
+      ),
+    );
+  }
+
+  void _open(Drama drama, {bool autoplay = false}) => openPage<void>(
+    context,
+    (_) => DetailPage(store: widget.store, drama: drama, autoplay: autoplay),
+  );
+
+  Future<void> _pickCategory(BuildContext anchor) async {
+    final explore = _explore!;
+    final value = await showChoicePanel<String>(
+      context: anchor,
+      title: '全部分类',
+      options: [for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name)],
+      selected: explore.tab.id,
+      grid: ChoiceGrid.categories,
+    );
+    if (value != null) {
+      unawaited(HapticFeedback.selectionClick());
+      explore.select(value);
+      final name = explore.tabs
+          .where((tab) => tab.id == value)
+          .map((tab) => tab.name)
+          .firstOrNull;
+      if (name != null) _showHint(name);
+    }
+  }
+
+  void _searchSubmitted(SourceSite source, String query) {
+    if (query.trim().isEmpty) return;
+    _search.clear();
+    openSearch(context, widget.store, source, query: query);
+  }
+
+  void _resetScroll(ExploreFeed explore, {required bool deferred}) {
+    final source = '${explore.source?.id}|';
+    final shown = '$source${explore.tab.id}';
+    if (shown == _shown) return;
+    final switched = _shown.startsWith(source);
+    _shown = shown;
+    if (deferred && switched) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _toTop());
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([_explore!, widget.store]),
+    builder: (context, _) {
+      final explore = _explore!;
+      final source = explore.source;
+      final form = AppScope.formFactorOf(context);
+      final television = form == FormFactor.television;
+      final desktop = form == FormFactor.window;
+      _resetScroll(explore, deferred: _swipes(form));
+      if (source == null) {
+        return Scaffold(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                if (!television) const PageHeader(title: '发现'),
+                Expanded(
+                  child: SourceSite.values.isEmpty
+                      ? StatusView(
+                          title: '还没有安装站源',
+                          message: widget.store.profile.admin
+                              ? '站源以模块的形式提供，请在「模块」页安装。'
+                              : '请联系管理员安装站源模块。',
+                          icon: Icons.extension_off_rounded,
+                        )
+                      : const StatusView(
+                          title: '暂无可用站源',
+                          message: '请在站源管理中开启站源，或联系管理员开放权限。',
+                          icon: Icons.public_off_rounded,
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      final inset = switch (form) {
+        FormFactor.phone => 16.0,
+        FormFactor.pad || FormFactor.window => 24.0,
+        FormFactor.television => televisionInset,
+      };
+      final tabs = Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: form == FormFactor.phone ? 0 : inset,
+        ),
+        child: CategoryTabs<String>(
+          key: _tabsKey,
+          options: [
+            for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
+          ],
+          selected: explore.tab.id,
+          onSelected: _selectTab,
+          onShowAll: _pickCategory,
+        ),
+      );
+      final header = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!television)
+            SourceBar(
+              source: source.name,
+              searchController: _search,
+              onSwitchSource: (anchor) => pickSource(anchor, widget.store),
+              onOpenSearch: () => openSearch(context, widget.store, source),
+              onSearchSubmitted: (query) => _searchSubmitted(source, query),
+              leading: [
+                if (widget.store.blurCoversButton)
+                  if (CoverBlurScope.of(context) case final blur?)
+                    BarButton(
+                      icon: blur.mode != CoverBlur.off
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                      tooltip: blur.mode != CoverBlur.off ? '显示封面' : '模糊封面',
+                      onPressed: blur.onToggle,
+                    ),
+              ],
+              actions: [
+                if (desktop)
+                  BarButton(
+                    icon: Icons.refresh_rounded,
+                    tooltip: '刷新',
+                    onPressed: explore.refresh,
+                  ),
+              ],
+            ),
+          if (!television || explore.feed!.items.isEmpty) tabs,
+        ],
+      );
+      return Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    // 顶栏整体铺一层磨砂玻璃；电视端保留原本的实心顶栏。
+                    if (television) header else FrostedHeader(child: header),
+                    Expanded(
+                      child: _swipeTabs(
+                        explore,
+                        form,
+                        _content(explore, inset, television, tabs),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 0,
+                child: _hintBadge(),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  bool _swipes(FormFactor form) =>
+      form == FormFactor.phone || form == FormFactor.pad;
+
+  Widget _swipeTabs(ExploreFeed explore, FormFactor form, Widget child) {
+    final tabs = explore.tabs;
+    final index = tabs.indexWhere((tab) => tab.id == explore.tab.id);
+    if (!_swipes(form) || index < 0) return child;
+    return SwipeSwitch(
+      key: ValueKey(explore.source?.id),
+      index: index,
+      count: tabs.length,
+      ready: switch (explore.feed) {
+        final feed? => feed.items.isNotEmpty || !feed.loading,
+        null => true,
+      },
+      onSwitch: (index) {
+        explore.select(tabs[index].id);
+        _showHint(tabs[index].name);
+      },
+      onEnter: _toTop,
+      child: child,
+    );
+  }
+
+  void _toTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  Widget _content(
+    ExploreFeed explore,
+    double inset,
+    bool television,
+    Widget tabs,
+  ) {
+    final feed = explore.feed!;
+    final hero = _hero(explore);
+    final items = explore.items;
+    if (feed.items.isEmpty) {
+      return FadeSwitcher(child: _status(feed));
+    }
+    final phone = AppScope.formFactorOf(context) == FormFactor.phone;
+    final desktop = AppScope.formFactorOf(context) == FormFactor.window;
+    return _grid(
+      explore,
+      feed,
+      hero,
+      items,
+      inset,
+      television,
+      tabs,
+      phone,
+      desktop,
+    );
+  }
+
+  Widget _status(DramaFeed feed) {
+    if (feed.loading) {
+      return const StatusView.loading(key: ValueKey('loading'));
+    }
+    if (feed.error.isNotEmpty) {
+      return StatusView(
+        key: const ValueKey('error'),
+        title: '暂时无法加载',
+        message: feed.error,
+        icon: Icons.cloud_off_rounded,
+        action: '重试',
+        onAction: () => feed.reload(force: true),
+      );
+    }
+    return StatusView(
+      key: const ValueKey('empty'),
+      title: '这里还没有剧',
+      message: '换一个分类看看',
+      icon: Icons.inbox_outlined,
+      action: '刷新',
+      onAction: () => feed.reload(force: true),
+    );
+  }
+
+  Widget _grid(
+    ExploreFeed explore,
+    DramaFeed feed,
+    Widget? hero,
+    List<Drama> items,
+    double inset,
+    bool television,
+    Widget tabs,
+    bool phone,
+    bool desktop,
+  ) {
+    final heroSection = hero == null
+        ? const SizedBox(key: ValueKey('none'), width: double.infinity)
+        : Padding(
+            key: hero.key,
+            padding: EdgeInsets.fromLTRB(inset, phone ? 12 : 16, inset, 0),
+            child: hero,
+          );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scroll = CustomScrollView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            if (television)
+              SliverPadding(
+                padding: const EdgeInsets.only(top: 8),
+                sliver: SliverToBoxAdapter(child: tabs),
+              ),
+            SliverToBoxAdapter(
+              child: television
+                  ? heroSection
+                  : AnimatedSize(
+                      key: ValueKey(explore.tab.id),
+                      duration: Motion.of(context, Motion.long),
+                      curve: Motion.enter,
+                      alignment: Alignment.topCenter,
+                      clipBehavior: Clip.none,
+                      child: FadeSwitcher(
+                        alignment: Alignment.topCenter,
+                        child: heroSection,
+                      ),
+                    ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(inset, desktop ? 20 : 16, inset, 0),
+              sliver: DramaSliverGrid(
+                width: constraints.maxWidth - inset * 2,
+                items: items,
+                rankOf: explore.rankOf,
+                autofocus:
+                    television && hero == null && ShellForeground.of(context),
+                heroScope: 'drama',
+                showScore: !explore.recommending,
+                exploreBlur: true,
+                onOpen: _open,
+                onMore: (drama) => quickFollow(context, widget.store, drama),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                inset,
+                8,
+                inset,
+                television ? 27 : 16,
+              ),
+              sliver: SliverToBoxAdapter(child: FeedFooter(feed: feed)),
+            ),
+          ],
+        );
+        return Stack(
+          children: [
+            AutoLoadMore(
+              feed: feed,
+              child: television
+                  ? scroll
+                  : RefreshIndicator(
+                      key: _refreshKey,
+                      onRefresh: explore.refresh,
+                      child: scroll,
+                    ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  excluding: !feed.loading,
+                  child: AnimatedOpacity(
+                    opacity: feed.loading ? 1 : 0,
+                    duration: Motion.of(context, Motion.medium),
+                    curve: Motion.standard,
+                    child: TickerMode(
+                      enabled: feed.loading,
+                      child: const LinearProgressIndicator(minHeight: 2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget? _hero(ExploreFeed explore) {
+    if (explore.resume case final entry?) {
+      final drama = entry.drama;
+      final total = drama.episodes;
+      final next = entry.finished && entry.episode < total
+          ? entry.episode + 1
+          : entry.episode;
+      return ExploreHero(
+        key: ValueKey(('resume', drama.id)),
+        drama: drama,
+        kicker: '继续观看',
+        meta: total > 0
+            ? '看到第 ${entry.episode} 集 · 共 $total 集'
+            : '看到第 ${entry.episode} 集',
+        progress: total > 0 ? entry.episode / total : null,
+        action: '继续第 $next 集',
+        onPlay: () => _open(drama, autoplay: true),
+        onDetail: () => _open(drama),
+      );
+    }
+    if (explore.featured case final drama?) {
+      return ExploreHero(
+        key: ValueKey(('featured', drama.id)),
+        drama: drama,
+        kicker: '今日推荐',
+        meta: [
+          if (drama.category.isNotEmpty) drama.category,
+          if (drama.episodes > 0) '共 ${drama.episodes} 集',
+        ].join(' · '),
+        action: '立即观看',
+        onPlay: () => _open(drama, autoplay: true),
+        onDetail: () => _open(drama),
+      );
+    }
+    return null;
+  }
+}
