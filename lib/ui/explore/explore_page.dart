@@ -12,7 +12,6 @@ import '../cover_blur.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../detail/detail_page.dart';
-import '../history/history_page.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/category_tabs.dart';
 import '../widgets/choice_panel.dart';
@@ -481,122 +480,9 @@ class ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  /// 「继续观看 / 今日推荐」不再首屏铺大封面，只留一条轻量入口，
-  /// 点进去（二级详情页）才显示大封面和内容。
-  /// 「最近观看」在首页只留一个不含任何内容的入口，不显示剧名、集数与封面，
-  /// 避免别人拿到手机就能看出在看什么；点进去（历史页）才展示具体内容。
-  Widget? _hero(ExploreFeed explore) {
-    if (explore.resume != null) {
-      return _ResumeBar(
-        key: const ValueKey('resume-entry'),
-        title: '最近观看',
-        meta: '',
-        onTap: () => openPage<void>(
-          context,
-          (_) => HistoryPage(store: widget.store),
-        ),
-      );
-    }
-    if (explore.featured case final drama?) {
-      return _ResumeBar(
-        key: ValueKey(('featured', drama.id)),
-        title: '今日推荐 · ${drama.title}',
-        meta: [
-          if (drama.category.isNotEmpty) drama.category,
-          if (drama.episodes > 0) '共 ${drama.episodes} 集',
-        ].join(' · '),
-        onTap: () => _open(drama),
-        onPlay: () => _open(drama, autoplay: true),
-      );
-    }
-    return null;
-  }
+  /// 首页不再放「最近观看 / 今日推荐」入口条：首屏直接从分类与卡片开始。
+  /// 观看记录只从「我的 → 观看记录」进入，别人拿到手机看不到观看痕迹。
+  Widget? _hero(ExploreFeed explore) => null;
+
 }
 
-/// 轻量入口条：不展示任何封面与剧集信息，点整条进二级页查看内容。
-class _ResumeBar extends StatelessWidget {
-  const _ResumeBar({
-    super.key,
-    required this.title,
-    required this.meta,
-    required this.onTap,
-    this.onPlay,
-  });
-
-  final String title;
-  final String meta;
-  final VoidCallback onTap;
-  final VoidCallback? onPlay;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.08),
-      shape: StadiumBorder(
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (meta.isNotEmpty)
-                      Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 12,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              if (onPlay case final play?)
-                SizedBox(
-                  width: 34,
-                  height: 34,
-                  child: IconButton(
-                    onPressed: play,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(
-                      Icons.play_circle_fill_rounded,
-                      size: 28,
-                      color: Colors.white,
-                    ),
-                    tooltip: '播放',
-                  ),
-                )
-              else
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 22,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -45,7 +45,7 @@ Future<void> pickSource(BuildContext anchor, LocalStore store) async {
     if (!anchor.mounted) return;
     ScaffoldMessenger.maybeOf(
       anchor,
-    )?.showSnackBar(const SnackBar(content: Text('未能切换站源，请重试')));
+    )?.showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('未能切换站源，请重试')));
   }
 }
 

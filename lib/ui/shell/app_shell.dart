@@ -226,7 +226,7 @@ class _AppShellState extends State<AppShell>
   void _mergeFinished(MergeTask task) {
     if (task.state == MergeState.cancelled) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
+      SnackBar(duration: Duration(milliseconds: 1400), 
         content: Text(
           task.state == MergeState.done
               ? '「${task.fileName}」${task.message}'

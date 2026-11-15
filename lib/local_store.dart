@@ -347,12 +347,67 @@ class LocalStore extends ChangeNotifier {
       SourceSite.isAvailable(source) &&
       profile.allows(source) &&
       sourceEnabled(source);
-  List<SourceSite> get sources =>
-      SourceSite.values.where((site) => allowsSource(site.id)).toList();
-  List<SourceSite> get permittedSources => [
-    for (final site in SourceSite.values)
-      if (!locked && profile.allows(site.id)) site,
+  List<SourceSite> get sources => [
+    for (final site in _orderedSites)
+      if (allowsSource(site.id) && !isSourceDeleted(site.id)) site,
   ];
+  List<SourceSite> get permittedSources => [
+    for (final site in _orderedSites)
+      if (!locked && profile.allows(site.id) && !isSourceDeleted(site.id)) site,
+  ];
+
+  /// 用户手动排定的站源顺序；未列出的源按内置顺序排在后面。
+  List<String> get sourceOrder => [
+    for (final id in _list(_settings['sourceOrder'])) '$id',
+  ];
+
+  List<SourceSite> get _orderedSites {
+    final order = sourceOrder;
+    if (order.isEmpty) return SourceSite.values;
+    final byId = {for (final site in SourceSite.values) site.id: site};
+    final result = <SourceSite>[];
+    for (final id in order) {
+      final site = byId.remove(id);
+      if (site != null) result.add(site);
+    }
+    result.addAll(byId.values);
+    return result;
+  }
+
+  /// 被用户从站源管理里删掉的源：只是本机隐藏，不改变内置清单，
+  /// 重新安装模块或清空偏好后仍可恢复。
+  Set<String> get deletedSources => {
+    for (final id in _list(_settings['sourceDeleted'])) '$id',
+  };
+
+  bool isSourceDeleted(String source) => deletedSources.contains(source);
+
+  Future<void> setSourceOrder(List<String> ids) {
+    final epoch = _epoch;
+    return _queue(() async {
+      _requireAdmin();
+      if (epoch != _epoch) throw StateError('当前用户已变更，请重试');
+      await _saveSettings({..._settings, 'sourceOrder': ids});
+    });
+  }
+
+  Future<void> setSourceDeleted(String source, {required bool deleted}) {
+    if (!SourceSite.isAvailable(source)) {
+      return Future.error(StateError('站源无效'));
+    }
+    final epoch = _epoch;
+    return _queue(() async {
+      _requireAdmin();
+      if (epoch != _epoch) throw StateError('当前用户已变更，请重试');
+      final gone = {...deletedSources};
+      if (deleted) {
+        gone.add(source);
+      } else {
+        gone.remove(source);
+      }
+      await _saveSettings({..._settings, 'sourceDeleted': gone.toList()});
+    });
+  }
 
   bool sourceEnabled(String source) => switch (_settings['sourceSwitches']) {
     final Map switches when switches[source] is bool =>

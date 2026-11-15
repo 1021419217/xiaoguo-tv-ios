@@ -19,7 +19,7 @@ Future<void> saveSetting(
   if (context.mounted) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('$failure')));
+    ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure')));
   }
 });
 

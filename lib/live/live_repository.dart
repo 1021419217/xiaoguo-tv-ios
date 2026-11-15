@@ -36,6 +36,97 @@ class LiveRepository {
     _routeOrders.clear();
   }
 
+  /// 把该源所有分类的频道合并成一个「全部频道」列表。
+  ///
+  /// 合并做两件事：
+  /// 1. 按主播名归并——同一个主播会同时挂在好几个分类下，只留一条；
+  /// 2. 归并时把同名的各条线路并到同一个频道里，播放时哪条先通就走哪条，
+  ///    这样「这个地址播不出来」不会直接变成「这个主播没了」。
+  ///
+  /// 秀场面板有 130 个分类、每个分类几十个主播，全量串行拉要十几秒，
+  /// 因此这里 6 路并发，并把每批结果通过 [onProgress] 交给页面增量渲染。
+  Future<List<LiveChannel>> allChannels(
+    LiveSource source, {
+    void Function(List<LiveChannel> merged, int done, int total)? onProgress,
+  }) async {
+    final list = await platforms(source);
+    // key 是归一化后的名字，value 是索引，方便把线路追加到已有频道上。
+    final index = <String, int>{};
+    final merged = <LiveChannel>[];
+    var done = 0;
+    final queue = [...list];
+
+    int absorb(LiveChannel channel) {
+      final key = _mergeKey(channel.name);
+      final at = index[key];
+      if (at == null) {
+        index[key] = merged.length;
+        merged.add(channel);
+        return merged.length - 1;
+      }
+      final existing = merged[at];
+      final urls = [...existing.urls];
+      for (final url in channel.urls) {
+        if (!urls.contains(url)) urls.add(url);
+      }
+      merged[at] = existing.withUrls(urls);
+      return at;
+    }
+
+    void publish() {
+      if (onProgress == null) return;
+      onProgress(
+        [
+          for (var at = 0; at < merged.length; at++)
+            _renumber(merged[at], at),
+        ],
+        done,
+        list.length,
+      );
+    }
+
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        final platform = queue.removeAt(0);
+        try {
+          for (final channel in await channels(source, platform)) {
+            absorb(channel);
+          }
+        } catch (_) {
+          // 单个分类失败只影响它自己，不阻断整体合并。
+        }
+        done++;
+        if (done % 4 == 0 || done == list.length) publish();
+      }
+    }
+
+    await Future.wait([for (var at = 0; at < 6; at++) worker()]);
+    return [
+      for (var at = 0; at < merged.length; at++) _renumber(merged[at], at),
+    ];
+  }
+
+  /// 主播名归一化：去掉首尾空白、中间空格、零宽字符，忽略大小写与全半角。
+  /// 面板里同一个主播常以「名字」「名字 」「Kingly」「kingly」并存。
+  String _mergeKey(String name) => name
+      .replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '')
+      .toLowerCase();
+
+  /// 合并后的列表统一重编号，避免同一主播在不同分类下出现重复编号。
+  LiveChannel _renumber(LiveChannel channel, int index) => LiveChannel(
+    key: LiveChannel.makeKey(channel.source, '全部频道', channel.name),
+    name: channel.name,
+    urls: channel.urls,
+    number: (index + 1).toString().padLeft(3, '0'),
+    headers: channel.headers,
+    logo: channel.logo,
+    group: '全部频道',
+    source: channel.source,
+    tvgId: channel.tvgId,
+    token: channel.token,
+    subtitle: channel.subtitle,
+  );
+
   Future<List<LivePlatform>> platforms(
     LiveSource source, {
     bool force = false,

@@ -18,6 +18,9 @@ import 'live_store.dart';
 /// 收藏分类的伪 ID：它不是真实分类，只在分类栏里代表「我的收藏」。
 const _favouritesId = '__favourites';
 
+/// 「全部频道」伪 ID：把源站所有分类的频道合并去重成一个列表。
+const _allId = '__all';
+
 /// 直播频道列表页。
 ///
 /// 顶部是直播源与分类，下面是该分类的频道网格；点频道进入全屏播放。
@@ -43,7 +46,6 @@ class LivePage extends StatefulWidget {
 
 class _LivePageState extends State<LivePage> {
   LiveSource? _source;
-  List<LivePlatform> _platforms = const [];
   String _platform = '';
   List<LiveChannel> _channels = const [];
   List<LiveChannel> _lastGood = const [];
@@ -52,6 +54,10 @@ class _LivePageState extends State<LivePage> {
   bool _failed = false;
   String? _error;
   int _generation = 0;
+
+  /// 「全部频道」合并进度：已拉完的分类数 / 总分类数。
+  int _progressDone = 0;
+  int _progressTotal = 0;
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
 
@@ -104,14 +110,14 @@ class _LivePageState extends State<LivePage> {
       final platforms = await widget.repository.platforms(source, force: force);
       if (!mounted || token != _generation) return;
       setState(() {
-        _platforms = platforms;
-        _platform = platforms.isEmpty ? '' : platforms.first.id;
+        _platform = platforms.isEmpty ? '' : _allId;
+        _progressTotal = platforms.length;
       });
       if (platforms.isEmpty) {
         setState(() => _loading = false);
         return;
       }
-      await _loadChannels(platforms.first);
+      await _loadAll();
     } catch (error) {
       if (!mounted || token != _generation) return;
       setState(() {
@@ -122,7 +128,8 @@ class _LivePageState extends State<LivePage> {
     }
   }
 
-  Future<void> _loadChannels(LivePlatform platform) async {
+  /// 一次性把所有分类的频道合并去重，边拉边显示，避免用户对着空页面等。
+  Future<void> _loadAll() async {
     final source = _source;
     if (source == null) return;
     final token = _generation;
@@ -130,23 +137,33 @@ class _LivePageState extends State<LivePage> {
       _loading = true;
       _failed = false;
       _error = null;
-      _platform = platform.id;
+      _progressDone = 0;
+      _channels = _lastGoodPlatform == _allId ? _lastGood : const [];
     });
     try {
-      final channels = await widget.repository.channels(source, platform);
+      final channels = await widget.repository.allChannels(
+        source,
+        onProgress: (merged, done, total) {
+          if (!mounted || token != _generation) return;
+          setState(() {
+            _channels = merged;
+            _progressDone = done;
+            _progressTotal = total;
+          });
+        },
+      );
       if (!mounted || token != _generation) return;
       setState(() {
         _channels = channels;
         _lastGood = channels;
-        _lastGoodPlatform = platform.id;
+        _lastGoodPlatform = _allId;
         _loading = false;
       });
     } catch (error) {
       if (!mounted || token != _generation) return;
       setState(() {
         _loading = false;
-        // 同一分类重新加载失败时保留上一次的内容，避免闪回空态。
-        _channels = _lastGoodPlatform == platform.id ? _lastGood : const [];
+        _channels = _lastGoodPlatform == _allId ? _lastGood : const [];
         _failed = _channels.isEmpty;
         _error = '$error';
       });
@@ -158,7 +175,6 @@ class _LivePageState extends State<LivePage> {
     widget.repository.clear();
     setState(() {
       _source = source;
-      _platforms = const [];
       _platform = '';
       _channels = const [];
       _lastGood = const [];
@@ -180,9 +196,19 @@ class _LivePageState extends State<LivePage> {
       });
       return;
     }
-    final platform = _platforms.where((item) => item.id == id).firstOrNull;
-    if (platform == null) return;
-    unawaited(_loadChannels(platform));
+    if (id != _allId) return;
+    if (_lastGoodPlatform == _allId && _lastGood.isNotEmpty) {
+      ++_generation;
+      setState(() {
+        _platform = _allId;
+        _channels = _lastGood;
+        _loading = false;
+        _failed = false;
+        _error = null;
+      });
+      return;
+    }
+    unawaited(_loadAll());
   }
 
   Future<void> _open(int index) async {
@@ -258,8 +284,10 @@ class _LivePageState extends State<LivePage> {
     }
     // 与首页一致：左右快滑在「收藏 / 各平台分类」之间切换。
     // 电视端组件会自动跳过手势，遥控器方向键行为不变。
-    final platformIds = [_favouritesId, for (final p in _platforms) p.id];
-    final platformLabels = ['收藏', for (final p in _platforms) p.name];
+    // 分类栏固定为「收藏 / 全部频道」：源站的 130 个秀场分类不再铺开，
+    // 全部频道已按主播名去重合并，观感与全剧TV 一致。
+    final platformIds = [_favouritesId, _allId];
+    final platformLabels = ['收藏', '全部频道'];
     var platformIndex = platformIds.indexOf(_platform);
     if (platformIndex < 0) platformIndex = 0;
     return Column(
@@ -301,43 +329,47 @@ class _LivePageState extends State<LivePage> {
 
   Widget _platformBar() => SizedBox(
     height: 52,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      itemCount: _platforms.length + 1,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return _Chip(
-            label: '收藏 ${widget.store.favourites.length}',
-            selected: _platform == _favouritesId,
-            onTap: () => _selectPlatform(_favouritesId),
-          );
-        }
-        final platform = _platforms[index - 1];
-        return _Chip(
-          label: platform.name,
-          badge: platform.count > 0 ? '${platform.count}' : null,
-          selected: platform.id == _platform,
-          onTap: () => _selectPlatform(platform.id),
-        );
-      },
+    child: Row(
+      children: [
+        const SizedBox(width: 16),
+        _Chip(
+          label: '收藏 ${widget.store.favourites.length}',
+          selected: _platform == _favouritesId,
+          onTap: () => _selectPlatform(_favouritesId),
+        ),
+        const SizedBox(width: 8),
+        _Chip(
+          label: _progressTotal > 0 && _loading && _platform == _allId
+              ? '全部频道 $_progressDone/$_progressTotal'
+              : '全部频道',
+          badge: _platform != _allId && _channels.isNotEmpty
+              ? '${_lastGood.length}'
+              : null,
+          selected: _platform == _allId,
+          onTap: () => _selectPlatform(_allId),
+        ),
+        const Spacer(),
+      ],
     ),
   );
 
   Widget _channelBody(BuildContext context) {
     if (_loading && _channels.isEmpty) {
-      return const StatusView.loading(title: '正在加载频道');
+      return StatusView.loading(
+        title: _progressTotal > 0
+            ? '正在合并频道 $_progressDone/$_progressTotal'
+            : '正在加载频道',
+      );
     }
     if (_channels.isEmpty) {
       final favourite = _platform == _favouritesId;
       return StatusView(
-        title: favourite ? '还没有收藏频道' : '该分类暂时没有频道',
-        message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '换个分类或稍后重试。',
+        title: favourite ? '还没有收藏频道' : '暂时没有可用的频道',
+        message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '下拉刷新或稍后重试。',
         icon: favourite ? Icons.star_border_rounded : Icons.tv_off_rounded,
       );
     }
-    return GridView.builder(
+    final grid = GridView.builder(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + widget.bottomInset),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 220,
@@ -353,6 +385,18 @@ class _LivePageState extends State<LivePage> {
           onTap: () => unawaited(_open(index)),
         );
       },
+    );
+    if (!_loading) return grid;
+    // 还在补齐后面的分类：顶上留一条细进度，已有频道照常可点。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LinearProgressIndicator(
+          minHeight: 2,
+          value: _progressTotal > 0 ? _progressDone / _progressTotal : null,
+        ),
+        Expanded(child: grid),
+      ],
     );
   }
 }

@@ -13,7 +13,7 @@ String formatBytes(int bytes) => bytes >= 1 << 30
     : '${(bytes / 1024).round()} KB';
 
 void showMessage(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(text)));
 
 Future<bool> downloadEpisodes(
   BuildContext context,
@@ -31,11 +31,11 @@ Future<bool> downloadEpisodes(
       episodes,
     );
     messenger.showSnackBar(
-      SnackBar(content: Text(added == 0 ? '所选剧集已在下载列表中' : '已加入下载 $added 集')),
+      SnackBar(duration: Duration(milliseconds: 1400), content: Text(added == 0 ? '所选剧集已在下载列表中' : '已加入下载 $added 集')),
     );
     return true;
   } catch (error) {
-    messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+    messenger.showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(error.toString())));
     return false;
   }
 }
@@ -90,7 +90,7 @@ Future<bool> removeDownloads(
     ids,
   );
   messenger.showSnackBar(
-    SnackBar(
+    SnackBar(duration: Duration(milliseconds: 1400), 
       content: Text(
         result.failures.isEmpty
             ? done

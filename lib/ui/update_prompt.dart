@@ -66,7 +66,7 @@ Future<void> checkUpdateManually(BuildContext context) async {
     }
   } catch (failure) {
     messenger.showSnackBar(
-      SnackBar(
+      SnackBar(duration: Duration(milliseconds: 1400), 
         content: Text(
           failure is AppFailure ? '检查更新失败：$failure' : '检查更新失败，请稍后再试',
         ),
@@ -75,7 +75,7 @@ Future<void> checkUpdateManually(BuildContext context) async {
     return;
   }
   if (update == null) {
-    messenger.showSnackBar(const SnackBar(content: Text('已是最新版本')));
+    messenger.showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('已是最新版本')));
     return;
   }
   if (!context.mounted) return;
@@ -135,6 +135,6 @@ Future<void> _openRelease(BuildContext context, String url) async {
   if (context.mounted) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('无法打开浏览器，链接已复制')));
+    ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('无法打开浏览器，链接已复制')));
   }
 }

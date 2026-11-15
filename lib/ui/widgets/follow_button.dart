@@ -11,7 +11,7 @@ Future<void> _toggle(BuildContext context, LocalStore store, Drama drama) =>
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('$failure')));
+        ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure')));
       }
     });
 
@@ -25,13 +25,13 @@ Future<void> quickFollow(
   try {
     await store.toggleFavorite(drama);
   } catch (failure) {
-    messenger.showSnackBar(SnackBar(content: Text('$failure')));
+    messenger.showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure')));
     return;
   }
   messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(
-      SnackBar(
+      SnackBar(duration: Duration(milliseconds: 1400), 
         persist: false,
         content: Text(
           followed ? '已取消追剧「${drama.title}」' : '已追剧「${drama.title}」',
@@ -42,7 +42,7 @@ Future<void> quickFollow(
               .toggleFavorite(drama)
               .catchError(
                 (Object failure) =>
-                    messenger.showSnackBar(SnackBar(content: Text('$failure'))),
+                    messenger.showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure'))),
               ),
         ),
       ),

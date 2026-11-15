@@ -33,7 +33,7 @@ class _UnlockPageState extends State<UnlockPage> {
     if (message != null && mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(message)));
     }
   }
 

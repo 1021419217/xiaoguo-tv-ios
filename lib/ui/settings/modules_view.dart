@@ -42,7 +42,7 @@ mixin _ModuleActions<T extends StatefulWidget> on State<T> {
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(message)));
     }
   }
 

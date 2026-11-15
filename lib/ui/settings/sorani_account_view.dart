@@ -68,7 +68,7 @@ class _SoraniAccountTileState extends State<SoraniAccountTile> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('$failure')));
+        ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -190,7 +190,7 @@ class _SoraniLoginDialogState extends State<_SoraniLoginDialog> {
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开浏览器，链接已复制')));
+      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('无法打开浏览器，链接已复制')));
     }
   }
 

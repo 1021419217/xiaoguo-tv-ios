@@ -428,7 +428,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
+    ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('播放偏好未能保存，请重试')));
   }
 
   @override
@@ -533,11 +533,20 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               key: const ValueKey('gestures'),
               gestures: _gestures,
               swipeEnabled: !_pinching,
+              // 单击只唤出控制条：手指碰一下画面就停播太容易误触。
               onTapUp: _pinching
                   ? null
                   : (_) {
                       if (_gestures.suppressTap) return;
+                      setState(_wake);
+                    },
+              // 暂停 / 继续统一走双击。
+              onDoubleTap: _pinching
+                  ? null
+                  : () {
+                      if (_gestures.suppressTap) return;
                       session.togglePlayback();
+                      setState(_wake);
                     },
               onLongPressStart: _pinching ? null : _pressStart,
               onLongPressMoveUpdate: _pressMove,
@@ -630,7 +639,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             height: bottom,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: session.togglePlayback,
+              // 这块只用来挡住系统手势条，点一下不再暂停。
+              onTap: () => setState(_wake),
               onVerticalDragStart: (_) {},
             ),
           ),

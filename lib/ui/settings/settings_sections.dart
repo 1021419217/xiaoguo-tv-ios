@@ -551,7 +551,7 @@ class SettingsSection extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开浏览器，链接已复制')));
+      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('无法打开浏览器，链接已复制')));
     }
   }
 
@@ -621,7 +621,7 @@ class _BackupCardState extends State<_BackupCard> {
     if (message != null && mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(message)));
     }
   }
 
@@ -694,7 +694,7 @@ class _RenderingTileState extends State<_RenderingTile> {
     if (!await AppDevice.setCompatibleRendering(enabled) && mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('兼容渲染模式未能保存，请重试')));
+      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('兼容渲染模式未能保存，请重试')));
     }
   }
 

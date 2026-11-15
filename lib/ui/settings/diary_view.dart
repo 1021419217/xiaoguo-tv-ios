@@ -56,7 +56,7 @@ class _DiaryViewState extends State<DiaryView> {
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('日记已复制')));
+      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('日记已复制')));
     }
   }
 

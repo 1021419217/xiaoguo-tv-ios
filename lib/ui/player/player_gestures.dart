@@ -522,6 +522,7 @@ class PlayerHoldGesture extends StatelessWidget {
     super.key,
     this.child,
     this.onTapUp,
+    this.onDoubleTap,
     this.onLongPressStart,
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
@@ -537,6 +538,10 @@ class PlayerHoldGesture extends StatelessWidget {
   /// 保持完全一致的命中范围。
   final Widget? child;
   final GestureTapUpCallback? onTapUp;
+
+  /// 传了才注册双击识别器：不传时保持原来的「抬手即单击」，
+  /// 单击不会被双击等待拖慢。
+  final GestureDoubleTapCallback? onDoubleTap;
   final GestureLongPressStartCallback? onLongPressStart;
   final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
   final GestureLongPressEndCallback? onLongPressEnd;
@@ -554,6 +559,17 @@ class PlayerHoldGesture extends StatelessWidget {
                 instance.onTapUp = onTapUp;
               },
             ),
+        // 竖屏把「暂停」挂到双击上，单击只负责唤出控制条，
+        // 避免手指一碰画面就停播。不传 onDoubleTap 时完全不注册，
+        // 单击依旧是立即响应、没有 300ms 等待。
+        if (onDoubleTap != null)
+          DoubleTapGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
+                () => DoubleTapGestureRecognizer(debugOwner: this),
+                (DoubleTapGestureRecognizer instance) {
+                  instance.onDoubleTap = onDoubleTap;
+                },
+              ),
         LongPressGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
               () => LongPressGestureRecognizer(
@@ -585,6 +601,7 @@ class PlayerGestureArea extends StatelessWidget {
     required this.gestures,
     this.swipeEnabled = true,
     this.onTapUp,
+    this.onDoubleTap,
     this.onLongPressStart,
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
@@ -596,6 +613,9 @@ class PlayerGestureArea extends StatelessWidget {
   /// 内嵌（非全屏）播放时关掉滑动，只保留点按与长按。
   final bool swipeEnabled;
   final GestureTapUpCallback? onTapUp;
+
+  /// 双击回调（仅竖屏用）：为 null 时只保留单击。
+  final GestureDoubleTapCallback? onDoubleTap;
   final GestureLongPressStartCallback? onLongPressStart;
   final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
   final GestureLongPressEndCallback? onLongPressEnd;
@@ -627,6 +647,7 @@ class PlayerGestureArea extends StatelessWidget {
           children: [
             PlayerHoldGesture(
               onTapUp: onTapUp,
+              onDoubleTap: onDoubleTap,
               onLongPressStart: onLongPressStart,
               onLongPressMoveUpdate: onLongPressMoveUpdate,
               onLongPressEnd: onLongPressEnd,

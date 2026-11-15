@@ -66,7 +66,7 @@ class _TermsPageState extends State<TermsPage> {
       setState(() => _busy = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('保存失败：$failure')));
+      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('保存失败：$failure')));
     }
   }
 
