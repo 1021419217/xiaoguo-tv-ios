@@ -70,7 +70,9 @@ class PlaybackSession extends ChangeNotifier {
       if (_closed || !_acceptErrors || _loading || _error != null) return;
       if (_health.stalled(
         position: player.state.position,
-        playing: player.state.playing && _playIntent,
+        // 用户想播就算数：mpv 卡在 demuxer 读时 playing 会是 false，
+        // 旧条件要求 playing 为真，导致这种卡死永远不触发恢复。
+        active: _playIntent,
         foreground: _foreground,
         now: DateTime.now(),
       )) {
@@ -177,6 +179,8 @@ class PlaybackSession extends ChangeNotifier {
   bool _closed = false;
   bool _acceptErrors = false;
   bool _foreground = true;
+  DateTime? _hiddenAt;
+  bool _resumeAfterHide = false;
   bool _playIntent = true;
   bool _pendingError = false;
   bool _boosting = false;
@@ -508,12 +512,29 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> _recover(String reason) async {
-    final current = _plan;
     if (_closed ||
         !_acceptErrors ||
         !_foreground ||
-        current == null ||
+        _plan == null ||
         _error != null) {
+      return;
+    }
+    // 回前台后的头几秒网络往往还没就绪，900ms 连发三次只会全部打空。
+    final attempt = _recovery.attempts;
+    if (attempt > 0) {
+      final wait = attempt == 1
+          ? const Duration(milliseconds: 1500)
+          : const Duration(seconds: 4);
+      _acceptErrors = false;
+      _errorTimer?.cancel();
+      _pendingError = false;
+      DiaryService.add('[Play] 恢复退避 ${wait.inMilliseconds}ms，准备第 ${attempt + 1} 次');
+      await Future<void>.delayed(wait);
+      if (_closed || !_foreground || _error != null) return;
+    }
+    final current = _plan;
+    if (current == null) {
+      _acceptErrors = true;
       return;
     }
     _acceptErrors = false;
@@ -539,7 +560,10 @@ class PlaybackSession extends ChangeNotifier {
         try {
           await saveProgress();
           _openedIndex = -1;
-          await player.stop();
+          await player.stop().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {},
+          );
         } finally {
           await _release(current.session);
         }
@@ -670,7 +694,12 @@ class PlaybackSession extends ChangeNotifier {
         await saveProgress();
         if (!_current(ticket)) return;
         _openedIndex = -1;
-        await player.stop();
+        // 后台挂起回来后 mpv 的 stop 有可能卡在已断开的 demuxer 上，
+        // 加超时避免整条串行队列被一个死会话堵住。
+        await player.stop().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {},
+        );
         final previous = _plan;
         _plan = null;
         if (recovery == PlaybackRecoveryAction.alternative) {
@@ -1160,18 +1189,83 @@ class PlaybackSession extends ChangeNotifier {
 
   void setForeground(bool visible) {
     if (_closed || _foreground == visible) return;
-    DiaryService.add(visible ? '[Play] 应用回到前台' : '[Play] 应用不可见，暂停播放');
     _foreground = visible;
     _health.reset();
-    _sync();
     if (!visible) {
+      _hiddenAt = DateTime.now();
+      // 只记「锁屏前真的在放」这一种，用户自己按了暂停再锁屏，回来保持暂停。
+      _resumeAfterHide = _playIntent && player.state.playing && _error == null;
+      DiaryService.add('[Play] 应用不可见，暂停播放');
       endBoost();
       _playIntent = false;
       unawaited(player.pause());
       unawaited(saveProgress());
-    } else if (_pendingError) {
-      _queueRecovery('foreground_pending_error');
+      _sync();
+      return;
     }
+    final hidden = _hiddenAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_hiddenAt!);
+    _hiddenAt = null;
+    final resume = _resumeAfterHide;
+    _resumeAfterHide = false;
+    DiaryService.add('[Play] 应用回到前台（后台 ${hidden.inSeconds}s）');
+    _sync();
+    if (_pendingError) _queueRecovery('foreground_pending_error');
+    if (!resume || _loading) return;
+    unawaited(_resumeAfterBackground(hidden));
+  }
+
+  /// 回前台时的两种处理：短暂切出去直接续播并做一次 6 秒体检；
+  /// 挂起超过 30 秒则重新解析直链、重建会话 —— 挂起期间 socket 被回收、
+  /// mpv 的解复用器和硬解会话也会失效，直接在旧会话上 resume 只会黑屏或卡死。
+  Future<void> _resumeAfterBackground(Duration hidden) async {
+    if (_closed || !_foreground) return;
+    _playIntent = true;
+    _notify();
+    if (hidden >= const Duration(seconds: 30)) {
+      DiaryService.add('[Play] 后台超过 30 秒，重建播放会话');
+      final position = _resumePosition;
+      // 给系统一点时间把网络栈恢复起来，回前台头一秒发请求基本必然失败。
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (_closed || !_foreground || !_playIntent) return;
+      try {
+        await play(
+          _index,
+          position: position,
+          recovery: PlaybackRecoveryAction.refresh,
+        ).timeout(const Duration(seconds: 30));
+      } catch (error) {
+        DiaryService.add('[Play] 回前台重建失败：${_diagnostic(error)}');
+        if (_closed || !_foreground) return;
+        // 超时只是兜底：如果 play 其实已经成功 open，就别再触发一次重建。
+        if (!_loading && _plan != null) return;
+        _recovery.reset();
+        _queueRecovery('foreground_rebuild_failed');
+      }
+      return;
+    }
+    try {
+      await player.play();
+    } catch (error) {
+      DiaryService.add('[Play] 回前台续播失败：${_diagnostic(error)}');
+    }
+    unawaited(_verifyForegroundResume());
+  }
+
+  /// 短暂切回来之后，6 秒内位置一动不动、也没在正常缓冲，就按停滞走恢复。
+  Future<void> _verifyForegroundResume() async {
+    final ticket = _generation;
+    final before = player.state.position;
+    await Future<void>.delayed(const Duration(seconds: 6));
+    if (_closed || !_foreground || !_playIntent || _loading || _error != null) {
+      return;
+    }
+    if (ticket != _generation) return;
+    final state = player.state;
+    if (state.position > before) return;
+    if (state.playing && state.buffering) return;
+    unawaited(_recover('foreground_no_progress'));
   }
 
   Future<void> saveProgress({bool quiet = false}) async {

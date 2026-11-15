@@ -7,6 +7,9 @@ class PlaybackRecovery {
   int _attempts = 0;
   bool _refreshed = false;
 
+  /// 已经用掉的恢复次数，用来给连续重试做退避。
+  int get attempts => _attempts;
+
   void reset() {
     _attempts = 0;
     _refreshed = false;
@@ -41,11 +44,11 @@ class PlaybackHealth {
 
   bool stalled({
     required Duration position,
-    required bool playing,
+    required bool active,
     required bool foreground,
     required DateTime now,
   }) {
-    if (!playing || !foreground || position != _position) {
+    if (!active || !foreground || position != _position) {
       _position = position;
       _lastProgress = now;
       return false;
