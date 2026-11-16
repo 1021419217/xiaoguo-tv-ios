@@ -83,6 +83,7 @@ class LocalStore extends ChangeNotifier {
   bool? _forceLogin;
   bool _locked = false;
   bool _disposed = false;
+  bool _erased = false;
   String? _configurationError;
   int _epoch = 0;
   int _failures = 0;
@@ -342,6 +343,24 @@ class LocalStore extends ChangeNotifier {
   }
 
   bool get canDownload => !locked && (profile.admin || profile.download);
+  bool get adminProtected =>
+      _profiles.firstWhere((profile) => profile.admin).protected;
+
+  Future<void> verifyAdmin(String pin) => _queue(
+    () => _checkPin(_profiles.firstWhere((profile) => profile.admin), pin),
+  );
+
+  Future<List<String>> eraseAll(Future<List<String>> Function() wipe) async {
+    var leftover = const <String>[];
+    await _queue(() async {
+      _requireAdmin();
+      leftover = await wipe();
+      _erased = true;
+      await preferences.clear();
+    });
+    return leftover;
+  }
+
   bool allowsSource(String source) =>
       !locked &&
       SourceSite.isAvailable(source) &&
@@ -409,6 +428,21 @@ class LocalStore extends ChangeNotifier {
     });
   }
 
+  /// 重新安装模块后调用：清掉本机「已删除」标记，让站源立刻回到列表。
+  ///
+  /// 卸载模块不会清这个标记，所以以前删过的源即使重新装回来也会继续被过滤掉；
+  /// 这里不校验 isAvailable，安装完成的那一瞬间模块可能还没注册完。
+  Future<void> restoreDeletedSource(String source) {
+    if (!isSourceDeleted(source)) return Future<void>.value();
+    final epoch = _epoch;
+    return _queue(() async {
+      _requireAdmin();
+      if (epoch != _epoch) throw StateError('当前用户已变更，请重试');
+      final gone = {...deletedSources}..remove(source);
+      await _saveSettings({..._settings, 'sourceDeleted': gone.toList()});
+    });
+  }
+
   bool sourceEnabled(String source) => switch (_settings['sourceSwitches']) {
     final Map switches when switches[source] is bool =>
       switches[source] as bool,
@@ -426,6 +460,14 @@ class LocalStore extends ChangeNotifier {
       final switches = {..._map(_settings['sourceSwitches']), source: enabled};
       await _saveSettings({..._settings, 'sourceSwitches': switches});
     });
+  }
+
+  List<String> _restoredModules = const [];
+
+  List<String> takeRestoredModules() {
+    final modules = _restoredModules;
+    _restoredModules = const [];
+    return modules;
   }
 
   Map<String, FollowCheck> get followChecks => Map.of(_followChecks);
@@ -1045,7 +1087,7 @@ class LocalStore extends ChangeNotifier {
     _notify();
   });
 
-  Future<String> exportBackup() async {
+  Future<String> exportBackup({Iterable<String> modules = const []}) async {
     await _writes.catchError((Object _) {});
     _requireAdmin();
     final libraries = <String, Object?>{};
@@ -1088,6 +1130,8 @@ class LocalStore extends ChangeNotifier {
       'deleteAfterAutoExport': deleteAfterAutoExport,
       'deleteAfterManualExport': deleteAfterManualExport,
       'televisionKeyboard': televisionKeyboard,
+      'sourceSwitches': _map(_settings['sourceSwitches']),
+      'modules': modules.where(validSourceId).toSet().toList(),
       'libraries': libraries,
     });
     if (utf8.encode(content).length > 8 * 1024 * 1024) {
@@ -1127,6 +1171,25 @@ class LocalStore extends ChangeNotifier {
       (key) => data.containsKey(key) && data[key] is! bool,
     )) {
       throw const FormatException('备份设置无效');
+    }
+    if (data['sourceSwitches'] case final Object switches) {
+      if (switches is! Map ||
+          switches.length > 100 ||
+          switches.entries.any(
+            (entry) =>
+                entry.key is! String ||
+                !validSourceId(entry.key as String) ||
+                entry.value is! bool,
+          )) {
+        throw const FormatException('备份站源设置无效');
+      }
+    }
+    if (data['modules'] case final Object modules) {
+      if (modules is! List ||
+          modules.length > 100 ||
+          modules.any((id) => id is! String || !validSourceId(id))) {
+        throw const FormatException('备份模块列表无效');
+      }
     }
     final libraries = data['libraries'] as Map;
     for (final profile in profiles) {
@@ -1187,6 +1250,8 @@ class LocalStore extends ChangeNotifier {
           'themeColor': color.name,
         for (final key in _backupFlags)
           if (data[key] case final bool value) key: value,
+        if (data['sourceSwitches'] case final Map switches)
+          'sourceSwitches': switches,
         if (data['blurCoversLaunch'] case final String mode)
           'blurCoversLaunch': mode
         else if (data['blurCoversOnLaunch'] case final bool launch)
@@ -1220,6 +1285,9 @@ class LocalStore extends ChangeNotifier {
     }
     await _removeLegacy();
     await _initialize();
+    _restoredModules = [
+      if (data['modules'] case final List modules) ...modules.cast<String>(),
+    ];
     _epoch++;
     _notify();
   }
@@ -1306,7 +1374,9 @@ class LocalStore extends ChangeNotifier {
   });
 
   Future<void> _queue(Future<void> Function() action) {
-    _writes = _writes.catchError((Object _) {}).then((_) => action());
+    _writes = _writes
+        .catchError((Object _) {})
+        .then((_) => _erased ? null : action());
     return _writes;
   }
 

@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../search/search_page.dart';
-import '../settings/sources_view.dart';
+import '../modules/modules_page.dart';
 import '../shell/app_shell.dart';
-import '../widgets/glass_app_bar.dart';
 import '../widgets/choice_panel.dart';
 
 Future<void> pickSource(BuildContext anchor, LocalStore store) async {
@@ -17,24 +16,12 @@ Future<void> pickSource(BuildContext anchor, LocalStore store) async {
     ],
     selected: store.source,
     grid: ChoiceGrid.sources,
-    action: SourceSite.values.length > 1
+    action: store.profile.admin
         ? (
             label: '管理站源',
             icon: Icons.tune_rounded,
-            onPressed: () => openPage<void>(
-              anchor,
-              (_) => Scaffold(
-                extendBodyBehindAppBar: true,
-                appBar: glassAppBar(title: '站源管理'),
-                body: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: kToolbarHeight),
-                    child: SourcesView(store: store),
-                  ),
-                ),
-              ),
-            ),
+            onPressed: () =>
+                openPage<void>(anchor, (_) => ModulesPage(store: store)),
           )
         : null,
   );

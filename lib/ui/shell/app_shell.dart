@@ -17,8 +17,8 @@ import '../explore/source_actions.dart';
 import '../follow/follow_page.dart';
 import '../history/history_page.dart';
 import '../mine/mine_page.dart';
-import '../modules/modules_page.dart';
 import '../update_prompt.dart';
+import '../modules/module_install.dart';
 import '../widgets/bar_button.dart';
 import '../theme/motion.dart';
 import '../widgets/focus_ring.dart';
@@ -30,7 +30,6 @@ enum AppTab {
   follow('追剧', Icons.bookmark_border_rounded, Icons.bookmark_rounded),
   live('直播', Icons.live_tv_outlined, Icons.live_tv_rounded),
   history('历史', Icons.history_rounded, Icons.history_rounded),
-  modules('模块', Icons.extension_outlined, Icons.extension_rounded),
   mine('我的', Icons.person_outline_rounded, Icons.person_rounded);
 
   const AppTab(this.label, this.icon, this.selectedIcon);
@@ -116,7 +115,9 @@ class _AppShellState extends State<AppShell>
     super.initState();
     FocusManager.instance.addListener(_followFocus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) runStartupChecks(context, widget.store);
+      if (!mounted) return;
+      unawaited(offerRestoredModules(context, widget.store));
+      runStartupChecks(context, widget.store);
     });
   }
 
@@ -168,8 +169,6 @@ class _AppShellState extends State<AppShell>
       if (switch (tab) {
         AppTab.history =>
           widget.store.historyTab && !AppScope.of(context).television,
-        // 模块入口并入 设置 → 站源 → 模块管理，不再占底栏。
-        AppTab.modules => false,
         AppTab.explore || AppTab.follow || AppTab.live || AppTab.mine => true,
       })
         tab,
@@ -289,7 +288,6 @@ class _AppShellState extends State<AppShell>
       bottomInset: AppScope.formFactorOf(context) == FormFactor.phone ? 88 : 0,
     ),
     AppTab.history => HistoryPage(store: widget.store, root: true),
-    AppTab.modules => ModulesPage(store: widget.store),
     AppTab.mine => MinePage(
       store: widget.store,
       downloads: _downloads!,
@@ -403,10 +401,7 @@ class _AppShellState extends State<AppShell>
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
                           AppTab.mine => _mineEntry,
-                          AppTab.explore ||
-                          AppTab.live ||
-                          AppTab.history ||
-                          AppTab.modules => null,
+                          AppTab.explore || AppTab.live || AppTab.history => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||

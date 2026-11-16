@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../playback_preferences.dart';
 import '../../playback_session.dart';
+import '../app_scope.dart';
 import '../settings/sorani_account_view.dart';
 import '../theme/motion.dart';
 import '../widgets/contained_slider.dart';
@@ -16,6 +17,7 @@ import 'danmaku_overlay.dart';
 import 'fade_presence.dart';
 import 'playback_handle.dart';
 import 'playback_sheets.dart';
+import 'player_lock.dart';
 import 'player_status.dart';
 import 'player_gestures.dart';
 import 'player_video.dart';
@@ -41,6 +43,7 @@ class PlayerSurface extends StatefulWidget {
     required this.onWide,
     this.onMiniWindow,
     required this.onSurface,
+    required this.onSay,
   });
   final PlaybackHandle handle;
   final ValueListenable<String> hint;
@@ -51,6 +54,7 @@ class PlayerSurface extends StatefulWidget {
   final VoidCallback onWide;
   final VoidCallback? onMiniWindow;
   final VoidCallback onSurface;
+  final ValueChanged<String> onSay;
 
   @override
   State<PlayerSurface> createState() => _PlayerSurfaceState();
@@ -149,7 +153,28 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   }
 
   bool get _controlsVisible =>
-      _visible || _session.paused || _session.stalled || !_session.ready;
+      !_session.locked &&
+      (_visible || _session.paused || _session.stalled || !_session.ready);
+
+  bool get _lockable => widget.touch && widget.fullscreen && !desktopPlatform;
+
+  void _lock() {
+    _pressEnd();
+    _tapTimer?.cancel();
+    _hideTimer?.cancel();
+    if (_streak != 0) setState(_commitStreak);
+    _close();
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(true);
+    widget.onSay('已锁定，点屏幕显示锁图标');
+  }
+
+  void _unlock() {
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(false);
+    _show();
+    widget.onSay('已解锁');
+  }
 
   void _scheduleHide() {
     _hideTimer?.cancel();
@@ -311,6 +336,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     listenable: _session,
     builder: (context, _) {
       final state = _session.player.state;
+      final locked = _session.locked;
       final visible = _controlsVisible;
       final popup = visible ? _popup : null;
       return MouseRegion(
@@ -337,12 +363,13 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
               LayoutBuilder(
                 builder: (context, constraints) => PlayerGestureArea(
                   gestures: _gestures,
-                  swipeEnabled: widget.fullscreen,
-                  onTapUp: (details) =>
-                      _tapUp(details, constraints.maxWidth),
-                  onLongPressStart: (_) => _pressStart(),
-                  onLongPressEnd: (_) => _pressEnd(),
-                  onLongPressCancel: _pressEnd,
+                  swipeEnabled: widget.fullscreen && !locked,
+                  onTapUp: locked
+                      ? null
+                      : (details) => _tapUp(details, constraints.maxWidth),
+                  onLongPressStart: locked ? null : (_) => _pressStart(),
+                  onLongPressEnd: locked ? null : (_) => _pressEnd(),
+                  onLongPressCancel: locked ? null : _pressEnd,
                 ),
               )
             else
@@ -437,6 +464,13 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
                 ),
                 null => null,
               },
+            ),
+            PlayerLockOverlay(
+              locked: locked,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.only(left: 20),
+              onUnlock: _unlock,
+              onBlocked: () => widget.onSay('已锁定，点击锁图标解锁'),
             ),
           ],
         ),
@@ -542,6 +576,14 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
             ),
           ),
         ),
+        if (_lockable)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: PlayerLockButton(locked: false, onPressed: _lock),
+            ),
+          ),
         Positioned(
           left: 6,
           right: 6,

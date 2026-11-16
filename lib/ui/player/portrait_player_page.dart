@@ -23,6 +23,7 @@ import 'fade_presence.dart';
 import 'mini_player.dart';
 import 'playback_sheets.dart';
 import 'playback_handle.dart';
+import 'player_lock.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
 
@@ -165,12 +166,27 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   bool get _chromeShown =>
-      !_session.store.playbackPreferences.autoHideControls ||
-      !_idle ||
-      _dragging ||
-      _session.paused ||
-      _session.error != null ||
-      _session.loading && !_quietSwitch;
+      !_session.locked &&
+      (!_session.store.playbackPreferences.autoHideControls ||
+          !_idle ||
+          _dragging ||
+          _session.paused ||
+          _session.error != null ||
+          _session.loading && !_quietSwitch);
+
+  void _lock() {
+    if (_holding) _pressEnd();
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(true);
+    _say('已锁定，点屏幕显示锁图标');
+  }
+
+  void _unlock() {
+    unawaited(HapticFeedback.selectionClick());
+    _session.setLocked(false);
+    _wake();
+    _say('已解锁');
+  }
 
   void _syncSystemBars() {
     final immersive =
@@ -258,6 +274,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _wheel(PointerSignalEvent event) {
+    if (_session.locked) return;
     if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (_scrolling) return;
@@ -303,6 +320,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerDown(PointerDownEvent event) {
+    if (_session.locked) return;
     _pointers[event.pointer] = event.position;
     if (_pointers.length != 2) return;
     if (_holding) _pressEnd();
@@ -313,6 +331,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerMove(PointerMoveEvent event) {
+    if (_session.locked) return;
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.position;
     final from = _pinchFrom;
@@ -438,31 +457,47 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       value: AppTheme.systemBars(Brightness.dark),
       child: Theme(
         data: dark,
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              Listener(
-                onPointerDown: _pointerDown,
-                onPointerMove: _pointerMove,
-                onPointerUp: _pointerUp,
-                onPointerCancel: _pointerUp,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _scrolled,
-                  child: PageView.builder(
-                    controller: _pages,
-                    scrollDirection: Axis.vertical,
-                    physics: _pinching
-                        ? const NeverScrollableScrollPhysics()
-                        : const _PagePhysics(),
-                    itemCount: _session.detail.episodes.length,
-                    itemBuilder: _page,
+        child: PopScope(
+          canPop: !_session.locked,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _say('已锁定，点屏幕显示锁图标');
+          },
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                Listener(
+                  onPointerDown: _pointerDown,
+                  onPointerMove: _pointerMove,
+                  onPointerUp: _pointerUp,
+                  onPointerCancel: _pointerUp,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _scrolled,
+                    child: PageView.builder(
+                      controller: _pages,
+                      scrollDirection: Axis.vertical,
+                      physics: _pinching || _session.locked
+                          ? const NeverScrollableScrollPhysics()
+                          : const _PagePhysics(),
+                      itemCount: _session.detail.episodes.length,
+                      itemBuilder: _page,
+                    ),
                   ),
                 ),
-              ),
-              IgnorePointer(ignoring: _scrolling, child: _controls(context)),
-            ],
+                IgnorePointer(ignoring: _scrolling, child: _controls(context)),
+                PlayerLockOverlay(
+                  locked: _session.locked,
+                  alignment: Alignment.topRight,
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.paddingOf(context).top + 6,
+                    right: 12,
+                  ),
+                  onUnlock: _unlock,
+                  onBlocked: () => _say('已锁定，点击锁图标解锁'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -532,24 +567,26 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             PlayerGestureArea(
               key: const ValueKey('gestures'),
               gestures: _gestures,
-              swipeEnabled: !_pinching,
+              swipeEnabled: !_pinching && !session.locked,
               // 单击只唤出控制条：手指碰一下画面就停播太容易误触。
-              onTapUp: _pinching
+              onTapUp: _pinching || session.locked
                   ? null
                   : (_) {
                       if (_gestures.suppressTap) return;
                       setState(_wake);
                     },
               // 暂停 / 继续统一走双击。
-              onDoubleTap: _pinching
+              onDoubleTap: _pinching || session.locked
                   ? null
                   : () {
                       if (_gestures.suppressTap) return;
                       session.togglePlayback();
                       setState(_wake);
                     },
-              onLongPressStart: _pinching ? null : _pressStart,
-              onLongPressMoveUpdate: _pressMove,
+              onLongPressStart: _pinching || session.locked ? null : _pressStart,
+              onLongPressMoveUpdate: _pinching || session.locked
+                  ? null
+                  : _pressMove,
               onLongPressEnd: (_) => _pressEnd(),
               onLongPressCancel: _pressEnd,
             ),
@@ -640,7 +677,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               // 这块只用来挡住系统手势条，点一下不再暂停。
-              onTap: () => setState(_wake),
+              onTap: session.locked ? null : () => setState(_wake),
               onVerticalDragStart: (_) {},
             ),
           ),
@@ -880,6 +917,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ],
           ),
         ),
+        if (!desktopPlatform) PlayerLockButton(locked: false, onPressed: _lock),
         FollowIcon(
           store: widget.store,
           drama: session.detail.drama,

@@ -117,6 +117,10 @@ class _SourcesViewState extends State<SourcesView> {
     builder: (context, _) {
       final admin = _store.profile.admin;
       final sites = _store.permittedSources;
+      final deleted = [
+        for (final id in _store.deletedSources)
+          if (SourceSite.isAvailable(id)) SourceSite.byId(id),
+      ];
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -153,6 +157,26 @@ class _SourcesViewState extends State<SourcesView> {
                 );
               },
             ),
+          if (deleted.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SettingsCard(
+              children: [
+                for (final site in deleted)
+                  SettingsTile(
+                    icon: Icons.restore_rounded,
+                    title: '恢复「${site.name}」',
+                    subtitle: '已在本机删除，点一下让它回到列表',
+                    enabled: admin,
+                    onTap: admin
+                        ? () => saveSetting(
+                            context,
+                            () => _store.setSourceDeleted(site.id, deleted: false),
+                          )
+                        : null,
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           const _Note(
             '关闭的站源不在发现、搜索、追剧、观看记录和下载中显示，记录保留，重新开启后恢复。'
@@ -333,7 +357,7 @@ class SourceAccountsView extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           if (soraniAccountAvailable())
-            SettingsCard(children: [SoraniAccountTile(admin: admin)])
+            SettingsCard(children: [SoraniAccountButton(admin: admin)])
           else
             const _Note('没有已安装且需要登录的站源'),
         ],
