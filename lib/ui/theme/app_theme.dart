@@ -165,6 +165,31 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      // 开关同样走黑白反色：开启是白轨 + 深色圆点，关闭是极淡白轨 + 灰点。
+      // 默认 M3 会拿 primary（淡紫）当轨道，在纯黑玻璃界面里是一块突兀的彩色。
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          if (selected) return dark ? const Color(0xFF111114) : Colors.white;
+          return dark
+              ? Colors.white.withValues(alpha: 0.55)
+              : scheme.onSurfaceVariant;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          if (selected) {
+            return dark ? const Color(0xFFF2F2F5) : scheme.primary;
+          }
+          return dark
+              ? Colors.white.withValues(alpha: 0.10)
+              : scheme.surfaceContainerHighest;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          if (selected) return Colors.transparent;
+          return dark ? Colors.white.withValues(alpha: 0.14) : scheme.outline;
+        }),
+      ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: dark ? Colors.white : scheme.primary,
         linearTrackColor: Colors.white.withValues(alpha: 0.22),

@@ -221,6 +221,9 @@ class PlaybackSession extends ChangeNotifier {
   Timer? _standbyIdleTimer;
   Timer? _resumeTimer;
   Timer? _seekWatchdog;
+  /// 同一集内「重载线路」的次数上限：站源地址失效时重载一次就够，
+  /// 再失败说明是站源本身的问题，继续重开只会变成无限循环。
+  int _reopenCount = 0;
   DateTime? _pausedSince;
   DateTime? _sleepAt;
   int _sleepMinutes = 0;
@@ -732,6 +735,7 @@ class PlaybackSession extends ChangeNotifier {
     final ticket = ++_generation;
     _seekSequence++;
     _seekWatchdog?.cancel();
+    _reopenCount = 0;
     danmaku.setPlan(null);
     _acceptErrors = false;
     _pendingError = false;
@@ -1086,11 +1090,14 @@ class PlaybackSession extends ChangeNotifier {
   void _armResumeWatchdog() {
     _cancelResumeWatchdog();
     final position = player.state.position;
-    _resumeTimer = Timer(const Duration(seconds: 5), () {
+    _resumeTimer = Timer(const Duration(seconds: 8), () {
       _resumeTimer = null;
       if (_closed || !_playIntent) return;
       if (player.state.position > position) return;
-      DiaryService.add('[Play] 恢复后 5 秒没有进展，重新加载当前集');
+      // 还在缓冲说明解码器在拉流，别把正在干活的会话掐掉重来。
+      // 91 这类站源起播本来就慢，误判一次要重新解析地址，反而更久。
+      if (player.state.buffering) return;
+      DiaryService.add('[Play] 恢复后 8 秒没有进展，重新获取播放地址');
       unawaited(_reviveCurrent());
     });
   }
@@ -1103,31 +1110,46 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _reviveCurrent() =>
       _reopen(Duration(milliseconds: (_resumePosition * 1000).round()));
 
+  /// 重开当前集。站源的播放地址多半带时效签名（91、黄色仓库这类解析出来的
+  /// 直链几分钟就失效），所以这里默认走 [play] 重新解析地址，而不是拿旧
+  /// plan.url 再 open 一次：旧地址 403 只会让画面一直黑着，还看不出原因。
+  /// 只有本机文件不需要重新解析，直接 open 更快。
   Future<void> _reopen(Duration target) async {
-    final position = target.inMilliseconds / 1000;
-    final plan = _plan;
-    if (plan == null || plan.local || plan.url.isEmpty) {
-      if (!local) await play(_index, position: position);
+    if (_reopenCount > 0) {
+      DiaryService.add('[Play] 本次播放已重载过一次，跳过重复重载');
       return;
     }
-    try {
-      _health.reset();
-      _staleAudio = false;
-      await player.open(
-        Media(
-          plan.url,
-          httpHeaders: plan.headers,
-          start: position > 0
-              ? Duration(milliseconds: (position * 1000).round())
-              : null,
-        ),
-        play: _foreground && _playIntent,
-      );
-      _openedIndex = _index;
-    } catch (_) {
-      if (_closed) return;
-      await play(_index, position: position);
+    _reopenCount++;
+    final position = target.inMilliseconds / 1000;
+    final plan = _plan;
+    if (plan != null && plan.local && plan.url.isNotEmpty) {
+      try {
+        _health.reset();
+        _staleAudio = false;
+        await player.open(
+          Media(
+            plan.url,
+            httpHeaders: plan.headers,
+            start: position > 0
+                ? Duration(milliseconds: (position * 1000).round())
+                : null,
+          ),
+          play: _foreground && _playIntent,
+        );
+        _openedIndex = _index;
+        return;
+      } catch (_) {
+        if (_closed) return;
+      }
     }
+    if (local) return;
+    // refresh 让 [play] 跳过预热缓存、重新向站源要地址：预热的同样是旧签名
+    // 直链，直接复用等于白重载一次。
+    await play(
+      _index,
+      position: position,
+      recovery: PlaybackRecoveryAction.refresh,
+    );
   }
 
   void _scheduleStandbyIdle() {
@@ -1170,18 +1192,20 @@ class PlaybackSession extends ChangeNotifier {
     _seekWatchdog?.cancel();
     final ticket = _seekSequence;
     Duration? settled;
-    _seekWatchdog = Timer(const Duration(milliseconds: 2500), () {
+    _seekWatchdog = Timer(const Duration(seconds: 3), () {
       if (!_seekWatchStillValid(ticket)) return;
       settled = player.state.position;
-      _seekWatchdog = Timer(const Duration(milliseconds: 2500), () {
+      _seekWatchdog = Timer(const Duration(seconds: 4), () {
         _seekWatchdog = null;
         if (!_seekWatchStillValid(ticket)) return;
         final position = player.state.position;
         if ((position - target).abs() <= const Duration(seconds: 2)) return;
         if (position > settled! + const Duration(milliseconds: 800)) return;
+        // 缓冲中不动是正常的（站源切片慢），别因此重建会话。
+        if (player.state.buffering) return;
         DiaryService.add(
           '[Play] 跳转未生效 目标=${target.inSeconds}s '
-          '位置=${position.inSeconds}s，重新打开当前线路',
+          '位置=${position.inSeconds}s，重新获取播放地址',
         );
         unawaited(_reopen(target));
       });

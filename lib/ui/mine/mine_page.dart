@@ -12,6 +12,7 @@ import '../downloads/downloads_page.dart';
 import '../history/history_page.dart';
 import '../modules/modules_page.dart';
 import '../shell/app_shell.dart';
+import '../settings/diary_view.dart';
 import '../settings/settings_page.dart';
 import '../theme/motion.dart';
 import '../widgets/cover_image.dart';
@@ -84,6 +85,15 @@ class MinePage extends StatelessWidget {
     onTap: () => openPage<void>(context, (_) => ModulesPage(store: store)),
   );
 
+  /// 播放诊断从「设置 → 诊断」提到一级页面：出问题时不用再翻两层菜单。
+  void _openDiagnostics(BuildContext context) => openPage<void>(
+    context,
+    (_) => Scaffold(
+      appBar: AppBar(title: const Text('播放诊断')),
+      body: const SafeArea(child: DiaryView()),
+    ),
+  );
+
   Widget _entries(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -92,6 +102,12 @@ class MinePage extends StatelessWidget {
         const SizedBox(height: 10),
       ],
       _settings(context),
+      const SizedBox(height: 10),
+      _SettingsEntry(
+        icon: Icons.monitor_heart_outlined,
+        label: '播放诊断',
+        onTap: () => _openDiagnostics(context),
+      ),
     ],
   );
 
@@ -346,6 +362,14 @@ class MinePage extends StatelessWidget {
                           context,
                           (_) => SettingsPage(store: store),
                         ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _TelevisionEntry(
+                        icon: Icons.monitor_heart_outlined,
+                        title: '播放诊断',
+                        subtitle: '播放日记与排障',
+                        onTap: () => _openDiagnostics(context),
                       ),
                     ),
                   ],

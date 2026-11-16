@@ -269,10 +269,10 @@ class _ModulesPageState extends State<ModulesPage>
   );
 
   Widget _list(List<Widget> children) => ListView.separated(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
     itemCount: children.length,
     itemBuilder: (_, index) => children[index],
-    separatorBuilder: (_, _) => const SizedBox(height: 12),
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
   );
 
   Widget _installedTab() {
@@ -425,27 +425,49 @@ class _ModulesPageState extends State<ModulesPage>
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
+          preferredSize: const Size.fromHeight(46),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TabBar(
-              controller: _tabs,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              labelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-              tabs: const [
-                Tab(text: '已安装'),
-                Tab(text: '在线仓库'),
-                Tab(text: '内置'),
-                Tab(text: '手动'),
-              ],
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Builder(
+              builder: (context) {
+                final theme = Theme.of(context);
+                final dark = theme.brightness == Brightness.dark;
+                final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+                return TabBar(
+                  controller: _tabs,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  dividerColor: Colors.transparent,
+                  overlayColor: WidgetStatePropertyAll(
+                    ink.withValues(alpha: 0.06),
+                  ),
+                  splashBorderRadius: BorderRadius.circular(999),
+                  indicatorSize: TabBarIndicatorSize.label,
+                  indicatorPadding: const EdgeInsets.symmetric(vertical: 7),
+                  indicator: BoxDecoration(
+                    color: ink.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: ink.withValues(alpha: 0.14)),
+                  ),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  labelColor: ink,
+                  unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                  labelStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  tabs: const [
+                    Tab(height: 32, text: '已安装'),
+                    Tab(height: 32, text: '在线仓库'),
+                    Tab(height: 32, text: '内置'),
+                    Tab(height: 32, text: '手动'),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -495,41 +517,66 @@ class _ModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final meta = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-      height: 1.35,
+      color: colors.onSurfaceVariant,
+      fontSize: 12,
+      height: 1.3,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.2,
     );
     final footer = leading.isNotEmpty || actions.isNotEmpty;
-    return GroupCard(
-      children: [
-        InkWell(
+    final trimmed = name.trim();
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           onTap: onTap,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(18, 14, 12, footer ? 10 : 14),
+                padding: EdgeInsets.fromLTRB(16, 16, 12, footer ? 12 : 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _Monogram(
+                      text: trimmed.isEmpty
+                          ? '?'
+                          : trimmed.substring(0, 1).toUpperCase(),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DefaultTextStyle.merge(
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontSize: 18,
-                            ),
-                            child: _ModuleTitle(name, adult: adult),
-                          ),
-                          const SizedBox(height: 2),
+                          _ModuleTitle(name, adult: adult),
+                          const SizedBox(height: 4),
                           Text(
-                            '版本：${version.isEmpty ? '未标注' : version}',
+                            'v${version.isEmpty ? '—' : version}  ·  $id',
                             style: meta,
                           ),
-                          Text('标识：$id', style: meta),
                           if (body.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            ...body,
+                            const SizedBox(height: 8),
+                            DefaultTextStyle.merge(
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 13,
+                                height: 1.4,
+                                fontWeight: FontWeight.w500,
+                                color: colors.onSurfaceVariant,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                spacing: 4,
+                                children: body,
+                              ),
+                            ),
                           ],
                         ],
                       ),
@@ -541,11 +588,9 @@ class _ModuleCard extends StatelessWidget {
               if (footer) ...[
                 Divider(
                   height: 1,
-                  indent: 18,
-                  endIndent: 18,
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.6,
-                  ),
+                  indent: 16,
+                  endIndent: 16,
+                  color: colors.outlineVariant,
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
@@ -558,7 +603,147 @@ class _ModuleCard extends StatelessWidget {
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+/// 模块首字母方块：44 见方、14 圆角、极淡玻璃底 + 一圈细描边。
+/// 比彩色图标块安静，也不会和「限制级」这类状态标记抢注意力。
+class _Monogram extends StatelessWidget {
+  const _Monogram({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: ink.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ink.withValues(alpha: 0.10)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+          color: ink.withValues(alpha: 0.86),
+        ),
+      ),
+    );
+  }
+}
+
+/// 状态标记：只有描边和弱化的字，不用红底，避免整页被一行红块切碎。
+class _Tag extends StatelessWidget {
+  const _Tag(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: ink.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 9.5,
+          height: 1.35,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: ink.withValues(alpha: 0.62),
+        ),
+      ),
+    );
+  }
+}
+
+enum _PillTone { neutral, accent, danger }
+
+/// 卡片操作按钮：统一 32 高的小胶囊（图标 15 + 12.5 字 + 6 间距）。
+/// accent 用反色强调（白底黑字），danger 只降低饱和度的红描边，不做整块填充。
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.icon,
+    required this.label,
+    this.onPressed,
+    this.tone = _PillTone.neutral,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final _PillTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : colors.onSurface;
+    final active = onPressed != null;
+    final (bg, border, fg) = switch (tone) {
+      _PillTone.accent => (
+        ink.withValues(alpha: active ? 0.92 : 0.16),
+        Colors.transparent,
+        dark ? const Color(0xFF111114) : colors.surface,
+      ),
+      _PillTone.danger => (
+        colors.error.withValues(alpha: active ? 0.10 : 0.04),
+        colors.error.withValues(alpha: active ? 0.32 : 0.12),
+        colors.error.withValues(alpha: active ? 0.92 : 0.36),
+      ),
+      _PillTone.neutral => (
+        ink.withValues(alpha: active ? 0.07 : 0.03),
+        ink.withValues(alpha: active ? 0.14 : 0.06),
+        ink.withValues(alpha: active ? 0.88 : 0.30),
+      ),
+    };
+    return FocusRing(
+      radius: 999,
+      child: Material(
+        color: bg,
+        shape: StadiumBorder(side: BorderSide(color: border)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const StadiumBorder(),
+          child: SizedBox(
+            height: 32,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 6,
+                children: [
+                  Icon(icon, size: 15, color: fg),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.1,
+                      color: fg,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -566,9 +751,13 @@ class _ModuleCard extends StatelessWidget {
 ButtonStyle _cardButton(ColorScheme colors, {bool primary = false}) =>
     FilledButton.styleFrom(
       visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      backgroundColor: primary ? colors.primaryContainer : null,
-      foregroundColor: primary ? colors.onPrimaryContainer : null,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
+      minimumSize: const Size(0, 32),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      backgroundColor: primary
+          ? colors.primaryContainer
+          : colors.surfaceContainerHighest.withValues(alpha: 0.5),
+      foregroundColor: primary ? colors.onPrimaryContainer : colors.onSurface,
     );
 
 class _InstalledCard extends StatelessWidget {
@@ -605,11 +794,30 @@ class _InstalledCard extends StatelessWidget {
         if (module.error.isNotEmpty)
           Text(module.error, style: TextStyle(color: colors.error))
         else ...[
-          if (module.description.isNotEmpty) Text(module.description),
-          if (update case final update?)
+          if (module.description.isNotEmpty)
             Text(
-              '可更新到 ${update.version}',
-              style: TextStyle(color: colors.primary),
+              module.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (update case final update?)
+            Row(
+              spacing: 4,
+              children: [
+                Icon(
+                  Icons.arrow_upward_rounded,
+                  size: 13,
+                  color: colors.onSurface.withValues(alpha: 0.9),
+                ),
+                Text(
+                  '可更新到 ${update.version}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
             ),
         ],
       ],
@@ -623,43 +831,30 @@ class _InstalledCard extends StatelessWidget {
           SoraniAccountButton(admin: admin, style: _cardButton(colors)),
       ],
       actions: [
-        FocusRing(
-          radius: 20,
-          child: IconButton.filledTonal(
-            visualDensity: VisualDensity.compact,
-            tooltip: '导出模块',
-            onPressed: onExport,
-            icon: const Icon(Icons.save_alt_rounded),
-          ),
+        _Pill(
+          icon: Icons.ios_share_rounded,
+          label: '导出',
+          onPressed: onExport,
         ),
         if (update != null) ...[
-          FocusRing(
-            radius: 20,
-            child: FilledButton.tonalIcon(
-              style: _cardButton(colors, primary: true),
-              onPressed: onUpdate,
-              icon: const Icon(Icons.cloud_upload_outlined),
-              label: const Text('更新'),
-            ),
+          _Pill(
+            icon: Icons.arrow_circle_up_outlined,
+            label: '更新',
+            tone: _PillTone.accent,
+            onPressed: onUpdate,
           ),
-          FocusRing(
-            radius: 20,
-            child: IconButton.filledTonal(
-              visualDensity: VisualDensity.compact,
-              tooltip: '卸载',
-              onPressed: onUninstall,
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
+          _Pill(
+            icon: Icons.delete_outline_rounded,
+            label: '卸载',
+            tone: _PillTone.danger,
+            onPressed: onUninstall,
           ),
         ] else
-          FocusRing(
-            radius: 20,
-            child: FilledButton.tonalIcon(
-              style: _cardButton(colors),
-              onPressed: onUninstall,
-              icon: const Icon(Icons.delete_outline_rounded),
-              label: const Text('卸载'),
-            ),
+          _Pill(
+            icon: Icons.delete_outline_rounded,
+            label: '卸载',
+            tone: _PillTone.danger,
+            onPressed: onUninstall,
           ),
       ],
     );
@@ -685,17 +880,22 @@ class _IndexCard extends StatelessWidget {
       version: entry.version,
       id: entry.id,
       body: [
-        if (entry.description.isNotEmpty) Text(entry.description),
+        if (entry.description.isNotEmpty)
+          Text(
+            entry.description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         if (records != null)
           Text('待恢复：$records', style: TextStyle(color: colors.primary)),
       ],
-      trailing: FocusRing(
-        radius: 20,
-        child: FilledButton.tonalIcon(
-          style: _cardButton(colors, primary: true),
+      trailing: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: _Pill(
+          icon: Icons.download_rounded,
+          label: '安装',
+          tone: _PillTone.accent,
           onPressed: onInstall,
-          icon: const Icon(Icons.download_rounded),
-          label: const Text('安装'),
         ),
       ),
     );
@@ -709,27 +909,32 @@ class _ModuleTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!adult) return Text(text);
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final style = Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontSize: 16.5,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.2,
+      height: 1.25,
+    );
+    if (!adult) {
+      return Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
     return Row(
-      spacing: 8,
+      spacing: 7,
       children: [
-        Flexible(child: Text(text)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: colors.errorContainer,
-            borderRadius: BorderRadius.circular(6),
-          ),
+        Flexible(
           child: Text(
-            '限制级',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: colors.onErrorContainer,
-              fontWeight: FontWeight.w600,
-            ),
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
           ),
         ),
+        const _Tag('限制级'),
       ],
     );
   }
