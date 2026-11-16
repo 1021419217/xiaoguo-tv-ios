@@ -10,13 +10,16 @@ class GroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainer.withValues(alpha: 0.72),
+    // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
+    // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
+    // 设置页所有条目点下去都没有任何反馈，就是这个原因。
+    return Material(
+      color: colors.surfaceContainer.withValues(alpha: 0.72),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.outlineVariant),
+        side: BorderSide(color: colors.outlineVariant),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
