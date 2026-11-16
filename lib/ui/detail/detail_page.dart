@@ -21,7 +21,7 @@ import '../theme/motion.dart';
 import '../widgets/choice_panel.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
-import '../widgets/swipe_switch.dart';
+import '../widgets/swipe_category_layer.dart';
 import 'author_page.dart';
 
 class _Metrics {
@@ -1928,14 +1928,16 @@ class _DetailPageState extends State<DetailPage> {
     onPressed: () => details.selectGroup(group),
   );
 
-  Widget _swipeGroups(DramaDetails details, _Metrics m) {
-    return SwipeSwitch(
-      index: details.group,
-      count: details.groupCount,
-      onSwitch: (group) => _swipeTo(details, group),
-      child: _grid(details, m),
-    );
-  }
+  Widget _swipeGroups(DramaDetails details, _Metrics m) => SwipeCategoryLayer(
+    itemCount: details.groupCount,
+    index: details.group,
+    labels: [
+      for (var group = 0; group < details.groupCount; group++)
+        details.groupLabel(group),
+    ],
+    onIndexChanged: (group) => _swipeTo(details, group),
+    child: _grid(details, m),
+  );
 
   void _renewKeys(String drama) {
     if (drama == _keyedDrama) return;

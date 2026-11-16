@@ -63,6 +63,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   };
   Player? _bound;
   Timer? _hideTimer;
+  Timer? _holdTimer;
+  Offset? _holdFrom;
   Timer? _tapTimer;
   Timer? _streakTimer;
   Timer? _clockTimer;
@@ -132,6 +134,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       unawaited(subscription.cancel());
     }
     _hideTimer?.cancel();
+    _holdTimer?.cancel();
     _tapTimer?.cancel();
     _streakTimer?.cancel();
     _clockTimer?.cancel();
@@ -250,11 +253,9 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     }
     if (_tapTimer?.isActive ?? false) {
       _tapTimer!.cancel();
-      if (side == 0) {
-        _session.togglePlayback();
-      } else {
-        _startStreak(side);
-      }
+      // 中间双击不再暂停：暂停统一交给屏幕中央的按钮，
+      // 否则连点两下画面就会停，和「单击显隐播控」冲突。
+      if (side != 0) _startStreak(side);
       return;
     }
     _tapTimer = Timer(const Duration(milliseconds: 300), _toggleControls);
@@ -302,10 +303,34 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   }
 
   void _pressStart() {
-    if (!_session.ready) return;
+    _holdTimer?.cancel();
+    if (!_session.ready || _session.paused) return;
     _session.holdBoost();
-    unawaited(HapticFeedback.selectionClick());
+    unawaited(HapticFeedback.mediumImpact());
     setState(() => _holding = true);
+  }
+
+  // 默认长按 500ms 才触发倍速，太钝；240ms 就给上，手指一按住立刻加速。
+  void _pointerDown(PointerDownEvent event) {
+    if (_holding) return;
+    _holdFrom = event.position;
+    _holdTimer?.cancel();
+    _holdTimer = Timer(const Duration(milliseconds: 240), _pressStart);
+  }
+
+  void _pointerMove(PointerMoveEvent event) {
+    final origin = _holdFrom;
+    if (origin == null || _holding) return;
+    if ((event.position - origin).distance > 14) {
+      _holdTimer?.cancel();
+      _holdFrom = null;
+    }
+  }
+
+  void _pointerUp(PointerEvent event) {
+    _holdTimer?.cancel();
+    _holdFrom = null;
+    if (_holding) _pressEnd();
   }
 
   void _pressEnd() {
@@ -439,139 +464,145 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     };
     if (sidePanel != null && !_sidePanelShown) _sidePanelMount++;
     _sidePanelShown = sidePanel != null;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        PlayerVideo(
-          key: ValueKey(session.player),
-          handle: widget.handle,
-          player: session.player,
-          fit: session.videoFit,
-        ),
-        DanmakuOverlay(
-          controller: session.danmaku,
-          video: session.videoSize,
-          fit: session.videoFit,
-          style: session.danmakuStyle,
-        ),
-        SwipeControls(
-          session: session,
-          enabled: full,
-          levels: session.store.playbackPreferences.swipeLevels,
-          episodes: session.store.playbackPreferences.swipeEpisodes,
-          child: LayoutBuilder(
-            builder: (context, constraints) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: (details) => _tapUp(details, constraints.maxWidth, full),
-              onLongPressStart: (_) => _pressStart(),
-              onLongPressEnd: (_) => _pressEnd(),
-              onLongPressCancel: _pressEnd,
+    return Listener(
+      onPointerDown: _pointerDown,
+      onPointerMove: _pointerMove,
+      onPointerUp: _pointerUp,
+      onPointerCancel: _pointerUp,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          PlayerVideo(
+            key: ValueKey(session.player),
+            handle: widget.handle,
+            player: session.player,
+            fit: session.videoFit,
+          ),
+          DanmakuOverlay(
+            controller: session.danmaku,
+            video: session.videoSize,
+            fit: session.videoFit,
+            style: session.danmakuStyle,
+          ),
+          SwipeControls(
+            session: session,
+            enabled: full,
+            levels: session.store.playbackPreferences.swipeLevels,
+            episodes: session.store.playbackPreferences.swipeEpisodes,
+            child: LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) =>
+                    _tapUp(details, constraints.maxWidth, full),
+              ),
             ),
           ),
-        ),
-        FadePresence(
-          duration: Motion.medium,
-          child: session.ready && session.stalled
-              ? const IgnorePointer(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : null,
-        ),
-        FadePresence(
-          duration: Motion.medium,
-          child: session.loading ? PlaybackLoading(session: session) : null,
-        ),
-        FadePresence(
-          duration: Motion.medium,
-          child: switch (session.error) {
-            final error? => PlaybackFailure(session: session, error: error),
-            null => null,
-          },
-        ),
-        FadePresence(
-          scaleFrom: .9,
-          child: _streak != 0 ? _streakBadge(full) : null,
-        ),
-        IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 180),
-            child: Listener(
-              onPointerDown: (_) => _scheduleHide(),
-              child: full ? _fullControls(context) : _miniControls(context),
+          FadePresence(
+            duration: Motion.medium,
+            child: session.ready && session.stalled
+                ? const IgnorePointer(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : null,
+          ),
+          FadePresence(
+            duration: Motion.medium,
+            child: session.loading ? PlaybackLoading(session: session) : null,
+          ),
+          FadePresence(
+            duration: Motion.medium,
+            child: switch (session.error) {
+              final error? => PlaybackFailure(session: session, error: error),
+              null => null,
+            },
+          ),
+          FadePresence(
+            scaleFrom: .9,
+            child: _streak != 0 ? _streakBadge(full) : null,
+          ),
+          IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Listener(
+                onPointerDown: (_) => _scheduleHide(),
+                child: full ? _fullControls(context) : _miniControls(context),
+              ),
             ),
           ),
-        ),
-        if (full && !visible && session.store.playbackPreferences.progressLine)
+          if (full &&
+              !visible &&
+              session.store.playbackPreferences.progressLine)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 2,
+              child: IgnorePointer(child: _thinProgress(context)),
+            ),
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0,
-            height: 2,
-            child: IgnorePointer(child: _thinProgress(context)),
+            top: full ? 24 : 12,
+            child: FadePresence(
+              child: session.boosting
+                  ? IgnorePointer(child: Center(child: _boostBadge()))
+                  : null,
+            ),
           ),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: full ? 24 : 12,
-          child: FadePresence(
-            child: session.boosting
-                ? IgnorePointer(child: Center(child: _boostBadge()))
-                : null,
+          if (session.saveWarning case final warning?)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: full ? 120 : 64,
+              child: _saveWarning(warning),
+            ),
+          Positioned.fill(
+            child: FadePresence(
+              child: switch (_panel) {
+                final panel? when full => GestureDetector(
+                  onTap: _closePanel,
+                  child: ColoredBox(
+                    color: _sidePanel(panel)
+                        ? const Color(0x4D000000)
+                        : Colors.transparent,
+                  ),
+                ),
+                _ => null,
+              },
+            ),
           ),
-        ),
-        if (session.saveWarning case final warning?)
           Positioned(
-            left: 12,
-            right: 12,
-            bottom: full ? 120 : 64,
-            child: _saveWarning(warning),
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: 360,
+            child: FadePresence(
+              // A fresh key on every show keeps reopen-during-fade from reusing
+              // the closing panel's state, matching the old unmount behavior.
+              key: ValueKey(_sidePanelMount),
+              duration: Motion.long,
+              slideFrom: const Offset(1, 0),
+              child: sidePanel,
+            ),
           ),
-        Positioned.fill(
-          child: FadePresence(
-            child: switch (_panel) {
-              final panel? when full => GestureDetector(
-                onTap: _closePanel,
-                child: ColoredBox(
-                  color: _sidePanel(panel)
-                      ? const Color(0x4D000000)
-                      : Colors.transparent,
+          if (_panel case final panel? when full)
+            if (!_sidePanel(panel))
+              Positioned(
+                left: 0,
+                top: 0,
+                child: CompositedTransformFollower(
+                  link: _links[panel]!,
+                  showWhenUnlinked: false,
+                  targetAnchor: Alignment.topCenter,
+                  followerAnchor: Alignment.bottomCenter,
+                  offset: const Offset(0, -6),
+                  child: _popup(context, panel),
                 ),
               ),
-              _ => null,
-            },
-          ),
-        ),
-        Positioned(
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 360,
-          child: FadePresence(
-            // A fresh key on every show keeps reopen-during-fade from reusing
-            // the closing panel's state, matching the old unmount behavior.
-            key: ValueKey(_sidePanelMount),
-            duration: Motion.long,
-            slideFrom: const Offset(1, 0),
-            child: sidePanel,
-          ),
-        ),
-        if (_panel case final panel? when full)
-          if (!_sidePanel(panel))
-            Positioned(
-              left: 0,
-              top: 0,
-              child: CompositedTransformFollower(
-                link: _links[panel]!,
-                showWhenUnlinked: false,
-                targetAnchor: Alignment.topCenter,
-                followerAnchor: Alignment.bottomCenter,
-                offset: const Offset(0, -6),
-                child: _popup(context, panel),
-              ),
-            ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -679,6 +710,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             child: _Shade(height: 150, top: false),
           ),
         ),
+        _centerPlayButton(),
         Positioned(
           left: left,
           right: right,
@@ -686,7 +718,8 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           height: 56,
           child: Row(
             children: [
-              _icon(Icons.arrow_back_rounded, '退出全屏', () => _rotate(true)),
+              // 左上角改成旋转图标：它做的是横竖屏切换，不是返回上一页。
+              _icon(Icons.screen_rotation_rounded, '切换竖屏', () => _rotate(true)),
               const SizedBox(width: 4),
               Expanded(
                 child: Column(
@@ -877,6 +910,63 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       () => _change(_session.toggleDanmaku),
       color: enabled ? Theme.of(context).colorScheme.primary : null,
       size: 40,
+    );
+  }
+
+  /// 中央播放 / 暂停按钮：播控可见时出现，暂停时一直保留。
+  /// 单击画面只显隐播控，暂停只走这里，避免连点画面误停。
+  Widget _centerPlayButton() {
+    final session = _session;
+    final visible = _visible || _pinned;
+    final shown = session.ready && (!session.paused || visible);
+    return Center(
+      child: IgnorePointer(
+        ignoring: !shown,
+        child: AnimatedOpacity(
+          opacity: shown ? 1 : 0,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          child: AnimatedScale(
+            scale: shown ? 1 : .86,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            child: GestureDetector(
+              onTap: () {
+                if (!session.ready) return;
+                unawaited(HapticFeedback.selectionClick());
+                _scheduleHide();
+                session.togglePlayback();
+              },
+              child: Container(
+                width: 66,
+                height: 66,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: .38),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .22),
+                  ),
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    session.paused
+                        ? Icons.play_arrow_rounded
+                        : Icons.pause_rounded,
+                    key: ValueKey(session.paused),
+                    size: 40,
+                    color: Colors.white.withValues(alpha: .92),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

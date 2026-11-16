@@ -20,7 +20,7 @@ import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
-import '../widgets/swipe_switch.dart';
+import '../widgets/swipe_category_layer.dart';
 import 'download_actions.dart';
 import 'downloaded_drama_page.dart';
 import 'merge_actions.dart';
@@ -193,16 +193,14 @@ class _DownloadsPageState extends State<DownloadsPage>
           : index == 1
           ? _downloadedGrid(context, view)
           : _mergeList(context);
-      final touch = switch (AppScope.formFactorOf(context)) {
-        FormFactor.phone || FormFactor.pad => true,
-        FormFactor.window || FormFactor.television => false,
-      };
-      final swiped = touch
-          ? SwipeSwitch(
+      // 与首页、追剧页统一的横滑层：跟手阻尼 + 侧滑淡入，不再整页黑屏。
+      final swiped = _selection == null
+          ? SwipeCategoryLayer(
+              itemCount: _tabs.length,
               index: index,
-              count: _tabs.length,
-              enabled: _selection == null,
-              onSwitch: _tabs.animateTo,
+              labels: const ['下载中', '已下载', '合并'],
+              onIndexChanged: _tabs.animateTo,
+              hintTop: 8,
               child: body,
             )
           : body;

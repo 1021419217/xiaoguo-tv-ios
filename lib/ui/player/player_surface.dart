@@ -222,11 +222,9 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     }
     if (_tapTimer?.isActive ?? false) {
       _tapTimer!.cancel();
-      if (side == 0) {
-        _session.togglePlayback();
-      } else {
-        _startStreak(side);
-      }
+      // 中间双击不再暂停：暂停只走画面中央的按钮，
+      // 与手机端一致，避免连点画面误停。
+      if (side != 0) _startStreak(side);
       return;
     }
     _tapTimer = Timer(const Duration(milliseconds: 300), _toggleControls);

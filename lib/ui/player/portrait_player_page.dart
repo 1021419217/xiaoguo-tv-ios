@@ -66,6 +66,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   Timer? _seekTimer;
   Timer? _idleTimer;
   bool _idle = false;
+  Timer? _holdTimer;
+  Offset? _holdFrom;
   bool _quietSwitch = false;
   late bool _lastPaused = _session.paused;
   late int _lastIndex = _session.index;
@@ -155,13 +157,24 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     });
   }
 
+  /// 播控是否可见：只由「空闲 / 拖动 / 出错 / 加载」决定。暂停不再把
+  /// 播控钉在屏幕上——否则单击永远隐藏不了，用户会以为点击失灵。
   bool get _chromeShown =>
       !_session.store.playbackPreferences.autoHideControls ||
       !_idle ||
       _dragging ||
-      _session.paused ||
       _session.error != null ||
       _session.loading && !_quietSwitch;
+
+  /// 单击画面：显示 / 隐藏播控。暂停交给屏幕中央的按钮。
+  void _toggleControls() => setState(() {
+    if (_idle) {
+      _wake();
+    } else {
+      _idleTimer?.cancel();
+      _idle = true;
+    }
+  });
 
   void _syncSystemBars() {
     final immersive =
@@ -295,6 +308,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   void _pointerDown(PointerDownEvent event) {
     _pointers[event.pointer] = event.position;
+    if (_pointers.length == 1) {
+      _holdFrom = event.position;
+      _holdTimer?.cancel();
+      // 默认长按要 500ms 才触发倍速，手感太钝；这里 240ms 就给上。
+      _holdTimer = Timer(const Duration(milliseconds: 240), _boostBegin);
+      return;
+    }
+    _holdTimer?.cancel();
+    _holdFrom = null;
     if (_pointers.length != 2) return;
     if (_holding) _pressEnd();
     setState(() {
@@ -303,9 +325,30 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     });
   }
 
+  void _boostBegin() {
+    _holdTimer?.cancel();
+    if (!mounted || !_session.ready || _session.paused) return;
+    _session.holdBoost();
+    unawaited(HapticFeedback.mediumImpact());
+    setState(() {
+      _holding = true;
+      _heldIndex = _session.index;
+      _lockArmed = false;
+    });
+  }
+
   void _pointerMove(PointerMoveEvent event) {
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.position;
+    final origin = _holdFrom;
+    if (origin != null && !_holding) {
+      // 手指在计时结束前就开始滑动（翻页 / 拖进度）→ 不算长按。
+      if ((event.position - origin).distance > 14) {
+        _holdTimer?.cancel();
+        _holdFrom = null;
+      }
+    }
+    if (_holding) _moveLock(event.position);
     final from = _pinchFrom;
     if (from == null || _pointers.length != 2) return;
     final (low, high) = _zoomRange;
@@ -313,6 +356,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerUp(PointerEvent event) {
+    _holdTimer?.cancel();
+    _holdFrom = null;
+    if (_holding) _pressEnd();
     final from = _pinchFrom;
     if (from != null && _pointers.length == 2) _settleZoom();
     _pointers.remove(event.pointer);
@@ -351,28 +397,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _say(target == VideoFit.crop ? '画面比例：裁切，双指捏合恢复' : '画面比例：自动');
   }
 
-  void _pressStart(LongPressStartDetails details, double width) {
-    final x = details.localPosition.dx;
-    if (x < width / 5 || x > width * 4 / 5) {
-      if (!_session.boostLocked) _session.holdBoost();
-      unawaited(HapticFeedback.selectionClick());
-      setState(() {
-        _holding = true;
-        _heldIndex = _session.index;
-        _lockArmed = false;
-      });
-    } else {
-      unawaited(HapticFeedback.selectionClick());
-      unawaited(_openSettings());
-    }
-  }
-
-  void _pressMove(LongPressMoveUpdateDetails details) {
-    if (!_holding) return;
+  /// 按住后往下拖：越过屏幕三分之一或拖到底部条，松手即锁定倍速。
+  void _moveLock(Offset position) {
+    final origin = _holdFrom;
+    if (origin == null) return;
     final height = MediaQuery.sizeOf(context).height;
     final armed =
-        details.localOffsetFromOrigin.dy >= height / 3 ||
-        details.globalPosition.dy >= height - _bars.bottom - _maskHeight;
+        position.dy - origin.dy >= height / 3 ||
+        position.dy >= height - _bars.bottom - _maskHeight;
     if (armed != _lockArmed) {
       unawaited(HapticFeedback.selectionClick());
       setState(() => _lockArmed = armed);
@@ -528,13 +560,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               child: LayoutBuilder(
                 builder: (context, constraints) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _pinching ? null : session.togglePlayback,
-                  onLongPressStart: _pinching
-                      ? null
-                      : (details) => _pressStart(details, constraints.maxWidth),
-                  onLongPressMoveUpdate: _pressMove,
-                  onLongPressEnd: (_) => _pressEnd(),
-                  onLongPressCancel: _pressEnd,
+                  // 单击只显隐播控；长按倍速由外层 Listener 以 240ms 计时，
+                  // 不再用默认 500ms 的 onLongPressStart。
+                  onTap: _pinching ? null : _toggleControls,
                 ),
               ),
             ),
@@ -573,27 +601,56 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ),
           ),
         ),
+        // 屏幕中央的播放 / 暂停按钮：播控可见时出现，暂停时一直保留，
+        // 点一下就能继续。单击画面本身只显隐播控，不再直接暂停。
         Center(
           child: IgnorePointer(
+            ignoring: !(session.ready && (!session.paused || _chromeShown)),
             child: AnimatedOpacity(
-              opacity: session.ready && session.paused ? 1 : 0,
+              opacity: session.ready && (!session.paused || _chromeShown)
+                  ? 1
+                  : 0,
               duration: Motion.of(context, Motion.short),
               curve: Motion.standard,
               child: AnimatedScale(
-                scale: session.ready && session.paused ? 1 : .8,
+                scale: session.ready && (!session.paused || _chromeShown)
+                    ? 1
+                    : .86,
                 duration: Motion.of(context, Motion.short),
                 curve: Motion.enter,
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: .35),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.play_arrow_rounded,
-                    size: 44,
-                    color: Colors.white.withValues(alpha: .9),
+                child: GestureDetector(
+                  onTap: () {
+                    if (!session.ready) return;
+                    unawaited(HapticFeedback.selectionClick());
+                    setState(_wake);
+                    session.togglePlayback();
+                  },
+                  child: AnimatedContainer(
+                    duration: Motion.of(context, Motion.short),
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .38),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .22),
+                      ),
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: Motion.of(context, Motion.short),
+                      transitionBuilder: (child, animation) => ScaleTransition(
+                        scale: animation,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: Icon(
+                        session.paused
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
+                        key: ValueKey(session.paused),
+                        size: 44,
+                        color: Colors.white.withValues(alpha: .92),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -624,7 +681,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             height: bottom,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: session.togglePlayback,
+              onTap: _toggleControls,
               onVerticalDragStart: (_) {},
             ),
           ),
@@ -844,6 +901,18 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           drama: session.detail.drama,
           color: Colors.white,
           activeColor: Theme.of(context).colorScheme.primaryFixedDim,
+        ),
+        // 播放设置原来靠「长按画面中间」触发，太隐蔽；改成顶栏图标，
+        // 和横屏页的齿轮位置一致。
+        IconButton(
+          onPressed: () {
+            setState(_wake);
+            unawaited(_openSettings());
+          },
+          icon: const Icon(Icons.settings_rounded),
+          color: Colors.white,
+          tooltip: '播放设置',
+          style: IconButton.styleFrom(fixedSize: const Size.square(44)),
         ),
       ],
     );

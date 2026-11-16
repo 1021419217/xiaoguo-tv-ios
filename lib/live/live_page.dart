@@ -1,14 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../ui/app_scope.dart';
+import '../ui/widgets/capsule_tabs.dart';
 import '../local_store.dart';
 
 import '../ui/widgets/bar_button.dart';
 import '../ui/widgets/frosted_header.dart';
 import '../ui/widgets/focus_ring.dart';
 import '../ui/widgets/status_view.dart';
-import '../ui/widgets/swipe_category_layer.dart';
 import 'live_models.dart';
 import 'live_player_page.dart';
 import 'live_repository.dart';
@@ -54,6 +58,8 @@ class _LivePageState extends State<LivePage> {
   bool _failed = false;
   String? _error;
   int _generation = 0;
+  final _pager = PageController();
+  int _page = 0;
 
   /// 「全部频道」合并进度：已拉完的分类数 / 总分类数。
   int _progressDone = 0;
@@ -83,6 +89,7 @@ class _LivePageState extends State<LivePage> {
   @override
   void dispose() {
     widget.store.removeListener(_storeChanged);
+    _pager.dispose();
     super.dispose();
   }
 
@@ -172,6 +179,7 @@ class _LivePageState extends State<LivePage> {
 
   void _selectSource(LiveSource source) {
     if (source.id == _source?.id) return;
+    _resetPages();
     widget.repository.clear();
     setState(() {
       _source = source;
@@ -185,6 +193,7 @@ class _LivePageState extends State<LivePage> {
 
   void _selectPlatform(String id) {
     if (id == _platform) return;
+    _resetPages();
     if (id == _favouritesId) {
       ++_generation;
       setState(() {
@@ -211,23 +220,10 @@ class _LivePageState extends State<LivePage> {
     unawaited(_loadAll());
   }
 
-  Future<void> _open(int index) async {
-    final source = _source;
-    final channel = _channels[index];
-    if (source == null) return;
-    await widget.store.remember(channel);
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => LivePlayerPage(
-          repository: widget.repository,
-          store: widget.store,
-          source: source,
-          channels: _channels,
-          index: index,
-        ),
-      ),
-    );
+  /// 换分类或换源后回到第一页：否则停在第 7 页会看到空白。
+  void _resetPages() {
+    _page = 0;
+    if (_pager.hasClients) _pager.jumpToPage(0);
   }
 
   @override
@@ -238,7 +234,7 @@ class _LivePageState extends State<LivePage> {
       surfaceTintColor: Colors.transparent,
       flexibleSpace: const FrostedHeader(fill: true),
       titleSpacing: 16,
-      title: _header(),
+      title: const GlassTitle(title: '直播'),
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),
@@ -258,51 +254,31 @@ class _LivePageState extends State<LivePage> {
     body: SafeArea(top: true, bottom: false, child: _body(context)),
   );
 
-  /// 顶栏标题行：玻璃标题后面紧跟「收藏 / 全部频道」，不再单独占一行，
-  /// 分类之上也就没有那块空着的黑条了。
-  Widget _header() => Row(
-    spacing: 8,
-    children: [
-      const GlassTitle(title: '直播', expand: false),
-      Flexible(child: _platformChips()),
-    ],
-  );
-
-  Widget _platformChips() {
-    final chips = [
-      GlassChip(
-        label: '收藏 ${widget.store.favourites.length}',
-        selected: _platform == _favouritesId,
-        height: 34,
-        onTap: () => _selectPlatform(_favouritesId),
-      ),
-      GlassChip(
-        label: _progressTotal > 0 && _loading && _platform == _allId
-            ? '全部频道 $_progressDone/$_progressTotal'
-            : '全部频道',
-        badge: _platform != _allId && _channels.isNotEmpty
-            ? '${_lastGood.length}'
-            : null,
-        selected: _platform == _allId,
-        height: 34,
-        onTap: () => _selectPlatform(_allId),
-      ),
-    ];
-    final sources = _sources;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
+  /// 顶栏只放标题与刷新。分类从标题行里挪出来单独占一行——上一版把
+  /// 「收藏 / 全部频道 / 源名」全塞进顶栏，小屏上会横向滚动，太挤。
+  Widget _platformBar() {
+    final favourites = widget.store.favourites.length;
+    final merging = _progressTotal > 0 && _loading && _platform == _allId;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
-        spacing: 6,
         children: [
-          for (final chip in chips) chip,
-          // 只有配置了多个直播源时才出现切换入口，单源时顶栏保持干净。
-          if (sources.length > 1)
+          CapsuleTabs(
+            labels: [
+              favourites == 0 ? '收藏' : '收藏 $favourites',
+              merging ? '全部频道 $_progressDone/$_progressTotal' : '全部频道',
+            ],
+            index: _platform == _favouritesId ? 0 : 1,
+            onChanged: (index) =>
+                _selectPlatform(index == 0 ? _favouritesId : _allId),
+          ),
+          const Spacer(),
+          if (_sources.length > 1)
             GlassChip(
               label: _source?.name ?? '直播源',
               selected: false,
-              height: 34,
-              onTap: () => _pickSource(sources),
+              height: 32,
+              onTap: () => unawaited(_pickSource(_sources)),
             ),
         ],
       ),
@@ -356,19 +332,17 @@ class _LivePageState extends State<LivePage> {
         onAction: () => unawaited(_loadPlatforms(force: true)),
       );
     }
-    // 与首页一致：左右快滑在「收藏 / 全部频道」之间切换。
-    // 电视端组件会自动跳过手势，遥控器方向键行为不变。
-    // 源站的 130 个秀场分类不再铺开，全部频道已按主播名去重合并。
-    final platformIds = [_favouritesId, _allId];
-    final platformLabels = ['收藏', '全部频道'];
-    var platformIndex = platformIds.indexOf(_platform);
-    if (platformIndex < 0) platformIndex = 0;
-    return SwipeCategoryLayer(
-      itemCount: platformIds.length,
-      index: platformIndex,
-      labels: platformLabels,
-      onIndexChanged: (next) => _selectPlatform(platformIds[next]),
-      child: _channelBody(context),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _platformBar(),
+        if (_loading && _channels.isNotEmpty)
+          LinearProgressIndicator(
+            minHeight: 2,
+            value: _progressTotal > 0 ? _progressDone / _progressTotal : null,
+          ),
+        Expanded(child: _channelBody(context)),
+      ],
     );
   }
 
@@ -388,36 +362,126 @@ class _LivePageState extends State<LivePage> {
         icon: favourite ? Icons.star_border_rounded : Icons.tv_off_rounded,
       );
     }
-    final grid = GridView.builder(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 24 + widget.bottomInset),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 220,
-        mainAxisExtent: 64,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: _channels.length,
-      itemBuilder: (context, index) {
-        final channel = _channels[index];
-        return _ChannelTile(
-          channel: channel,
-          onTap: () => unawaited(_open(index)),
+    // 电视与桌面窗口沿用纵向网格（遥控器 / 滚轮），手机与平板改成横向分页：
+    // 全部频道有上千个，一直往下滑太累，横滑一屏一页更省力。
+    final wide = switch (AppScope.formFactorOf(context)) {
+      FormFactor.television || FormFactor.window => true,
+      _ => false,
+    };
+    if (wide) return _grid(_channels, bottom: 24 + widget.bottomInset);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const inset = 16.0, gap = 10.0, cell = 220.0, tile = 64.0;
+        final columns = math.max(
+          1,
+          ((constraints.maxWidth - inset * 2) / (cell + gap)).ceil(),
+        );
+        final usable = constraints.maxHeight - 12 - 32 - widget.bottomInset;
+        final rows = math.max(1, ((usable + gap) / (tile + gap)).floor());
+        final perPage = columns * rows;
+        final pages = math.max(1, (_channels.length / perPage).ceil());
+        return Stack(
+          children: [
+            PageView.builder(
+              controller: _pager,
+              itemCount: pages,
+              onPageChanged: (page) {
+                if (page == _page) return;
+                unawaited(HapticFeedback.selectionClick());
+                setState(() => _page = page);
+              },
+              itemBuilder: (context, page) {
+                final from = page * perPage;
+                final to = math.min(from + perPage, _channels.length);
+                return _grid(
+                  _channels.sublist(from, to),
+                  bottom: 44 + widget.bottomInset,
+                  scrollable: false,
+                );
+              },
+            ),
+            if (pages > 1)
+              Positioned(
+                right: 16,
+                bottom: 10 + widget.bottomInset,
+                child: IgnorePointer(
+                  child: _PageBadge(page: _page, pages: pages),
+                ),
+              ),
+          ],
         );
       },
     );
-    if (!_loading) return grid;
-    // 还在补齐后面的分类：顶上留一条细进度，已有频道照常可点。
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LinearProgressIndicator(
-          minHeight: 2,
-          value: _progressTotal > 0 ? _progressDone / _progressTotal : null,
+  }
+
+  Widget _grid(
+    List<LiveChannel> channels, {
+    required double bottom,
+    bool scrollable = true,
+  }) => GridView.builder(
+    padding: EdgeInsets.fromLTRB(16, 12, 16, bottom),
+    physics: scrollable ? null : const NeverScrollableScrollPhysics(),
+    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 220,
+      mainAxisExtent: 64,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+    ),
+    itemCount: channels.length,
+    itemBuilder: (context, index) {
+      final channel = channels[index];
+      return _ChannelTile(
+        channel: channel,
+        onTap: () => unawaited(_openChannel(channel)),
+      );
+    },
+  );
+
+  Future<void> _openChannel(LiveChannel channel) async {
+    final source = _source;
+    if (source == null) return;
+    final index = _channels.indexOf(channel);
+    await widget.store.remember(channel);
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LivePlayerPage(
+          repository: widget.repository,
+          store: widget.store,
+          source: source,
+          channels: _channels,
+          index: index,
         ),
-        Expanded(child: grid),
-      ],
+      ),
     );
   }
+}
+
+/// 右下角的翻页指示：`2 / 7`。频道上千时圆点会糊成一片，数字更清楚。
+class _PageBadge extends StatelessWidget {
+  const _PageBadge({required this.page, required this.pages});
+
+  final int page;
+  final int pages;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+    ),
+    child: Text(
+      '${page + 1} / $pages',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    ),
+  );
 }
 
 class _ChannelTile extends StatelessWidget {

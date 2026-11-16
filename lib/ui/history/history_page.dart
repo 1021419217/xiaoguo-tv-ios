@@ -8,7 +8,7 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
-import '../widgets/swipe_switch.dart';
+import '../widgets/swipe_category_layer.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/frosted_header.dart';
@@ -308,18 +308,18 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   /// 左右滑动切换下方「站源」分类，与追剧页、下载页的手势保持一致。
+  /// 与追剧、首页同一套横滑层：跟手阻尼 + 侧滑淡入，不会整页黑一下。
   Widget _swipe(_View view, Widget child) {
-    final touch = switch (AppScope.formFactorOf(context)) {
-      FormFactor.phone || FormFactor.pad => true,
-      FormFactor.window || FormFactor.television => false,
-    };
-    if (!touch) return child;
+    if (view.selection != null) return child;
     final ids = ['', for (final site in view.sources) site.id];
-    return SwipeSwitch(
-      index: ids.indexOf(view.source),
-      count: ids.length,
-      enabled: view.selection == null,
-      onSwitch: (index) => setState(() => _source = ids[index]),
+    var index = ids.indexOf(view.source);
+    if (index < 0) index = 0;
+    return SwipeCategoryLayer(
+      itemCount: ids.length,
+      index: index,
+      labels: ['全部', for (final site in view.sources) site.name],
+      onIndexChanged: (next) => setState(() => _source = ids[next]),
+      hintTop: 8,
       child: child,
     );
   }
