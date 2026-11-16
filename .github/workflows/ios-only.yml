@@ -12,6 +12,8 @@ env:
   PYTHONUTF8: '1'
   # 与上游 guoapp 完全一致的 Bundle ID：安装即可覆盖官方包并保留数据。
   PACKAGE_NAME: com.yingshib.xg
+  # 内置站源模块：Jable 与 SupJav（随包安装，模块页里也能单独卸载/更新）。
+  BUNDLED_MODULES: modules/jable,modules/supjav
 
 jobs:
   ios:

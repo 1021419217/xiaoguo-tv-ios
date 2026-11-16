@@ -14,6 +14,7 @@ import '../theme/motion.dart';
 import '../detail/detail_page.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/category_tabs.dart';
+import 'hero_carousel.dart';
 import '../widgets/choice_panel.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/follow_button.dart';
@@ -482,7 +483,25 @@ class ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  /// 首页不再放「最近观看 / 今日推荐」入口条：首屏直接从分类与卡片开始。
-  /// 观看记录只从「追剧 → 最近观看」进入，别人拿到手机看不到观看痕迹。
-  Widget? _hero(ExploreFeed explore) => null;
+  /// 首页顶部大海报：当前分类最靠前、带封面的几部剧。
+  /// 观看记录仍然只从「追剧 → 最近观看」进入，海报只展示公开内容，
+  /// 别人拿到手机看不到观看痕迹。
+  Widget? _hero(ExploreFeed explore) {
+    final form = AppScope.formFactorOf(context);
+    // 电视靠遥控器方向键，轮播翻页反而碍事，保持原来的纯网格。
+    if (form == FormFactor.television) return null;
+    final items = <Drama>[];
+    for (final drama in explore.items) {
+      if (drama.cover.isEmpty) continue;
+      items.add(drama);
+      if (items.length == 5) break;
+    }
+    if (items.isEmpty) return null;
+    return HeroCarousel(
+      key: ValueKey('hero-${explore.tab.id}'),
+      items: items,
+      onOpen: _open,
+      height: form == FormFactor.phone ? 196 : 208,
+    );
+  }
 }
