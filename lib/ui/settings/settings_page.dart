@@ -8,6 +8,7 @@ import '../../resource_settings_editor.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../modules/modules_page.dart';
 import '../users/users_view.dart';
 import '../widgets/bar_button.dart';
 import '../widgets/focus_ring.dart';
@@ -15,7 +16,6 @@ import '../widgets/frosted_header.dart';
 import '../widgets/group_card.dart';
 import 'appearance_settings.dart';
 import 'settings_rows.dart';
-import 'diary_view.dart';
 import 'settings_sections.dart';
 
 typedef _Subpage = ({String title, WidgetBuilder body});
@@ -195,7 +195,7 @@ class _SettingsPageState extends State<SettingsPage> {
       SettingsGroup.users => '当前：${store.profile.name}',
       SettingsGroup.about =>
         scope.version.isEmpty ? '版本未知' : '版本 ${scope.version}',
-      SettingsGroup.modules => '安装、导出模块与站源开关',
+      SettingsGroup.modules => '排序、测速、开关与恢复已删除的站源',
       SettingsGroup.diagnostics => '播放调试日记、备份与恢复',
     };
   }
@@ -334,69 +334,64 @@ class _SettingsPageState extends State<SettingsPage> {
     body: SafeArea(
       top: true,
       bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.only(top: kToolbarHeight),
-        child: ListenableBuilder(
-          listenable: widget.store,
-          builder: (context, _) {
-            final groups = SettingsGroup.values;
-            // 每 3 个分组一段，段名按内容归组（新增分组时只需补段名）。
-            const sections = ['界面与播放', '内容与站源', '设备与数据', '诊断与备份'];
-            return ListView(
-              // 底部留出悬浮胶囊导航的空间，避免最后一项被遮住。
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-              children: [
-                const SectionHeader(
-                  title: '常用',
-                  padding: EdgeInsets.fromLTRB(4, 12, 8, 8),
+      child: ListenableBuilder(
+        listenable: widget.store,
+        builder: (context, _) {
+          final groups = SettingsGroup.values;
+          // 每 3 个分组一段，段名按内容归组（新增分组时只需补段名）。
+          const sections = ['界面与播放', '内容与站源', '设备与数据', '诊断与备份'];
+          return ListView(
+            // 底部留出悬浮胶囊导航的空间，避免最后一项被遮住。
+            // 顶部不再额外加留白：SafeArea 已经把状态栏与磨砂顶栏让出来了。
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+            children: [
+              const SectionHeader(
+                title: '常用',
+                padding: EdgeInsets.fromLTRB(4, 2, 8, 6),
+              ),
+              GroupCard(
+                children: [
+                  SettingsTile(
+                    icon: Icons.extension_outlined,
+                    iconColor: _tileColors[0],
+                    title: '模块',
+                    subtitle: '安装、更新、导出模块，以及站源开关',
+                    onTap: () => openPage<void>(
+                      context,
+                      (_) => ModulesPage(store: widget.store),
+                    ),
+                  ),
+                ],
+              ),
+              for (
+                var section = 0;
+                section < sections.length && section * 3 < groups.length;
+                section++
+              ) ...[
+                SectionHeader(
+                  title: sections[section],
+                  padding: const EdgeInsets.fromLTRB(4, 18, 8, 8),
                 ),
                 GroupCard(
                   children: [
-                    SettingsTile(
-                      icon: Icons.monitor_heart_outlined,
-                      iconColor: _tileColors[3],
-                      title: '播放诊断',
-                      subtitle: '播放日记与排障，出问题时先看这里',
-                      onTap: () => openPage<void>(
-                        context,
-                        (_) => Scaffold(
-                          appBar: AppBar(title: const Text('播放诊断')),
-                          body: const SafeArea(child: DiaryView()),
-                        ),
+                    for (
+                      var i = section * 3;
+                      i < groups.length && i < section * 3 + 3;
+                      i++
+                    )
+                      SettingsTile(
+                        icon: groups[i].icon,
+                        iconColor: _tileColors[i % _tileColors.length],
+                        title: groups[i].label,
+                        subtitle: _summary(groups[i]),
+                        onTap: () => _openGroup(groups[i]),
                       ),
-                    ),
                   ],
                 ),
-                for (
-                  var section = 0;
-                  section < sections.length && section * 3 < groups.length;
-                  section++
-                ) ...[
-                  SectionHeader(
-                    title: sections[section],
-                    padding: const EdgeInsets.fromLTRB(4, 18, 8, 8),
-                  ),
-                  GroupCard(
-                    children: [
-                      for (
-                        var i = section * 3;
-                        i < groups.length && i < section * 3 + 3;
-                        i++
-                      )
-                        SettingsTile(
-                          icon: groups[i].icon,
-                          iconColor: _tileColors[i % _tileColors.length],
-                          title: groups[i].label,
-                          subtitle: _summary(groups[i]),
-                          onTap: () => _openGroup(groups[i]),
-                        ),
-                    ],
-                  ),
-                ],
               ],
-            );
-          },
-        ),
+            ],
+          );
+        },
       ),
     ),
   );
@@ -425,12 +420,9 @@ class _SettingsPageState extends State<SettingsPage> {
       body: SafeArea(
         top: true,
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: kToolbarHeight),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [_section(group)],
-          ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          children: [_section(group)],
         ),
       ),
     ),

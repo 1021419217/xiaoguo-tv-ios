@@ -8,6 +8,8 @@ import '../../source_modules.dart';
 import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
+import '../widgets/action_pill.dart';
+import '../widgets/swipe_switch.dart';
 import '../shell/app_shell.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
@@ -184,40 +186,21 @@ class _FollowPageState extends State<FollowPage> {
     }.toList(),
   );
 
-  Widget _textButton(
-    String label,
-    VoidCallback? onPressed, {
-    IconData? icon,
-    FocusNode? focusNode,
-  }) => FocusRing(
-    radius: 20,
-    child: icon == null
-        ? TextButton(
-            focusNode: focusNode,
-            onPressed: onPressed,
-            child: Text(label),
-          )
-        : TextButton.icon(
-            focusNode: focusNode,
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18),
-            label: Text(label),
-          ),
-  );
-
-  Widget _editButtonFor(_View view, {bool icon = true}) => _textButton(
-    '编辑',
-    view.shown.isEmpty ? null : _startEditing,
-    icon: icon ? Icons.check_box_outlined : null,
+  /// 顶栏操作统一成 [ActionPill]，和下载页、模块页同一套胶囊。
+  Widget _editButtonFor(_View view) => ActionPill(
+    icon: Icons.check_box_outlined,
+    label: '编辑',
     focusNode: _editButton,
+    onPressed: view.shown.isEmpty ? null : _startEditing,
   );
 
   Widget _selectAll(_View view) {
     final all = _ids(view);
     final everything = view.selection!.length == all.length;
-    return _textButton(
-      everything ? '取消全选' : '全选',
-      () => setState(() => _selection = everything ? {} : all),
+    return ActionPill(
+      icon: Icons.select_all_rounded,
+      label: everything ? '取消全选' : '全选',
+      onPressed: () => setState(() => _selection = everything ? {} : all),
     );
   }
 
@@ -241,7 +224,11 @@ class _FollowPageState extends State<FollowPage> {
   List<Widget> _editActions(_View view) => [
     _selectAll(view),
     _unfollowButton(view),
-    _textButton('完成', _finishEditing),
+    ActionPill(
+      icon: Icons.done_rounded,
+      label: '完成',
+      onPressed: _finishEditing,
+    ),
   ];
 
   Widget _title(String text, double size) => Semantics(
@@ -284,39 +271,64 @@ class _FollowPageState extends State<FollowPage> {
     );
   }
 
+  /// 左右滑动切换下方「站源」分类（全部 → 各站源）。顶栏三段胶囊只响应点击，
+  /// 这里只切当前页自己的分类，和下载页「下载中/已下载/合并」的手势一致。
+  Widget _swipe(_View view, Widget child) {
+    final touch = switch (AppScope.formFactorOf(context)) {
+      FormFactor.phone || FormFactor.pad => true,
+      FormFactor.window || FormFactor.television => false,
+    };
+    if (!touch) return child;
+    final ids = ['', for (final site in view.sources) site.id];
+    return SwipeSwitch(
+      index: ids.indexOf(view.source),
+      count: ids.length,
+      enabled: view.selection == null,
+      onSwitch: (index) => setState(() => _source = ids[index]),
+      child: child,
+    );
+  }
+
   Widget _phone(BuildContext context, _View view) {
     final selection = view.selection;
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: _content(
-          context,
+        child: _swipe(
           view,
-          inset: 16,
-          header: [
-            FadeSwitcher(
-              child: selection == null
-                  ? PageHeader(
-                      key: const ValueKey(false),
-                      title: '追剧',
-                      titleChild: widget.headerChild,
-                      actions: [_editButtonFor(view, icon: false)],
-                    )
-                  : PageHeader(
-                      key: const ValueKey(true),
-                      title: '已选择 ${selection.length} 部',
-                      actions: [
-                        _selectAll(view),
-                        _textButton('完成', _finishEditing),
-                      ],
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: _search(),
-            ),
-            ?_sources(view, inset: 16, scroll: true),
-          ],
+          _content(
+            context,
+            view,
+            inset: 16,
+            header: [
+              FadeSwitcher(
+                child: selection == null
+                    ? PageHeader(
+                        key: const ValueKey(false),
+                        title: '追剧',
+                        titleChild: widget.headerChild,
+                        actions: [_editButtonFor(view)],
+                      )
+                    : PageHeader(
+                        key: const ValueKey(true),
+                        title: '已选择 ${selection.length} 部',
+                        actions: [
+                          _selectAll(view),
+                          ActionPill(
+                            icon: Icons.done_rounded,
+                            label: '完成',
+                            onPressed: _finishEditing,
+                          ),
+                        ],
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _search(),
+              ),
+              ?_sources(view, inset: 16, scroll: true),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: selection == null

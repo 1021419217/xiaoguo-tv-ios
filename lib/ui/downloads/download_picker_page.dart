@@ -198,10 +198,7 @@ class _DownloadPickerPageState extends State<DownloadPickerPage> {
         body: SafeArea(
           top: true,
           bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.only(top: kToolbarHeight),
-            child: _grid(inset: 16, minCellWidth: 60, touch: true),
-          ),
+          child: _grid(inset: 16, minCellWidth: 60, touch: true),
         ),
         bottomNavigationBar: SafeArea(
           child: Padding(

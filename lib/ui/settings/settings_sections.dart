@@ -14,7 +14,6 @@ import '../../resource_settings.dart';
 import '../../resource_settings_editor.dart';
 import '../../window_on_top.dart';
 import '../app_scope.dart';
-import '../modules/modules_page.dart';
 import '../shell/app_shell.dart';
 import '../player/danmaku_settings.dart';
 import '../update_prompt.dart';
@@ -33,7 +32,9 @@ enum SettingsGroup {
   appearance('外观', Icons.palette_outlined),
   playback('播放', Icons.play_arrow_rounded),
   danmaku('弹幕', Icons.subtitles_outlined),
-  modules('模块', Icons.extension_outlined),
+  // 模块入口按用户要求提到「常用」最上方（直接进模块页），这里只留站源管理，
+  // 免得同一件事在设置里出现两次。
+  modules('站源', Icons.link_rounded),
   download('下载', Icons.download_rounded),
   storage('存储', Icons.folder_outlined),
   proxy('代理', Icons.language_rounded),
@@ -100,7 +101,7 @@ class SettingsSection extends StatelessWidget {
               SettingsGroup.proxy => _proxy(context),
               SettingsGroup.users => [UsersView(store: store, open: open)],
               SettingsGroup.about => _about(context),
-              SettingsGroup.modules => _modules(context),
+              SettingsGroup.modules => _sources(context),
               SettingsGroup.diagnostics => _diagnostics(),
               _ => const [],
             },
@@ -559,17 +560,9 @@ class SettingsSection extends StatelessWidget {
     }
   }
 
-  /// 模块（站源插件的安装、导出、站源开关）原先在「我的」里，底栏改成
-  /// 设置直达后并入设置，避免多一层入口。
-  List<Widget> _modules(BuildContext context) => [
+  List<Widget> _sources(BuildContext context) => [
     SettingsCard(
       children: [
-        SettingsTile(
-          title: '模块管理',
-          subtitle: '安装、更新、导出模块，以及开关站源',
-          onTap: () =>
-              openPage<void>(context, (_) => ModulesPage(store: store)),
-        ),
         SettingsTile(
           title: '站源管理',
           subtitle: '排序、测速、开关与恢复已删除的站源',

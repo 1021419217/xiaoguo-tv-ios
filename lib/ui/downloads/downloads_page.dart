@@ -10,8 +10,11 @@ import '../../source_modules.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
-import '../widgets/glass_app_bar.dart';
+import '../widgets/action_pill.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/capsule_tabs.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/glass_app_bar.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
@@ -215,39 +218,39 @@ class _DownloadsPageState extends State<DownloadsPage>
     },
   );
 
-  Widget _textButton(String label, VoidCallback? onPressed, {IconData? icon}) =>
-      FocusRing(
-        radius: 20,
-        child: icon == null
-            ? TextButton(onPressed: onPressed, child: Text(label))
-            : TextButton.icon(
-                onPressed: onPressed,
-                icon: Icon(icon, size: 18),
-                label: Text(label),
-              ),
-      );
+  /// 顶栏操作统一走 [ActionPill]：和模块页、追剧页同一套胶囊语言，
+  /// 不再混用 Material 默认字按钮（主色文字、无底、高度不一致）。
+  Widget _editButton(_View view) => ActionPill(
+    icon: Icons.check_box_outlined,
+    label: '编辑',
+    onPressed: _editable(view) ? () => setState(() => _selection = {}) : null,
+  );
 
-  Widget _pauseAll(_View view, {bool icon = true}) {
+  Widget _pauseAll(_View view) {
     final active = [
       for (final job in view.pending)
         if (job.active) job,
     ];
-    return _textButton(
-      '全部暂停',
-      active.isEmpty || _busy ? null : () => _controlAll('pause', active),
-      icon: icon ? Icons.pause_rounded : null,
+    return BarButton(
+      icon: Icons.pause_rounded,
+      tooltip: '全部暂停',
+      onPressed: active.isEmpty || _busy
+          ? null
+          : () => _controlAll('pause', active),
     );
   }
 
-  Widget _resumeAll(_View view, {bool icon = true}) {
+  Widget _resumeAll(_View view) {
     final paused = [
       for (final job in view.pending)
         if (job.resumable) job,
     ];
-    return _textButton(
-      '全部继续',
-      paused.isEmpty || _busy ? null : () => _controlAll('resume', paused),
-      icon: icon ? Icons.play_arrow_rounded : null,
+    return BarButton(
+      icon: Icons.play_arrow_rounded,
+      tooltip: '全部继续',
+      onPressed: paused.isEmpty || _busy
+          ? null
+          : () => _controlAll('resume', paused),
     );
   }
 
@@ -255,21 +258,15 @@ class _DownloadsPageState extends State<DownloadsPage>
       ? view.pending.isNotEmpty
       : _downloadedTab && view.downloaded.isNotEmpty;
 
-  Widget _editButton(_View view, {bool icon = true}) => _textButton(
-    '编辑',
-    _editable(view) ? () => setState(() => _selection = {}) : null,
-    icon: icon ? Icons.check_box_outlined : null,
-  );
-
   String _selectedTitle(Set<String> selection) =>
       '已选择 ${selection.length} ${_downloadedTab ? '部' : '集'}';
 
-  Widget _clearMerges({bool icon = true}) => _textButton(
-    '清除已结束',
-    widget.merges.tasks.any((task) => task.finished)
+  Widget _clearMerges() => ActionPill(
+    icon: Icons.clear_all_rounded,
+    label: '清除已结束',
+    onPressed: widget.merges.tasks.any((task) => task.finished)
         ? widget.merges.clearFinished
         : null,
-    icon: icon ? Icons.clear_all_rounded : null,
   );
 
   Future<void> _mergeSelected(_View view) async {
@@ -351,9 +348,10 @@ class _DownloadsPageState extends State<DownloadsPage>
         ? {for (final item in view.downloaded) item.drama.id}
         : {for (final job in view.pending) job.id};
     final everything = view.selection!.length == all.length;
-    return _textButton(
-      everything ? '取消全选' : '全选',
-      () => setState(() => _selection = everything ? {} : all),
+    return ActionPill(
+      icon: Icons.select_all_rounded,
+      label: everything ? '取消全选' : '全选',
+      onPressed: () => setState(() => _selection = everything ? {} : all),
     );
   }
 
@@ -377,43 +375,23 @@ class _DownloadsPageState extends State<DownloadsPage>
   Widget _tabBar(double inset) {
     final pending = pendingDownloads(widget.downloads.jobs).length;
     final downloaded = downloadedDramas(widget.downloads.jobs).length;
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: TabBar(
-        controller: _tabs,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        dividerColor: Colors.transparent,
-        overlayColor: WidgetStatePropertyAll(ink.withValues(alpha: 0.06)),
-        splashBorderRadius: BorderRadius.circular(999),
-        indicatorSize: TabBarIndicatorSize.label,
-        indicatorPadding: const EdgeInsets.symmetric(vertical: 7),
-        indicator: BoxDecoration(
-          color: ink.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: ink.withValues(alpha: 0.14)),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: CapsuleTabs(
+          labels: [
+            pending == 0 ? '下载中' : '下载中 $pending',
+            downloaded == 0 ? '已下载' : '已下载 $downloaded',
+            widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
+          ],
+          index: _tabs.index,
+          onChanged: (index) {
+            if (index == _tabs.index) return;
+            setState(() => _selection = null);
+            _tabs.animateTo(index);
+          },
         ),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-        labelColor: ink,
-        unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-        tabs: [
-          Tab(height: 32, text: pending == 0 ? '下载中' : '下载中 $pending'),
-          Tab(height: 32, text: downloaded == 0 ? '已下载' : '已下载 $downloaded'),
-          Tab(
-            height: 32,
-            text: widget.merges.active == 0
-                ? '合并'
-                : '合并 ${widget.merges.active}',
-          ),
-        ],
       ),
     );
   }
@@ -427,38 +405,30 @@ class _DownloadsPageState extends State<DownloadsPage>
               title: widget.headerChild == null ? '下载' : null,
               titleWidget: widget.headerChild,
               actions: [
+                // 只在真的有可暂停 / 可继续的任务时才出现对应圆钮，顶栏不会
+                // 常驻两枚灰着的按钮，也就给中间的胶囊标签留出了位置。
                 if (_pendingTab && view.pending.isNotEmpty) ...[
-                  IconButton(
-                    tooltip: '全部暂停',
-                    onPressed: view.pending.any((job) => job.active) && !_busy
-                        ? () => _controlAll('pause', [
-                            for (final job in view.pending)
-                              if (job.active) job,
-                          ])
-                        : null,
-                    icon: const Icon(Icons.pause_rounded),
-                  ),
-                  IconButton(
-                    tooltip: '全部继续',
-                    onPressed:
-                        view.pending.any((job) => job.resumable) && !_busy
-                        ? () => _controlAll('resume', [
-                            for (final job in view.pending)
-                              if (job.resumable) job,
-                          ])
-                        : null,
-                    icon: const Icon(Icons.play_arrow_rounded),
-                  ),
-                  _editButton(view, icon: false),
+                  if (view.pending.any((job) => job.active)) ...[
+                    _pauseAll(view),
+                    const SizedBox(width: 8),
+                  ],
+                  if (view.pending.any((job) => job.resumable)) ...[
+                    _resumeAll(view),
+                    const SizedBox(width: 8),
+                  ],
+                  _editButton(view),
                 ],
                 if (_downloadedTab && view.downloaded.isNotEmpty)
-                  _editButton(view, icon: false),
-                if (_mergeTab) _clearMerges(icon: false),
+                  _editButton(view),
+                if (_mergeTab) _clearMerges(),
                 const SizedBox(width: 8),
               ],
               bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(48),
-                child: _tabBar(4),
+                preferredSize: const Size.fromHeight(50),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _tabBar(16),
+                ),
               ),
             )
           : glassAppBar(
@@ -470,20 +440,17 @@ class _DownloadsPageState extends State<DownloadsPage>
               ),
               actions: [_selectAll(view), const SizedBox(width: 8)],
             ),
+      // SafeArea 已经让出「状态栏 + 顶栏（含标签条）」的高度，
+      // 再叠 kToolbarHeight 只会多出一条空白。
       body: SafeArea(
         top: true,
         bottom: false,
-        child: Padding(
-          padding: EdgeInsets.only(
-            top: kToolbarHeight + (selection == null ? 48 : 0),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
-              Expanded(child: body),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
+            Expanded(child: body),
+          ],
         ),
       ),
       bottomNavigationBar: selection == null
@@ -568,9 +535,11 @@ class _DownloadsPageState extends State<DownloadsPage>
                               children: [
                                 _selectAll(view),
                                 ..._selectionActions(view),
-                                _textButton(
-                                  '完成',
-                                  () => setState(() => _selection = null),
+                                ActionPill(
+                                  icon: Icons.done_rounded,
+                                  label: '完成',
+                                  onPressed: () =>
+                                      setState(() => _selection = null),
                                 ),
                               ],
                             )
@@ -602,7 +571,7 @@ class _DownloadsPageState extends State<DownloadsPage>
             ),
           ),
           _tabBar(24),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _chipsSlot(context, _sourceChips(view, inset: 24)),
           Expanded(child: body),
         ],

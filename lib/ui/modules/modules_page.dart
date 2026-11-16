@@ -11,12 +11,12 @@ import '../../models.dart';
 import '../../source_modules.dart';
 import '../app_scope.dart';
 import '../settings/settings_rows.dart';
-import '../settings/sources_view.dart';
 import 'module_export.dart';
-import '../shell/app_shell.dart';
 import 'module_install.dart';
 import '../settings/sorani_account_view.dart';
+import '../widgets/action_pill.dart';
 import '../widgets/bar_button.dart';
+import '../widgets/capsule_tabs.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
 import '../widgets/group_card.dart';
@@ -286,6 +286,18 @@ class _ModulesPageState extends State<ModulesPage>
     }
     return _list([
       if (_error case final error?) _Note(error),
+      if (modules != null && modules.isNotEmpty)
+        SettingsCard(
+          children: [
+            SettingsTile(
+              icon: Icons.save_alt_rounded,
+              title: '导出全部模块',
+              subtitle: '把已安装的 ${modules.length} 个模块打包成一个 zip',
+              enabled: !_busy,
+              onTap: _busy ? null : () => _export(modules),
+            ),
+          ],
+        ),
       if (modules == null && _error == null)
         const _Loading()
       else if (modules != null && modules.isEmpty)
@@ -394,24 +406,6 @@ class _ModulesPageState extends State<ModulesPage>
       appBar: AppBar(
         title: const Text('模块'),
         actions: [
-          if (_tabs.index == 0)
-            BarButton(
-              icon: Icons.swap_vert_rounded,
-              tooltip: '站源管理',
-              onPressed: () => openPage<void>(
-                context,
-                (_) => Scaffold(
-                  appBar: AppBar(title: const Text('站源管理')),
-                  body: SourcesView(store: _store),
-                ),
-              ),
-            ),
-          if (_tabs.index == 0 && (_modules?.isNotEmpty ?? false))
-            BarButton(
-              icon: Icons.save_alt_rounded,
-              tooltip: '导出全部模块',
-              onPressed: _busy ? null : () => _export(_modules!),
-            ),
           if (_tabs.index == 1)
             BarButton(
               icon: Icons.refresh_rounded,
@@ -420,52 +414,23 @@ class _ModulesPageState extends State<ModulesPage>
                   ? null
                   : _loadIndex,
             ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(46),
+          preferredSize: const Size.fromHeight(50),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Builder(
-              builder: (context) {
-                final theme = Theme.of(context);
-                final dark = theme.brightness == Brightness.dark;
-                final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-                return TabBar(
-                  controller: _tabs,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  dividerColor: Colors.transparent,
-                  overlayColor: WidgetStatePropertyAll(
-                    ink.withValues(alpha: 0.06),
-                  ),
-                  splashBorderRadius: BorderRadius.circular(999),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  indicatorPadding: const EdgeInsets.symmetric(vertical: 7),
-                  indicator: BoxDecoration(
-                    color: ink.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: ink.withValues(alpha: 0.14)),
-                  ),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-                  labelColor: ink,
-                  unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                  labelStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  tabs: const [
-                    Tab(height: 32, text: '已安装'),
-                    Tab(height: 32, text: '在线仓库'),
-                    Tab(height: 32, text: '内置'),
-                    Tab(height: 32, text: '手动'),
-                  ],
-                );
-              },
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: CapsuleTabs(
+                labels: const ['已安装', '在线仓库', '内置', '手动'],
+                index: _tabs.index,
+                onChanged: (index) {
+                  if (index == _tabs.index) return;
+                  _tabs.animateTo(index);
+                  setState(() {});
+                },
+              ),
             ),
           ),
         ),
@@ -476,6 +441,9 @@ class _ModulesPageState extends State<ModulesPage>
           Expanded(
             child: TabBarView(
               controller: _tabs,
+              // 只允许点标签切换：底部指示器是「每段自己的背景」，
+              // 手指横滑时若内容跟着翻页，胶囊会停在两段之间，反而更乱。
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _installedTab(),
                 _catalogTab(bundled: false),
@@ -591,7 +559,7 @@ class _ModuleCard extends StatelessWidget {
                   color: colors.outlineVariant,
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                   child: Row(
                     spacing: 8,
                     children: [...leading, const Spacer(), ...actions],
@@ -663,83 +631,6 @@ class _Tag extends StatelessWidget {
           fontWeight: FontWeight.w700,
           letterSpacing: 0.3,
           color: ink.withValues(alpha: 0.62),
-        ),
-      ),
-    );
-  }
-}
-
-enum _PillTone { neutral, accent, danger }
-
-/// 卡片操作按钮：统一 32 高的小胶囊（图标 15 + 12.5 字 + 6 间距）。
-/// accent 用反色强调（白底黑字），danger 只降低饱和度的红描边，不做整块填充。
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.icon,
-    required this.label,
-    this.onPressed,
-    this.tone = _PillTone.neutral,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final _PillTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : colors.onSurface;
-    final active = onPressed != null;
-    final (bg, border, fg) = switch (tone) {
-      _PillTone.accent => (
-        ink.withValues(alpha: active ? 0.92 : 0.16),
-        Colors.transparent,
-        dark ? const Color(0xFF111114) : colors.surface,
-      ),
-      _PillTone.danger => (
-        colors.error.withValues(alpha: active ? 0.10 : 0.04),
-        colors.error.withValues(alpha: active ? 0.32 : 0.12),
-        colors.error.withValues(alpha: active ? 0.92 : 0.36),
-      ),
-      _PillTone.neutral => (
-        ink.withValues(alpha: active ? 0.07 : 0.03),
-        ink.withValues(alpha: active ? 0.14 : 0.06),
-        ink.withValues(alpha: active ? 0.88 : 0.30),
-      ),
-    };
-    return FocusRing(
-      radius: 999,
-      child: Material(
-        color: bg,
-        shape: StadiumBorder(side: BorderSide(color: border)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          customBorder: const StadiumBorder(),
-          child: SizedBox(
-            height: 32,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 6,
-                children: [
-                  Icon(icon, size: 15, color: fg),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.1,
-                      color: fg,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );
@@ -824,32 +715,32 @@ class _InstalledCard extends StatelessWidget {
         child: Switch(value: enabled, onChanged: onToggle),
       ),
       onTap: onDetails,
+      // 次要操作靠左（导出、账号），主操作与破坏性操作靠右（更新、卸载）：
+      // 三枚胶囊等宽等高、留白一致，卡片底部不再出现「一枚按钮贴边、
+      // 另一枚悬在中间」的松散感。
       leading: [
+        ActionPill(
+          icon: Icons.ios_share_rounded,
+          label: '导出',
+          onPressed: onExport,
+        ),
         if (module.id == 'sorani' && soraniAccountAvailable())
           SoraniAccountButton(admin: admin, style: _cardButton(colors)),
       ],
       actions: [
-        _Pill(icon: Icons.ios_share_rounded, label: '导出', onPressed: onExport),
-        if (update != null) ...[
-          _Pill(
+        if (update != null)
+          ActionPill(
             icon: Icons.arrow_circle_up_outlined,
             label: '更新',
-            tone: _PillTone.accent,
+            tone: ActionTone.accent,
             onPressed: onUpdate,
           ),
-          _Pill(
-            icon: Icons.delete_outline_rounded,
-            label: '卸载',
-            tone: _PillTone.danger,
-            onPressed: onUninstall,
-          ),
-        ] else
-          _Pill(
-            icon: Icons.delete_outline_rounded,
-            label: '卸载',
-            tone: _PillTone.danger,
-            onPressed: onUninstall,
-          ),
+        ActionPill(
+          icon: Icons.delete_outline_rounded,
+          label: '卸载',
+          tone: ActionTone.danger,
+          onPressed: onUninstall,
+        ),
       ],
     );
   }
@@ -880,11 +771,11 @@ class _IndexCard extends StatelessWidget {
           Text('待恢复：$records', style: TextStyle(color: colors.primary)),
       ],
       trailing: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: _Pill(
+        padding: const EdgeInsets.only(top: 2, left: 8),
+        child: ActionPill(
           icon: Icons.download_rounded,
           label: '安装',
-          tone: _PillTone.accent,
+          tone: ActionTone.accent,
           onPressed: onInstall,
         ),
       ),

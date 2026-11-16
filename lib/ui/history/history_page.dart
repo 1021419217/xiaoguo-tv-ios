@@ -7,6 +7,8 @@ import '../../watch_history.dart';
 import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
+import '../widgets/action_pill.dart';
+import '../widgets/swipe_switch.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/frosted_header.dart';
@@ -189,47 +191,31 @@ class _HistoryPageState extends State<HistoryPage> {
     }.toList(),
   );
 
-  Widget _textButton(
-    String label,
-    VoidCallback? onPressed, {
-    IconData? icon,
-    FocusNode? focusNode,
-  }) => FocusRing(
-    radius: 20,
-    child: icon == null
-        ? TextButton(
-            focusNode: focusNode,
-            onPressed: onPressed,
-            child: Text(label),
-          )
-        : TextButton.icon(
-            focusNode: focusNode,
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18),
-            label: Text(label),
-          ),
-  );
-
-  List<Widget> _browseActions(_View view, {bool icons = true}) => [
-    _textButton(
-      '编辑',
-      view.shown.isEmpty ? null : _startEditing,
-      icon: icons ? Icons.check_box_outlined : null,
+  /// 顶栏操作统一成 [ActionPill]：和追剧、下载、模块页同一套胶囊语言。
+  List<Widget> _browseActions(_View view) => [
+    ActionPill(
+      icon: Icons.check_box_outlined,
+      label: '编辑',
       focusNode: _editButton,
+      onPressed: view.shown.isEmpty ? null : _startEditing,
     ),
-    _textButton(
-      '清空',
-      view.shown.isEmpty ? null : () => _remove(_ids(view), clear: true),
-      icon: icons ? Icons.delete_outline_rounded : null,
+    ActionPill(
+      icon: Icons.delete_sweep_outlined,
+      label: '清空',
+      tone: ActionTone.danger,
+      onPressed: view.shown.isEmpty
+          ? null
+          : () => _remove(_ids(view), clear: true),
     ),
   ];
 
   Widget _selectAll(_View view) {
     final all = _ids(view);
     final everything = view.selection!.length == all.length;
-    return _textButton(
-      everything ? '取消全选' : '全选',
-      () => setState(() => _selection = everything ? {} : all),
+    return ActionPill(
+      icon: Icons.select_all_rounded,
+      label: everything ? '取消全选' : '全选',
+      onPressed: () => setState(() => _selection = everything ? {} : all),
     );
   }
 
@@ -255,7 +241,11 @@ class _HistoryPageState extends State<HistoryPage> {
   List<Widget> _editActions(_View view) => [
     _selectAll(view),
     _deleteButton(view),
-    _textButton('完成', _finishEditing),
+    ActionPill(
+      icon: Icons.done_rounded,
+      label: '完成',
+      onPressed: _finishEditing,
+    ),
   ];
 
   Widget _title(_View view, double size) => Semantics(
@@ -317,6 +307,23 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
+  /// 左右滑动切换下方「站源」分类，与追剧页、下载页的手势保持一致。
+  Widget _swipe(_View view, Widget child) {
+    final touch = switch (AppScope.formFactorOf(context)) {
+      FormFactor.phone || FormFactor.pad => true,
+      FormFactor.window || FormFactor.television => false,
+    };
+    if (!touch) return child;
+    final ids = ['', for (final site in view.sources) site.id];
+    return SwipeSwitch(
+      index: ids.indexOf(view.source),
+      count: ids.length,
+      enabled: view.selection == null,
+      onSwitch: (index) => setState(() => _source = ids[index]),
+      child: child,
+    );
+  }
+
   Widget _phone(BuildContext context, _View view) {
     final selection = view.selection;
     final root = widget.root;
@@ -352,19 +359,20 @@ class _HistoryPageState extends State<HistoryPage> {
               key: ValueKey(selection == null),
               mainAxisSize: MainAxisSize.min,
               children: selection == null
-                  ? _browseActions(view, icons: true)
+                  ? _browseActions(view)
                   : [_selectAll(view)],
             ),
           ),
           const SizedBox(width: 8),
         ],
       ),
+      // SafeArea 已让出「状态栏 + 磨砂顶栏」，不再叠 kToolbarHeight。
       body: SafeArea(
         top: true,
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: kToolbarHeight),
-          child: _content(
+        child: _swipe(
+          view,
+          _content(
             context,
             view,
             inset: 16,

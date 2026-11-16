@@ -10,11 +10,15 @@ import '../../merge_queue.dart';
 import '../downloads/downloads_page.dart';
 import '../follow/follow_page.dart';
 import '../history/history_page.dart';
+import '../widgets/capsule_tabs.dart';
 
-/// 「追剧」标签页：把追剧、最近观看、下载三块合成一页，用顶部分段胶囊切换。
+/// 「追剧」标签页：把追剧、最近观看、下载三块合成一页。
 ///
-/// 三个子页面各自保留原来的搜索、站源筛选与编辑操作，只把标题位置让给
-/// [LibrarySwitcher]，因此视觉上始终是同一套顶栏，切换时只有内容在变。
+/// 交互分工（用户明确要求）：
+/// * 上方「追剧 / 最近观看 / 下载」只响应点击——它决定的是「看哪一块」，
+///   左右滑动在这里容易和列表本身的横滑打架，所以不做手势切换；
+/// * 每一块内部自己的分类（追剧/最近观看是站源筛选，下载是下载中/已下载/合并）
+///   才用左右滑动切换，手势与「发现」页的分类横滑一致。
 class LibraryPage extends StatefulWidget {
   const LibraryPage({
     super.key,
@@ -39,13 +43,22 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   var _index = 0;
 
-  Widget get _switcher => LibrarySwitcher(
-    index: _index,
-    onChanged: (index) {
-      if (index == _index) return;
-      unawaited(HapticFeedback.selectionClick());
-      setState(() => _index = index);
-    },
+  /// 三段胶囊要挤进顶栏标题位，字号放大到极限时按比例缩放，绝不溢出。
+  Widget get _switcher => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: AlignmentDirectional.centerStart,
+    child: CapsuleTabs(
+      labels: const ['追剧', '最近观看', '下载'],
+      index: _index,
+      // 三段要挤进顶栏标题位，字号与内边距比独立页面的标签条略紧一档。
+      fontSize: 13,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      onChanged: (index) {
+        if (index == _index) return;
+        unawaited(HapticFeedback.selectionClick());
+        setState(() => _index = index);
+      },
+    ),
   );
 
   @override
@@ -67,94 +80,5 @@ class _LibraryPageState extends State<LibraryPage> {
         headerChild: _switcher,
       ),
     ],
-  );
-}
-
-/// 追剧 / 最近观看 / 下载 三段胶囊，样式与模块页的标签栏一致。
-class LibrarySwitcher extends StatelessWidget {
-  const LibrarySwitcher({
-    super.key,
-    required this.index,
-    required this.onChanged,
-  });
-  final int index;
-  final ValueChanged<int> onChanged;
-
-  static const _labels = ['追剧', '最近观看', '下载'];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: ink.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ink.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < _labels.length; i++)
-            _Segment(
-              label: _labels[i],
-              selected: index == i,
-              ink: ink,
-              dim: theme.colorScheme.onSurfaceVariant,
-              onTap: () => onChanged(i),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Segment extends StatelessWidget {
-  const _Segment({
-    required this.label,
-    required this.selected,
-    required this.ink,
-    required this.dim,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final Color ink;
-  final Color dim;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    selected: selected,
-    button: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 13),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? ink.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? ink.withValues(alpha: 0.14) : Colors.transparent,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13.5,
-            height: 1.1,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? ink : dim,
-          ),
-        ),
-      ),
-    ),
   );
 }

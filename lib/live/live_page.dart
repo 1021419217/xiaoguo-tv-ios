@@ -237,7 +237,8 @@ class _LivePageState extends State<LivePage> {
     appBar: AppBar(
       surfaceTintColor: Colors.transparent,
       flexibleSpace: const FrostedHeader(fill: true),
-      title: const GlassTitle(title: '直播'),
+      titleSpacing: 16,
+      title: _header(),
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),
@@ -251,15 +252,88 @@ class _LivePageState extends State<LivePage> {
         ),
       ],
     ),
-    body: SafeArea(
-      top: true,
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.only(top: kToolbarHeight),
-        child: _body(context),
-      ),
-    ),
+    // SafeArea 已经把「状态栏 + 顶栏」一起让出来了（extendBodyBehindAppBar
+    // 会把顶栏高度并进 body 的 padding.top），再叠 kToolbarHeight 就会多出
+    // 一条 56 点的纯黑空条——直播与设置页上方那块方块就是这么来的。
+    body: SafeArea(top: true, bottom: false, child: _body(context)),
   );
+
+  /// 顶栏标题行：玻璃标题后面紧跟「收藏 / 全部频道」，不再单独占一行，
+  /// 分类之上也就没有那块空着的黑条了。
+  Widget _header() => Row(
+    spacing: 8,
+    children: [
+      const GlassTitle(title: '直播', expand: false),
+      Flexible(child: _platformChips()),
+    ],
+  );
+
+  Widget _platformChips() {
+    final chips = [
+      GlassChip(
+        label: '收藏 ${widget.store.favourites.length}',
+        selected: _platform == _favouritesId,
+        height: 34,
+        onTap: () => _selectPlatform(_favouritesId),
+      ),
+      GlassChip(
+        label: _progressTotal > 0 && _loading && _platform == _allId
+            ? '全部频道 $_progressDone/$_progressTotal'
+            : '全部频道',
+        badge: _platform != _allId && _channels.isNotEmpty
+            ? '${_lastGood.length}'
+            : null,
+        selected: _platform == _allId,
+        height: 34,
+        onTap: () => _selectPlatform(_allId),
+      ),
+    ];
+    final sources = _sources;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        spacing: 6,
+        children: [
+          for (final chip in chips) chip,
+          // 只有配置了多个直播源时才出现切换入口，单源时顶栏保持干净。
+          if (sources.length > 1)
+            GlassChip(
+              label: _source?.name ?? '直播源',
+              selected: false,
+              height: 34,
+              onTap: () => _pickSource(sources),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickSource(List<LiveSource> sources) async {
+    final picked = await showModalBottomSheet<LiveSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final source in sources)
+              ListTile(
+                title: Text(source.name),
+                subtitle: source.description.isEmpty
+                    ? null
+                    : Text(source.description),
+                trailing: source.id == _source?.id
+                    ? const Icon(Icons.check_rounded)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, source),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) _selectSource(picked);
+  }
 
   Widget _body(BuildContext context) {
     final sources = _sources;
@@ -273,7 +347,7 @@ class _LivePageState extends State<LivePage> {
         icon: Icons.live_tv_outlined,
       );
     }
-    if (_failed) {
+    if (_failed && _channels.isEmpty) {
       return StatusView(
         title: '直播源暂时不可用',
         message: _error,
@@ -282,76 +356,21 @@ class _LivePageState extends State<LivePage> {
         onAction: () => unawaited(_loadPlatforms(force: true)),
       );
     }
-    // 与首页一致：左右快滑在「收藏 / 各平台分类」之间切换。
+    // 与首页一致：左右快滑在「收藏 / 全部频道」之间切换。
     // 电视端组件会自动跳过手势，遥控器方向键行为不变。
-    // 分类栏固定为「收藏 / 全部频道」：源站的 130 个秀场分类不再铺开，
-    // 全部频道已按主播名去重合并，观感与全剧TV 一致。
+    // 源站的 130 个秀场分类不再铺开，全部频道已按主播名去重合并。
     final platformIds = [_favouritesId, _allId];
     final platformLabels = ['收藏', '全部频道'];
     var platformIndex = platformIds.indexOf(_platform);
     if (platformIndex < 0) platformIndex = 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (sources.length > 1) _sourceBar(sources),
-        _platformBar(),
-        const Divider(height: 1),
-        Expanded(
-          child: SwipeCategoryLayer(
-            itemCount: platformIds.length,
-            index: platformIndex,
-            labels: platformLabels,
-            onIndexChanged: (next) => _selectPlatform(platformIds[next]),
-            child: _channelBody(context),
-          ),
-        ),
-      ],
+    return SwipeCategoryLayer(
+      itemCount: platformIds.length,
+      index: platformIndex,
+      labels: platformLabels,
+      onIndexChanged: (next) => _selectPlatform(platformIds[next]),
+      child: _channelBody(context),
     );
   }
-
-  Widget _sourceBar(List<LiveSource> sources) => SizedBox(
-    height: 56,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      itemCount: sources.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
-      itemBuilder: (context, index) {
-        final source = sources[index];
-        return _Chip(
-          label: source.name,
-          selected: source.id == _source?.id,
-          onTap: () => _selectSource(source),
-        );
-      },
-    ),
-  );
-
-  Widget _platformBar() => SizedBox(
-    height: 52,
-    child: Row(
-      children: [
-        const SizedBox(width: 16),
-        _Chip(
-          label: '收藏 ${widget.store.favourites.length}',
-          selected: _platform == _favouritesId,
-          onTap: () => _selectPlatform(_favouritesId),
-        ),
-        const SizedBox(width: 8),
-        _Chip(
-          label: _progressTotal > 0 && _loading && _platform == _allId
-              ? '全部频道 $_progressDone/$_progressTotal'
-              : '全部频道',
-          badge: _platform != _allId && _channels.isNotEmpty
-              ? '${_lastGood.length}'
-              : null,
-          selected: _platform == _allId,
-          onTap: () => _selectPlatform(_allId),
-        ),
-        const Spacer(),
-      ],
-    ),
-  );
 
   Widget _channelBody(BuildContext context) {
     if (_loading && _channels.isEmpty) {
@@ -399,28 +418,6 @@ class _LivePageState extends State<LivePage> {
       ],
     );
   }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.badge,
-  });
-  final String label;
-  final String? badge;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => GlassChip(
-    label: label,
-    badge: badge,
-    selected: selected,
-    onTap: onTap,
-    height: 40,
-  );
 }
 
 class _ChannelTile extends StatelessWidget {

@@ -363,10 +363,7 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
       body: SafeArea(
         top: true,
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: kToolbarHeight),
-          child: _content(context, item, selection, inset: 16),
-        ),
+        child: _content(context, item, selection, inset: 16),
       ),
       bottomNavigationBar: selection == null || item == null
           ? null

@@ -1,0 +1,170 @@
+import 'package:flutter/material.dart';
+
+/// 统一的胶囊分段控件：模块页、下载页、追剧页共用同一套外观与手感。
+///
+/// 关键点（上一版几个页面的痛点都在这里）：
+/// * 段宽由「文字 + 左右内边距」自己撑开，没有固定高度也没有固定宽度，
+///   所以胶囊永远完整包住文字，字号放大也不会露出半截；
+/// * 选中态是每段自己的背景，而不是在整条轨道上滑动的独立指示器，
+///   页面切换时不会出现指示器宽度插值不到位、只盖住半个字的中间态；
+/// * 轨道、描边、字重、圆角全部一致，任何一页看起来都是同一套东西。
+class CapsuleTabs extends StatefulWidget {
+  const CapsuleTabs({
+    super.key,
+    required this.labels,
+    required this.index,
+    required this.onChanged,
+    this.scrollable = false,
+    this.expand = false,
+    this.track = true,
+    this.fontSize = 13.5,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14),
+    this.margin = EdgeInsets.zero,
+  });
+
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  /// 标签过多时横向滚动，并在切换后把当前段滚进可视区。
+  final bool scrollable;
+
+  /// 各段等分铺满整行（用于数量固定、需要撑满的场合）。
+  final bool expand;
+
+  /// 是否绘制外层轨道底色。嵌在其它胶囊容器里时可以关掉。
+  final bool track;
+
+  final double fontSize;
+  final EdgeInsets padding;
+  final EdgeInsets margin;
+
+  @override
+  State<CapsuleTabs> createState() => _CapsuleTabsState();
+}
+
+class _CapsuleTabsState extends State<CapsuleTabs> {
+  final _scroll = ScrollController();
+  final _keys = <int, GlobalKey>{};
+
+  @override
+  void didUpdateWidget(covariant CapsuleTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index && widget.scrollable) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _reveal() {
+    final target = _keys[widget.index]?.currentContext;
+    if (target == null || !mounted) return;
+    Scrollable.ensureVisible(
+      target,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _segment(BuildContext context, int i) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    final selected = i == widget.index;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (!selected) widget.onChanged(i);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: widget.padding.add(
+            const EdgeInsets.symmetric(vertical: 6.5),
+          ),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? ink.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? ink.withValues(alpha: 0.14)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Text(
+            widget.labels[i],
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: widget.fontSize,
+              height: 1.15,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              letterSpacing: -0.1,
+              color: selected
+                  ? ink
+                  : theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: dark ? 0.86 : 0.92,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    final segments = [
+      for (var i = 0; i < widget.labels.length; i++)
+        KeyedSubtree(
+          key: _keys.putIfAbsent(i, GlobalKey.new),
+          child: _segment(context, i),
+        ),
+    ];
+    final row = widget.expand
+        ? Row(
+            children: [
+              for (final segment in segments) Expanded(child: segment),
+            ],
+          )
+        : Row(mainAxisSize: MainAxisSize.min, spacing: 2, children: segments);
+    final content = widget.scrollable
+        ? SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 2,
+              children: segments,
+            ),
+          )
+        : Padding(padding: const EdgeInsets.all(3), child: row);
+    if (!widget.track) return Padding(padding: widget.margin, child: content);
+    return Padding(
+      padding: widget.margin,
+      child: Container(
+        decoration: BoxDecoration(
+          color: ink.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: ink.withValues(alpha: 0.08)),
+        ),
+        child: content,
+      ),
+    );
+  }
+}

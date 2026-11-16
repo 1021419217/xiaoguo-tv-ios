@@ -157,13 +157,11 @@ class _SearchPageState extends State<SearchPage> {
           child: field,
         ),
       ),
+      // SafeArea 已经让出顶栏高度，再叠 kToolbarHeight 会多出空白。
       body: SafeArea(
         top: true,
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.only(top: kToolbarHeight),
-          child: FadeSwitcher(child: _body(context)),
-        ),
+        child: FadeSwitcher(child: _body(context)),
       ),
     );
   }

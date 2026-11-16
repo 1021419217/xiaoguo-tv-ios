@@ -45,10 +45,19 @@ class FrostedHeader extends StatelessWidget {
 /// 只加一层均匀玻璃 + 一圈极细描边，不加渐变高光、外发光。
 /// 外层 Row + Spacer 保证在 AppBar / Expanded 的紧约束下仍按文字宽度收缩。
 class GlassTitle extends StatelessWidget {
-  const GlassTitle({super.key, required this.title, this.count});
+  const GlassTitle({
+    super.key,
+    required this.title,
+    this.count,
+    this.expand = true,
+  });
 
   final String title;
   final String? count;
+
+  /// 是否用 Spacer 占满整行。嵌在一行里（标题后面还要放筛选胶囊）时传 false，
+  /// 否则内部 Spacer 会把后面的胶囊挤出去。
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +122,7 @@ class GlassTitle extends StatelessWidget {
             ),
           ),
         ),
-        const Spacer(),
+        if (expand) const Spacer(),
       ],
     );
   }
@@ -194,82 +203,6 @@ class GlassChip extends StatelessWidget {
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 玻璃文字按钮：手机端顶栏的「编辑 / 全选 / 完成」等文字操作，
-/// 与玻璃标题、玻璃圆钮保持同一套材质。电视端仍用实心 TextButton。
-class GlassAction extends StatelessWidget {
-  const GlassAction({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.icon,
-    this.focusNode,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final FocusNode? focusNode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    final inactive = onPressed == null;
-    return FocusRing(
-      radius: 18,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              focusNode: focusNode,
-              onTap: onPressed,
-              borderRadius: BorderRadius.circular(18),
-              splashColor: ink.withValues(alpha: 0.08),
-              child: Container(
-                height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: ink.withValues(alpha: dark ? 0.09 : 0.055),
-                  border: Border.all(
-                    color: ink.withValues(alpha: dark ? 0.14 : 0.10),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 5,
-                  children: [
-                    if (icon case final value?)
-                      Icon(
-                        value,
-                        size: 16,
-                        color: ink.withValues(alpha: inactive ? 0.35 : 0.9),
-                      ),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: ink.withValues(alpha: inactive ? 0.35 : 0.92),
-                      ),
-                    ),
                   ],
                 ),
               ),
