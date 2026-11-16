@@ -15,7 +15,11 @@ Future<String?> applyModuleInstall(
 }) async {
   final id = await repository.installModule(module.token);
   // 以前在本机「删除」过的源会留下 sourceDeleted 标记，装上也不会出现，这里一起清掉。
-  await store.restoreDeletedSource(id);
+  try {
+    await store.restoreDeletedSource(id);
+  } catch (_) {
+    // 清理失败不该让安装本身报错，站源管理页里还能手动恢复。
+  }
   if (enable && !module.installed) {
     await store.setSourceEnabled(id, true);
   }
