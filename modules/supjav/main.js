@@ -215,14 +215,15 @@ function search(page, query) {
 function serversOf(html) {
   const out = [];
   const seen = {};
-  const matched = html.match(/<a[^>]*class="btn-server[^"]*"[^>]*data-link="([^"]+)"[^>]*>([^<]*)<\/a>/g) || [];
+  // 属性顺序不固定（data-link 可能在 class 前后），先取出整个 <a> 再分别提取。
+  const matched = html.match(/<a[^>]*class="[^"]*btn-server[^"]*"[^>]*>[\s\S]*?<\/a>/g) || [];
   for (const block of matched) {
-    const pair = /data-link="([^"]+)"[^>]*>([^<]*)</.exec(block);
-    if (!pair) continue;
-    const name = clean(pair[2]).toUpperCase();
+    const link = /data-link="([^"]+)"/.exec(block);
+    if (!link) continue;
+    const name = clean(block.replace(/^<a[^>]*>/, '')).toUpperCase();
     if (name === '' || name === 'LUC' || seen[name]) continue;
     seen[name] = true;
-    out.push({ name: name, link: pair[1] });
+    out.push({ name: name, link: link[1] });
   }
   out.sort((left, right) => {
     const leftRank = SERVER_ORDER.indexOf(left.name);
