@@ -425,6 +425,7 @@ class _ModulesPageState extends State<ModulesPage>
               child: CapsuleTabs(
                 labels: const ['已安装', '在线仓库', '内置', '手动'],
                 index: _tabs.index,
+                animation: _tabs.animation,
                 onChanged: (index) {
                   if (index == _tabs.index) return;
                   _tabs.animateTo(index);
@@ -441,9 +442,6 @@ class _ModulesPageState extends State<ModulesPage>
           Expanded(
             child: TabBarView(
               controller: _tabs,
-              // 只允许点标签切换：底部指示器是「每段自己的背景」，
-              // 手指横滑时若内容跟着翻页，胶囊会停在两段之间，反而更乱。
-              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _installedTab(),
                 _catalogTab(bundled: false),

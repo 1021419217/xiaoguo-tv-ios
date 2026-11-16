@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 /// 关键点（上一版几个页面的痛点都在这里）：
 /// * 段宽由「文字 + 左右内边距」自己撑开，没有固定高度也没有固定宽度，
 ///   所以胶囊永远完整包住文字，字号放大也不会露出半截；
-/// * 选中态是每段自己的背景，而不是在整条轨道上滑动的独立指示器，
-///   页面切换时不会出现指示器宽度插值不到位、只盖住半个字的中间态；
+/// * 高亮是每段自己的背景，可选的 [animation] 让它跟随分页动画交叉淡入淡出，
+///   宽度始终等于某一段的真实宽度，不会出现「指示器正在两段之间」的中间态；
 /// * 轨道、描边、字重、圆角全部一致，任何一页看起来都是同一套东西。
 class CapsuleTabs extends StatefulWidget {
   const CapsuleTabs({
@@ -14,6 +14,7 @@ class CapsuleTabs extends StatefulWidget {
     required this.labels,
     required this.index,
     required this.onChanged,
+    this.animation,
     this.scrollable = false,
     this.expand = false,
     this.track = true,
@@ -25,6 +26,9 @@ class CapsuleTabs extends StatefulWidget {
   final List<String> labels;
   final int index;
   final ValueChanged<int> onChanged;
+
+  /// 与 `TabController.animation` 绑定：左右滑动分页时高亮跟着淡入淡出。
+  final Animation<double>? animation;
 
   /// 标签过多时横向滚动，并在切换后把当前段滚进可视区。
   final bool scrollable;
@@ -72,18 +76,21 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
     );
   }
 
-  Widget _segment(BuildContext context, int i) {
+  Widget _segment(BuildContext context, int i, double weight) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    final selected = i == widget.index;
+    final dim = theme.colorScheme.onSurfaceVariant.withValues(
+      alpha: dark ? 0.86 : 0.92,
+    );
+    final selected = weight > 0.5;
     return Semantics(
       selected: selected,
       button: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          if (!selected) widget.onChanged(i);
+          if (i != widget.index) widget.onChanged(i);
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
@@ -93,13 +100,9 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? ink.withValues(alpha: 0.12) : Colors.transparent,
+            color: ink.withValues(alpha: 0.12 * weight),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected
-                  ? ink.withValues(alpha: 0.14)
-                  : Colors.transparent,
-            ),
+            border: Border.all(color: ink.withValues(alpha: 0.14 * weight)),
           ),
           child: Text(
             widget.labels[i],
@@ -110,11 +113,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               height: 1.15,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               letterSpacing: -0.1,
-              color: selected
-                  ? ink
-                  : theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: dark ? 0.86 : 0.92,
-                    ),
+              color: Color.lerp(dim, ink, weight),
             ),
           ),
         ),
@@ -122,8 +121,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _layout(BuildContext context, double position) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
@@ -131,7 +129,11 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
       for (var i = 0; i < widget.labels.length; i++)
         KeyedSubtree(
           key: _keys.putIfAbsent(i, GlobalKey.new),
-          child: _segment(context, i),
+          child: _segment(
+            context,
+            i,
+            (1 - (position - i).abs()).clamp(0.0, 1.0),
+          ),
         ),
     ];
     final row = widget.expand
@@ -165,6 +167,16 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
         ),
         child: content,
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = widget.animation;
+    if (animation == null) return _layout(context, widget.index.toDouble());
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) => _layout(context, animation.value),
     );
   }
 }

@@ -386,6 +386,7 @@ class _DownloadsPageState extends State<DownloadsPage>
             widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
           ],
           index: _tabs.index,
+          animation: _tabs.animation,
           onChanged: (index) {
             if (index == _tabs.index) return;
             setState(() => _selection = null);
