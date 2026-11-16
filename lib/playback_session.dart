@@ -70,16 +70,10 @@ class PlaybackSession extends ChangeNotifier {
       if (_closed || !_acceptErrors || _loading || _error != null) return;
       if (_health.stalled(
         position: player.state.position,
-        // 用户想播就算数：mpv 卡在 demuxer 读时 playing 会是 false，
-        // 旧条件要求 playing 为真，导致这种卡死永远不触发恢复。
-        active: _playIntent,
+        playing: player.state.playing && _playIntent,
         foreground: _foreground,
         now: DateTime.now(),
       )) {
-        DiaryService.add(
-          '[Play] 停滞检测 位置=${player.state.position.inSeconds}s '
-          '播放=${player.state.playing} 缓冲=${player.state.buffering}',
-        );
         unawaited(_recover('position_stalled_20s'));
       }
     });
@@ -97,22 +91,15 @@ class PlaybackSession extends ChangeNotifier {
     final stream = player.stream;
     _subscriptions.addAll([
       stream.error.listen(_playerError),
-      stream.log.listen(_playerLog),
       stream.completed.listen(_completed),
       stream.position.listen((position) {
         if (!_closed && _openedIndex == _index && position > Duration.zero) {
           _resumePosition = position.inMilliseconds / 1000;
-          if (position >= const Duration(seconds: 2)) {
-            unawaited(_logVideoOutput(player.state.videoParams));
-          }
         }
         _sync();
       }),
       stream.playing.listen((playing) {
-        if (!playing) {
-          endBoost();
-          _networkSpeed = 0;
-        }
+        if (!playing) endBoost();
         _sync();
       }),
       stream.buffering.listen((buffering) {
@@ -131,54 +118,11 @@ class PlaybackSession extends ChangeNotifier {
     ]);
   }
 
-  int? _networkSpeed;
-  bool _speedReading = false;
-  Duration? _speedResumeAt;
-  DateTime? _speedResumeDeadline;
-
-  void _holdNetworkSpeed() {
-    _speedResumeAt = player.state.position;
-    _speedResumeDeadline = DateTime.now().add(const Duration(seconds: 15));
-  }
-
   String _videoOutput = '';
-  String _videoOutputSession = '';
-
-  /// libmpv 原始日志条数。warn 之后噪音明显变多，每个会话只留前 120 条，
-  /// 免得把「播放调试日记」里真正有用的 Play 记录挤掉。
-  int _mpvLogs = 0;
-  String _mpvLogLast = '';
-
-  /// 把 libmpv 的 warn / error 抄进日记：「Failed to open」这类提示背后
-  /// 真正的原因（无法识别文件格式、TLS 失败、4xx/5xx）只在原生日志里有。
-  void _playerLog(PlayerLog event) {
-    if (_closed) return;
-    final level = event.level.toLowerCase();
-    if (level != 'error' && level != 'warn') return;
-    final text = event.text.trim();
-    if (text.isEmpty || text == _mpvLogLast) return;
-    if (_mpvLogs >= 120) {
-      if (_mpvLogs == 120) {
-        _mpvLogs++;
-        DiaryService.add('[mpv] 日志已达 120 条上限，后续同类输出省略');
-      }
-      return;
-    }
-    _mpvLogs++;
-    _mpvLogLast = text;
-    DiaryService.add('[mpv/${event.prefix}] $text');
-  }
 
   Future<void> _logVideoOutput(VideoParams parameters) async {
     final platform = player.platform;
     if (parameters.pixelformat == null || platform is! NativePlayer) return;
-    if (!player.state.playing ||
-        player.state.buffering ||
-        player.state.position < const Duration(seconds: 2)) {
-      return;
-    }
-    final session = _plan?.session ?? '';
-    if (session.isEmpty || session == _videoOutputSession) return;
     try {
       final values = [
         for (final name in [
@@ -189,11 +133,9 @@ class PlaybackSession extends ChangeNotifier {
         ])
           await platform.getProperty(name),
       ];
-      if (_closed) return;
-      _videoOutputSession = session;
       final line =
           '[Video] decoder=${store.playbackPreferences.televisionDecoder.name} hwdec=${values[0]} vo=${values[1]} codec=${values[2]} fps=${values[3]} format=${parameters.pixelformat} hw_format=${parameters.hwPixelformat} size=${parameters.w}x${parameters.h}';
-      if (line == _videoOutput) return;
+      if (_closed || line == _videoOutput) return;
       _videoOutput = line;
       DiaryService.add(line);
     } catch (_) {}
@@ -218,13 +160,6 @@ class PlaybackSession extends ChangeNotifier {
   Timer? _stallTimer;
   Timer? _volumeTimer;
   Timer? _sleepTimer;
-  Timer? _standbyIdleTimer;
-  Timer? _resumeTimer;
-  Timer? _seekWatchdog;
-  /// 同一集内「重载线路」的次数上限：站源地址失效时重载一次就够，
-  /// 再失败说明是站源本身的问题，继续重开只会变成无限循环。
-  int _reopenCount = 0;
-  DateTime? _pausedSince;
   DateTime? _sleepAt;
   int _sleepMinutes = 0;
   bool _sleepAtEpisodeEnd = false;
@@ -242,13 +177,10 @@ class PlaybackSession extends ChangeNotifier {
   bool _closed = false;
   bool _acceptErrors = false;
   bool _foreground = true;
-  DateTime? _hiddenAt;
-  bool _resumeAfterHide = false;
   bool _playIntent = true;
   bool _pendingError = false;
   bool _boosting = false;
   bool _boostLocked = false;
-  bool _locked = false;
   bool _engaged;
   bool _staleAudio = false;
   bool _stalled = false;
@@ -290,7 +222,6 @@ class PlaybackSession extends ChangeNotifier {
   bool get paused => !_playIntent;
   bool get boosting => _boosting;
   bool get boostLocked => _boostLocked;
-  bool get locked => _locked;
   Size? get videoSize => _videoSize;
   double get aspectRatio => switch (_videoSize) {
     final size? => size.width / size.height,
@@ -424,12 +355,7 @@ class PlaybackSession extends ChangeNotifier {
           DateTime.now().difference(_standbyAt) > const Duration(minutes: 8)) {
         _dropStandby();
       }
-      if (_standbyIndex >= 0 ||
-          duration <= 0 ||
-          duration - position > 45000 ||
-          ahead < 3000) {
-        return;
-      }
+      if (_standbyIndex >= 0 || duration <= 0 || ahead < 3000) return;
     } else {
       if (!state.playing || state.buffering || !_playIntent) {
         _preloader.pause();
@@ -582,29 +508,12 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> _recover(String reason) async {
+    final current = _plan;
     if (_closed ||
         !_acceptErrors ||
         !_foreground ||
-        _plan == null ||
+        current == null ||
         _error != null) {
-      return;
-    }
-    // 回前台后的头几秒网络往往还没就绪，900ms 连发三次只会全部打空。
-    final attempt = _recovery.attempts;
-    if (attempt > 0) {
-      final wait = attempt == 1
-          ? const Duration(milliseconds: 1500)
-          : const Duration(seconds: 4);
-      _acceptErrors = false;
-      _errorTimer?.cancel();
-      _pendingError = false;
-      DiaryService.add('[Play] 恢复退避 ${wait.inMilliseconds}ms，准备第 ${attempt + 1} 次');
-      await Future<void>.delayed(wait);
-      if (_closed || !_foreground || _error != null) return;
-    }
-    final current = _plan;
-    if (current == null) {
-      _acceptErrors = true;
       return;
     }
     _acceptErrors = false;
@@ -630,10 +539,7 @@ class PlaybackSession extends ChangeNotifier {
         try {
           await saveProgress();
           _openedIndex = -1;
-          await player.stop().timeout(
-            const Duration(seconds: 3),
-            onTimeout: () {},
-          );
+          await player.stop();
         } finally {
           await _release(current.session);
         }
@@ -713,7 +619,6 @@ class PlaybackSession extends ChangeNotifier {
     if (!_usable || index < 0 || index >= detail.episodes.length) return;
     endBoost();
     _staleAudio = false;
-    _cancelResumeWatchdog();
     if (index != _index) _online = false;
     if (recovery == null &&
         position == 0 &&
@@ -734,8 +639,6 @@ class PlaybackSession extends ChangeNotifier {
     _preloader.clear();
     final ticket = ++_generation;
     _seekSequence++;
-    _seekWatchdog?.cancel();
-    _reopenCount = 0;
     danmaku.setPlan(null);
     _acceptErrors = false;
     _pendingError = false;
@@ -767,12 +670,7 @@ class PlaybackSession extends ChangeNotifier {
         await saveProgress();
         if (!_current(ticket)) return;
         _openedIndex = -1;
-        // 后台挂起回来后 mpv 的 stop 有可能卡在已断开的 demuxer 上，
-        // 加超时避免整条串行队列被一个死会话堵住。
-        await player.stop().timeout(
-          const Duration(seconds: 3),
-          onTimeout: () {},
-        );
+        await player.stop();
         final previous = _plan;
         _plan = null;
         if (recovery == PlaybackRecoveryAction.alternative) {
@@ -862,7 +760,6 @@ class PlaybackSession extends ChangeNotifier {
     _preloader.clear();
     final ticket = ++_generation;
     _seekSequence++;
-    _seekWatchdog?.cancel();
     _pendingError = false;
     _errorTimer?.cancel();
     _health.reset();
@@ -946,7 +843,6 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _dropStandby() {
-    _cancelStandbyIdle();
     final plan = _standbyPlan;
     final opened = _standbyOpen || plan != null;
     _standbyPlan = null;
@@ -968,30 +864,11 @@ class PlaybackSession extends ChangeNotifier {
   Future<int?> networkSpeed() async {
     final platform = player.platform;
     if (_closed || local || platform is! NativePlayer) return null;
-    if (_speedReading || _loading || !_foreground || !player.state.playing) {
-      return _networkSpeed;
-    }
-    final resumeAt = _speedResumeAt;
-    if (resumeAt != null) {
-      final progressed =
-          player.state.position > resumeAt + const Duration(milliseconds: 500);
-      if (!progressed && DateTime.now().isBefore(_speedResumeDeadline!)) {
-        return _networkSpeed;
-      }
-      _speedResumeAt = null;
-      _speedResumeDeadline = null;
-    }
-    if (player.state.buffering) return _networkSpeed;
-    _speedReading = true;
     try {
       final value = await platform.getProperty('cache-speed');
-      final speed = double.tryParse(value)?.round();
-      if (speed != null) _networkSpeed = speed;
-      return _networkSpeed;
+      return double.tryParse(value)?.round();
     } catch (_) {
-      return _networkSpeed;
-    } finally {
-      _speedReading = false;
+      return null;
     }
   }
 
@@ -1041,38 +918,13 @@ class PlaybackSession extends ChangeNotifier {
     endBoost();
     _playIntent = !player.state.playing;
     _health.reset();
-    if (_playIntent) {
-      _cancelStandbyIdle();
-      final paused = _takePausedSeconds();
-      if (paused >= 5) DiaryService.add('[Play] 恢复播放，已暂停 $paused 秒');
-      if (!local && paused >= 5) _armResumeWatchdog();
-      _holdNetworkSpeed();
-    } else {
-      _cancelResumeWatchdog();
-      _pausedSince = DateTime.now();
-      _scheduleStandbyIdle();
-    }
     if (_playIntent && player.state.completed) {
       unawaited(play(_index));
       return;
     }
     if (_playIntent && _staleAudio) {
       _staleAudio = false;
-      final position = player.state.position;
-      if (player.state.duration > Duration.zero && position > Duration.zero) {
-        unawaited(
-          player
-              .seek(position)
-              .then(
-                (_) => player.state.playing
-                    ? Future<void>.value()
-                    : player.playOrPause(),
-              )
-              .catchError((Object _) {}),
-        );
-      } else {
-        unawaited(player.playOrPause());
-      }
+      unawaited(player.seek(player.state.position).then((_) => player.play()));
     } else {
       unawaited(player.playOrPause());
     }
@@ -1080,96 +932,8 @@ class PlaybackSession extends ChangeNotifier {
     _syncDanmaku();
   }
 
-  int _takePausedSeconds() {
-    final since = _pausedSince;
-    _pausedSince = null;
-    if (since == null) return 0;
-    return DateTime.now().difference(since).inSeconds;
-  }
-
-  void _armResumeWatchdog() {
-    _cancelResumeWatchdog();
-    final position = player.state.position;
-    _resumeTimer = Timer(const Duration(seconds: 8), () {
-      _resumeTimer = null;
-      if (_closed || !_playIntent) return;
-      if (player.state.position > position) return;
-      // 还在缓冲说明解码器在拉流，别把正在干活的会话掐掉重来。
-      // 91 这类站源起播本来就慢，误判一次要重新解析地址，反而更久。
-      if (player.state.buffering) return;
-      DiaryService.add('[Play] 恢复后 8 秒没有进展，重新获取播放地址');
-      unawaited(_reviveCurrent());
-    });
-  }
-
-  void _cancelResumeWatchdog() {
-    _resumeTimer?.cancel();
-    _resumeTimer = null;
-  }
-
-  Future<void> _reviveCurrent() =>
-      _reopen(Duration(milliseconds: (_resumePosition * 1000).round()));
-
-  /// 重开当前集。站源的播放地址多半带时效签名（91、黄色仓库这类解析出来的
-  /// 直链几分钟就失效），所以这里默认走 [play] 重新解析地址，而不是拿旧
-  /// plan.url 再 open 一次：旧地址 403 只会让画面一直黑着，还看不出原因。
-  /// 只有本机文件不需要重新解析，直接 open 更快。
-  Future<void> _reopen(Duration target) async {
-    if (_reopenCount > 0) {
-      DiaryService.add('[Play] 本次播放已重载过一次，跳过重复重载');
-      return;
-    }
-    _reopenCount++;
-    final position = target.inMilliseconds / 1000;
-    final plan = _plan;
-    if (plan != null && plan.local && plan.url.isNotEmpty) {
-      try {
-        _health.reset();
-        _staleAudio = false;
-        await player.open(
-          Media(
-            plan.url,
-            httpHeaders: plan.headers,
-            start: position > 0
-                ? Duration(milliseconds: (position * 1000).round())
-                : null,
-          ),
-          play: _foreground && _playIntent,
-        );
-        _openedIndex = _index;
-        return;
-      } catch (_) {
-        if (_closed) return;
-      }
-    }
-    if (local) return;
-    // refresh 让 [play] 跳过预热缓存、重新向站源要地址：预热的同样是旧签名
-    // 直链，直接复用等于白重载一次。
-    await play(
-      _index,
-      position: position,
-      recovery: PlaybackRecoveryAction.refresh,
-    );
-  }
-
-  void _scheduleStandbyIdle() {
-    _cancelStandbyIdle();
-    if (_standby == null) return;
-    _standbyIdleTimer = Timer(const Duration(minutes: 1), () {
-      _standbyIdleTimer = null;
-      if (_closed || _playIntent || _standbyIndex < 0) return;
-      _dropStandby();
-    });
-  }
-
-  void _cancelStandbyIdle() {
-    _standbyIdleTimer?.cancel();
-    _standbyIdleTimer = null;
-  }
-
   Future<bool> seekTo(Duration target) async {
     if (!_usable || !ready) return false;
-    _cancelResumeWatchdog();
     final ticket = ++_seekSequence;
     final generation = _generation;
     danmaku.beginSeek();
@@ -1177,48 +941,14 @@ class PlaybackSession extends ChangeNotifier {
     try {
       await player.seek(target);
       succeeded = true;
-    } catch (error) {
-      DiaryService.add('[Play] 跳转失败 目标=${target.inSeconds}s：$error');
+    } catch (_) {
     } finally {
       if (!_closed && ticket == _seekSequence && generation == _generation) {
         danmaku.endSeek(succeeded ? target : player.state.position);
       }
     }
-    if (succeeded && ticket == _seekSequence) _watchSeek(target);
     return succeeded;
   }
-
-  void _watchSeek(Duration target) {
-    _seekWatchdog?.cancel();
-    final ticket = _seekSequence;
-    Duration? settled;
-    _seekWatchdog = Timer(const Duration(seconds: 3), () {
-      if (!_seekWatchStillValid(ticket)) return;
-      settled = player.state.position;
-      _seekWatchdog = Timer(const Duration(seconds: 4), () {
-        _seekWatchdog = null;
-        if (!_seekWatchStillValid(ticket)) return;
-        final position = player.state.position;
-        if ((position - target).abs() <= const Duration(seconds: 2)) return;
-        if (position > settled! + const Duration(milliseconds: 800)) return;
-        // 缓冲中不动是正常的（站源切片慢），别因此重建会话。
-        if (player.state.buffering) return;
-        DiaryService.add(
-          '[Play] 跳转未生效 目标=${target.inSeconds}s '
-          '位置=${position.inSeconds}s，重新获取播放地址',
-        );
-        unawaited(_reopen(target));
-      });
-    });
-  }
-
-  bool _seekWatchStillValid(int ticket) =>
-      !_closed &&
-      ticket == _seekSequence &&
-      _playIntent &&
-      _foreground &&
-      !_loading &&
-      _error == null;
 
   Duration? seekBy(int seconds) {
     final duration = player.state.duration;
@@ -1274,12 +1004,6 @@ class PlaybackSession extends ChangeNotifier {
       endBoost();
       _notify();
     }
-  }
-
-  void setLocked(bool locked) {
-    if (_locked == locked) return;
-    _locked = locked;
-    _notify();
   }
 
   bool endBoost() {
@@ -1436,91 +1160,18 @@ class PlaybackSession extends ChangeNotifier {
 
   void setForeground(bool visible) {
     if (_closed || _foreground == visible) return;
+    DiaryService.add(visible ? '[Play] 应用回到前台' : '[Play] 应用不可见，暂停播放');
     _foreground = visible;
     _health.reset();
+    _sync();
     if (!visible) {
-      _hiddenAt = DateTime.now();
-      // 只记「锁屏前真的在放」这一种，用户自己按了暂停再锁屏，回来保持暂停。
-      _resumeAfterHide = _playIntent && player.state.playing && _error == null;
-      DiaryService.add('[Play] 应用不可见，暂停播放');
       endBoost();
       _playIntent = false;
-      _pausedSince = DateTime.now();
-      _cancelResumeWatchdog();
-      _cancelStandbyIdle();
-      _dropStandby();
-      _preloader.clear();
       unawaited(player.pause());
       unawaited(saveProgress());
-      _sync();
-      return;
-    } else {
-      _holdNetworkSpeed();
-      if (_pendingError) _queueRecovery('foreground_pending_error');
+    } else if (_pendingError) {
+      _queueRecovery('foreground_pending_error');
     }
-    final hidden = _hiddenAt == null
-        ? Duration.zero
-        : DateTime.now().difference(_hiddenAt!);
-    _hiddenAt = null;
-    final resume = _resumeAfterHide;
-    _resumeAfterHide = false;
-    DiaryService.add('[Play] 应用回到前台（后台 ${hidden.inSeconds}s）');
-    _sync();
-    if (_pendingError) _queueRecovery('foreground_pending_error');
-    if (!resume || _loading) return;
-    unawaited(_resumeAfterBackground(hidden));
-  }
-
-  /// 回前台时的两种处理：短暂切出去直接续播并做一次 6 秒体检；
-  /// 挂起超过 30 秒则重新解析直链、重建会话 —— 挂起期间 socket 被回收、
-  /// mpv 的解复用器和硬解会话也会失效，直接在旧会话上 resume 只会黑屏或卡死。
-  Future<void> _resumeAfterBackground(Duration hidden) async {
-    if (_closed || !_foreground) return;
-    _playIntent = true;
-    _notify();
-    if (hidden >= const Duration(seconds: 30)) {
-      DiaryService.add('[Play] 后台超过 30 秒，重建播放会话');
-      final position = _resumePosition;
-      // 给系统一点时间把网络栈恢复起来，回前台头一秒发请求基本必然失败。
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (_closed || !_foreground || !_playIntent) return;
-      try {
-        await play(
-          _index,
-          position: position,
-          recovery: PlaybackRecoveryAction.refresh,
-        ).timeout(const Duration(seconds: 30));
-      } catch (error) {
-        DiaryService.add('[Play] 回前台重建失败：${_diagnostic(error)}');
-        if (_closed || !_foreground) return;
-        // 超时只是兜底：如果 play 其实已经成功 open，就别再触发一次重建。
-        if (!_loading && _plan != null) return;
-        _recovery.reset();
-        _queueRecovery('foreground_rebuild_failed');
-      }
-      return;
-    }
-    try {
-      await player.play();
-    } catch (error) {
-      DiaryService.add('[Play] 回前台续播失败：${_diagnostic(error)}');
-    }
-    unawaited(_verifyForegroundResume());
-  }
-
-  /// 短暂切回来之后，6 秒内位置一动不动、也没在正常缓冲，就按停滞走恢复。
-  Future<void> _verifyForegroundResume() async {
-    final ticket = _generation;
-    final before = player.state.position;
-    await Future<void>.delayed(const Duration(seconds: 6));
-    if (_closed || !_foreground || !_playIntent || _loading || _error != null) {
-      return;
-    }
-    if (ticket != _generation) return;
-    final state = player.state;
-    if (state.position > before) return;
-    if (state.playing && state.buffering) return;
-    unawaited(_recover('foreground_no_progress'));
   }
 
   Future<void> saveProgress({bool quiet = false}) async {
@@ -1569,11 +1220,8 @@ class PlaybackSession extends ChangeNotifier {
     _errorTimer?.cancel();
     _boostTimer?.cancel();
     _stallTimer?.cancel();
-    _seekWatchdog?.cancel();
     _volumeTimer?.cancel();
     _sleepTimer?.cancel();
-    _standbyIdleTimer?.cancel();
-    _resumeTimer?.cancel();
     if (_volumeTimer != null) _saveVolume();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());

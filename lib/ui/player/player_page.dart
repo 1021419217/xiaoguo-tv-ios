@@ -88,7 +88,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> _setFullScreen(bool value) => setWindowFullScreen(value);
 
   Future<void> _toggleFullscreen() async {
-    if (_playback.locked) return _say('已锁定，点屏幕显示锁图标');
     if (widget.padFullscreen case final pad?) {
       pad.value = !pad.value;
       _focus.requestFocus();
@@ -110,9 +109,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   bool get _filled => _fullscreen || _wide && !_selecting;
 
   void _back() {
-    if (_playback.locked) {
-      _say('已锁定，点屏幕显示锁图标');
-    } else if (_fullscreen) {
+    if (_fullscreen) {
       unawaited(_toggleFullscreen());
     } else if (_selecting) {
       _endSelection();
@@ -255,7 +252,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             onWide: _toggleWide,
             onMiniWindow: widget.onMiniWindow,
             onSurface: _focus.requestFocus,
-            onSay: _say,
           ),
         ),
       ),

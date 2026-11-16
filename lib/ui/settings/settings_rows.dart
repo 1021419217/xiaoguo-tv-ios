@@ -17,9 +17,12 @@ Future<void> saveSetting(
   Future<void> Function() change,
 ) => change().catchError((Object failure) {
   if (context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$failure')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: Duration(milliseconds: 1400),
+        content: Text('$failure'),
+      ),
+    );
   }
 });
 

@@ -116,7 +116,10 @@ class LiveSource {
     }
   }
 
-  static List<LiveSource> get all => <LiveSource>[...values, ...externalSources];
+  static List<LiveSource> get all => <LiveSource>[
+    ...values,
+    ...externalSources,
+  ];
 
   /// 绿色模式放行的分类白名单：只展示公开电视 / 广播 / 新闻类频道，
   /// 未被白名单命中的分类一律隐藏。配置外部源时可按需扩充关键词。

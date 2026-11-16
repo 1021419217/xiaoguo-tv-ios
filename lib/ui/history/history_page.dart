@@ -27,9 +27,17 @@ typedef _View = ({
 });
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key, required this.store, this.root = false});
+  const HistoryPage({
+    super.key,
+    required this.store,
+    this.root = false,
+    this.headerChild,
+  });
   final LocalStore store;
   final bool root;
+
+  /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
+  final Widget? headerChild;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -327,10 +335,14 @@ class _HistoryPageState extends State<HistoryPage> {
         titleWidget: FadeSwitcher(
           duration: Motion.short,
           alignment: AlignmentDirectional.centerStart,
-          child: GlassTitle(
-            key: ValueKey(selection == null),
-            title: selection == null ? '观看记录' : '已选择 ${selection.length} 部',
-          ),
+          child: selection == null && widget.headerChild != null
+              ? widget.headerChild!
+              : GlassTitle(
+                  key: ValueKey(selection == null),
+                  title: selection == null
+                      ? '观看记录'
+                      : '已选择 ${selection.length} 部',
+                ),
         ),
         actions: [
           FadeSwitcher(
@@ -353,17 +365,17 @@ class _HistoryPageState extends State<HistoryPage> {
         child: Padding(
           padding: const EdgeInsets.only(top: kToolbarHeight),
           child: _content(
-          context,
-          view,
-          inset: 16,
-          header: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
-              child: _search(),
-            ),
-            ?_sources(view, inset: 16, scroll: true),
-          ],
-        ),
+            context,
+            view,
+            inset: 16,
+            header: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
+                child: _search(),
+              ),
+              ?_sources(view, inset: 16, scroll: true),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: selection == null
@@ -405,7 +417,7 @@ class _HistoryPageState extends State<HistoryPage> {
                               icon: const Icon(Icons.close_rounded),
                             ),
                     ),
-                    Expanded(child: _title(view, 28)),
+                    Expanded(child: widget.headerChild ?? _title(view, 28)),
                     _trailing(
                       view,
                       SizedBox(
@@ -444,7 +456,7 @@ class _HistoryPageState extends State<HistoryPage> {
               child: Row(
                 spacing: 12,
                 children: [
-                  Expanded(child: _title(view, 24)),
+                  Expanded(child: widget.headerChild ?? _title(view, 24)),
                   _trailing(
                     view,
                     SizedBox(

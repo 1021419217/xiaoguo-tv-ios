@@ -14,6 +14,8 @@ import '../../resource_settings.dart';
 import '../../resource_settings_editor.dart';
 import '../../window_on_top.dart';
 import '../app_scope.dart';
+import '../modules/modules_page.dart';
+import '../shell/app_shell.dart';
 import '../player/danmaku_settings.dart';
 import '../update_prompt.dart';
 import '../users/users_view.dart';
@@ -24,12 +26,14 @@ import 'appearance_settings.dart';
 import 'backup_actions.dart';
 import 'diary_view.dart';
 import 'settings_rows.dart';
+import 'sources_view.dart';
 import 'storage_view.dart';
 
 enum SettingsGroup {
   appearance('外观', Icons.palette_outlined),
   playback('播放', Icons.play_arrow_rounded),
   danmaku('弹幕', Icons.subtitles_outlined),
+  modules('模块', Icons.extension_outlined),
   download('下载', Icons.download_rounded),
   storage('存储', Icons.folder_outlined),
   proxy('代理', Icons.language_rounded),
@@ -96,6 +100,7 @@ class SettingsSection extends StatelessWidget {
               SettingsGroup.proxy => _proxy(context),
               SettingsGroup.users => [UsersView(store: store, open: open)],
               SettingsGroup.about => _about(context),
+              SettingsGroup.modules => _modules(context),
               SettingsGroup.diagnostics => _diagnostics(),
               _ => const [],
             },
@@ -545,11 +550,40 @@ class SettingsSection extends StatelessWidget {
     if (opened) return;
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('无法打开浏览器，链接已复制')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text('无法打开浏览器，链接已复制'),
+        ),
+      );
     }
   }
+
+  /// 模块（站源插件的安装、导出、站源开关）原先在「我的」里，底栏改成
+  /// 设置直达后并入设置，避免多一层入口。
+  List<Widget> _modules(BuildContext context) => [
+    SettingsCard(
+      children: [
+        SettingsTile(
+          title: '模块管理',
+          subtitle: '安装、更新、导出模块，以及开关站源',
+          onTap: () =>
+              openPage<void>(context, (_) => ModulesPage(store: store)),
+        ),
+        SettingsTile(
+          title: '站源管理',
+          subtitle: '排序、测速、开关与恢复已删除的站源',
+          onTap: () => openPage<void>(
+            context,
+            (_) => Scaffold(
+              appBar: AppBar(title: const Text('站源管理')),
+              body: SourcesView(store: store),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ];
 
   List<Widget> _diagnostics() => [
     SettingsCard(
@@ -615,9 +649,12 @@ class _BackupCardState extends State<_BackupCard> {
       if (mounted) setState(() => _busy = false);
     }
     if (message != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text(message),
+        ),
+      );
     }
   }
 
@@ -690,9 +727,12 @@ class _RenderingTileState extends State<_RenderingTile> {
     );
     if (accepted != true || !mounted) return;
     if (!await AppDevice.setCompatibleRendering(enabled) && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('兼容渲染模式未能保存，请重试')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text('兼容渲染模式未能保存，请重试'),
+        ),
+      );
     }
   }
 

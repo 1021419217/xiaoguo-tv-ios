@@ -59,7 +59,6 @@ class ExplorePageState extends State<ExplorePage> {
     super.dispose();
   }
 
-
   void _measureHeader() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -165,13 +164,13 @@ class ExplorePageState extends State<ExplorePage> {
                       ? StatusView(
                           title: '还没有安装站源',
                           message: widget.store.profile.admin
-                              ? '站源以模块的形式提供，请在 我的 › 模块 安装。'
+                              ? '站源以模块的形式提供，请在 设置 › 模块 安装。'
                               : '请联系管理员安装站源模块。',
                           icon: Icons.extension_off_rounded,
                         )
                       : const StatusView(
                           title: '暂无可用站源',
-                          message: '请在 我的 › 模块 中开启站源，或联系管理员开放权限。',
+                          message: '请在 设置 › 模块 中开启站源，或联系管理员开放权限。',
                           icon: Icons.public_off_rounded,
                         ),
                 ),
@@ -325,7 +324,10 @@ class ExplorePageState extends State<ExplorePage> {
     if (feed.items.isEmpty) {
       final status = FadeSwitcher(child: _status(feed));
       return topInset > 0
-          ? Padding(padding: EdgeInsets.only(top: topInset), child: status)
+          ? Padding(
+              padding: EdgeInsets.only(top: topInset),
+              child: status,
+            )
           : status;
     }
     final phone = AppScope.formFactorOf(context) == FormFactor.phone;
@@ -481,8 +483,6 @@ class ExplorePageState extends State<ExplorePage> {
   }
 
   /// 首页不再放「最近观看 / 今日推荐」入口条：首屏直接从分类与卡片开始。
-  /// 观看记录只从「我的 → 观看记录」进入，别人拿到手机看不到观看痕迹。
+  /// 观看记录只从「追剧 → 最近观看」进入，别人拿到手机看不到观看痕迹。
   Widget? _hero(ExploreFeed explore) => null;
-
 }
-

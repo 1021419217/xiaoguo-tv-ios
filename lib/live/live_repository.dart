@@ -76,10 +76,7 @@ class LiveRepository {
     void publish() {
       if (onProgress == null) return;
       onProgress(
-        [
-          for (var at = 0; at < merged.length; at++)
-            _renumber(merged[at], at),
-        ],
+        [for (var at = 0; at < merged.length; at++) _renumber(merged[at], at)],
         done,
         list.length,
       );
@@ -108,9 +105,8 @@ class LiveRepository {
 
   /// 主播名归一化：去掉首尾空白、中间空格、零宽字符，忽略大小写与全半角。
   /// 面板里同一个主播常以「名字」「名字 」「Kingly」「kingly」并存。
-  String _mergeKey(String name) => name
-      .replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '')
-      .toLowerCase();
+  String _mergeKey(String name) =>
+      name.replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '').toLowerCase();
 
   /// 合并后的列表统一重编号，避免同一主播在不同分类下出现重复编号。
   LiveChannel _renumber(LiveChannel channel, int index) => LiveChannel(

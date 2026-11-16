@@ -210,6 +210,7 @@ abstract class AppRepository {
     bool force = false,
   });
   Future<CatalogPage> cached(String source, {String category = ''});
+
   /// 取某位作者在该站源里的其它作品。站源不支持时抛 AppFailure。
   Future<CatalogPage> authorCatalog(
     String source, {
@@ -221,6 +222,7 @@ abstract class AppRepository {
   Future<String> cover(Drama drama, {bool force = false});
   bool coverCached(Drama drama) => false;
   Future<DramaDetail> detail(Drama drama);
+
   /// 探测某一集的可用清晰度（只解析播放地址，不建会话、不预取）。
   Future<QualityProbe> qualities(Drama drama, Episode episode) async =>
       const QualityProbe();
@@ -987,6 +989,7 @@ class NativeRepository extends AppRepository {
       }),
     );
   }
+
   @override
   bool coverCached(Drama drama) =>
       _coverPaths.containsKey('${drama.id}\u0000${drama.cover}');

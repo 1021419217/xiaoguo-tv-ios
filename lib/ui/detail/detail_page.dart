@@ -220,8 +220,7 @@ class _DetailPageState extends State<DetailPage> {
   PlaybackHandle? _watched;
   late bool _autoplayPending = widget.autoplay;
   late bool _curtain = widget.autoplay;
-  static final _qualityCache =
-      <String, ({QualityProbe probe, DateTime at})>{};
+  static final _qualityCache = <String, ({QualityProbe probe, DateTime at})>{};
   QualityProbe? _probe;
   String _probeKey = '';
   bool _probing = false;
@@ -265,9 +264,12 @@ class _DetailPageState extends State<DetailPage> {
     final details = _details!;
     await details.load();
     if (!mounted || details.error == null || details.episodes.isEmpty) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(details.error!)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: Duration(milliseconds: 1400),
+        content: Text(details.error!),
+      ),
+    );
   }
 
   double _startAt(int index, {required bool resume}) {
@@ -363,10 +365,7 @@ class _DetailPageState extends State<DetailPage> {
       // 解析不出来就当这个源没给清晰度，区块留空；同样缓存一段时间，
       // 免得每次刷新详情都去敲一次站源。
       if (mounted) {
-        _qualityCache[key] = (
-          probe: const QualityProbe(),
-          at: DateTime.now(),
-        );
+        _qualityCache[key] = (probe: const QualityProbe(), at: DateTime.now());
       }
     } finally {
       _probing = false;
@@ -1442,7 +1441,8 @@ class _DetailPageState extends State<DetailPage> {
     ),
   );
 
-  Widget _followingHeadline(DramaDetails details, _Metrics m, double top) =>      ConstrainedBox(
+  Widget _followingHeadline(DramaDetails details, _Metrics m, double top) =>
+      ConstrainedBox(
         constraints: BoxConstraints(minHeight: m.cover.height - top),
         child: IntrinsicHeight(
           child: Column(
@@ -1529,10 +1529,7 @@ class _DetailPageState extends State<DetailPage> {
     ColorScheme colors, {
     bool copyable = false,
   }) {
-    final text = Text(
-      value,
-      style: TextStyle(fontSize: m.note, height: 1.55),
-    );
+    final text = Text(value, style: TextStyle(fontSize: m.note, height: 1.55));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
@@ -1634,7 +1631,13 @@ class _DetailPageState extends State<DetailPage> {
           children: [
             for (final quality in probe.qualities)
               _qualityChip(quality, '${quality}P', selected == quality, m),
-            _qualityChip(0, '自动', selected == 0, m, trailing: probe.hls ? 'HLS' : ''),
+            _qualityChip(
+              0,
+              '自动',
+              selected == 0,
+              m,
+              trailing: probe.hls ? 'HLS' : '',
+            ),
           ],
         ),
       ],

@@ -133,7 +133,12 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
         throw AppFailure('未获得存储权限，无法导出');
       }
     } catch (error) {
-      messenger.showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text('$error')));
+      messenger.showSnackBar(
+        SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text('$error'),
+        ),
+      );
       return;
     }
     if (!mounted) return;
@@ -174,7 +179,8 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
     navigator.pop();
     await widget.downloads.refresh();
     messenger.showSnackBar(
-      SnackBar(duration: Duration(milliseconds: 1400), 
+      SnackBar(
+        duration: Duration(milliseconds: 1400),
         content: Text(
           failures.isEmpty
               ? '已导出到 Movies/${safeFileName(item.drama.title)}'

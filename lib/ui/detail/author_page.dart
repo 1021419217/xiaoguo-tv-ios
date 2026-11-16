@@ -42,7 +42,8 @@ class _AuthorPageState extends State<AuthorPage> {
   var _started = false;
   String _error = '';
 
-  String get _title => widget.author.trim().isEmpty ? '作者主页' : widget.author.trim();
+  String get _title =>
+      widget.author.trim().isEmpty ? '作者主页' : widget.author.trim();
 
   @override
   void initState() {
@@ -67,7 +68,9 @@ class _AuthorPageState extends State<AuthorPage> {
 
   void _maybeLoadMore() {
     if (!_scroll.hasClients) return;
-    if (_scroll.position.pixels < _scroll.position.maxScrollExtent - 320) return;
+    if (_scroll.position.pixels < _scroll.position.maxScrollExtent - 320) {
+      return;
+    }
     _load();
   }
 
@@ -92,7 +95,9 @@ class _AuthorPageState extends State<AuthorPage> {
         _items.addAll(result.items.where((item) => known.add(item.id)));
         _hasMore = result.hasMore && result.items.isNotEmpty;
         _loading = false;
-        if (_items.isEmpty && result.warning.isNotEmpty) _error = result.warning;
+        if (_items.isEmpty && result.warning.isNotEmpty) {
+          _error = result.warning;
+        }
       });
     } catch (failure) {
       if (!mounted) return;

@@ -228,9 +228,12 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
       await change();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('播放偏好未能保存，请重试')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text('播放偏好未能保存，请重试'),
+        ),
+      );
     }
   }
 

@@ -25,6 +25,7 @@ class SourceBar extends StatelessWidget {
   final ValueChanged<String> onSearchSubmitted;
   final TextEditingController? searchController;
   final Widget? televisionLeading;
+
   /// 小果 2.0 新增：左端附加操作（如封面模糊开关），保留以免破坏调用点。
   final List<Widget> leading;
   final List<Widget> actions;

@@ -37,11 +37,16 @@ class DownloadsPage extends StatefulWidget {
     required this.downloads,
     required this.converter,
     required this.merges,
+    this.headerChild,
   });
   final LocalStore store;
   final DownloadOverview downloads;
   final DownloadConverter converter;
   final MergeQueue merges;
+
+  /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
+  /// 传入时同时把本页当作 tab 根页面处理（不显示返回箭头）。
+  final Widget? headerChild;
 
   @override
   State<DownloadsPage> createState() => _DownloadsPageState();
@@ -372,21 +377,38 @@ class _DownloadsPageState extends State<DownloadsPage>
   Widget _tabBar(double inset) {
     final pending = pendingDownloads(widget.downloads.jobs).length;
     final downloaded = downloadedDramas(widget.downloads.jobs).length;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
       child: TabBar(
         controller: _tabs,
         isScrollable: true,
         tabAlignment: TabAlignment.start,
-        labelStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        dividerColor: Colors.transparent,
+        overlayColor: WidgetStatePropertyAll(ink.withValues(alpha: 0.06)),
+        splashBorderRadius: BorderRadius.circular(999),
+        indicatorSize: TabBarIndicatorSize.label,
+        indicatorPadding: const EdgeInsets.symmetric(vertical: 7),
+        indicator: BoxDecoration(
+          color: ink.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: ink.withValues(alpha: 0.14)),
+        ),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+        labelColor: ink,
+        unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         unselectedLabelStyle: const TextStyle(
-          fontSize: 15,
+          fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
         tabs: [
-          Tab(text: pending == 0 ? '下载中' : '下载中 $pending'),
-          Tab(text: downloaded == 0 ? '已下载' : '已下载 $downloaded'),
+          Tab(height: 32, text: pending == 0 ? '下载中' : '下载中 $pending'),
+          Tab(height: 32, text: downloaded == 0 ? '已下载' : '已下载 $downloaded'),
           Tab(
+            height: 32,
             text: widget.merges.active == 0
                 ? '合并'
                 : '合并 ${widget.merges.active}',
@@ -402,7 +424,8 @@ class _DownloadsPageState extends State<DownloadsPage>
       extendBodyBehindAppBar: true,
       appBar: selection == null
           ? glassAppBar(
-              title: '下载',
+              title: widget.headerChild == null ? '下载' : null,
+              titleWidget: widget.headerChild,
               actions: [
                 if (_pendingTab && view.pending.isNotEmpty) ...[
                   IconButton(
@@ -455,12 +478,12 @@ class _DownloadsPageState extends State<DownloadsPage>
             top: kToolbarHeight + (selection == null ? 48 : 0),
           ),
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
-            Expanded(child: body),
-          ],
-        ),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
+              Expanded(child: body),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: selection == null
@@ -499,7 +522,9 @@ class _DownloadsPageState extends State<DownloadsPage>
                 children: [
                   ToggleIconSwitcher(
                     child: view.selection == null
-                        ? const BackButton(key: ValueKey('back'))
+                        ? widget.headerChild != null
+                              ? const SizedBox(key: ValueKey('back'), width: 8)
+                              : const BackButton(key: ValueKey('back'))
                         : IconButton(
                             key: const ValueKey('close'),
                             tooltip: '退出编辑',
@@ -513,18 +538,21 @@ class _DownloadsPageState extends State<DownloadsPage>
                       child: FadeSwitcher(
                         duration: Motion.short,
                         alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          view.selection == null
-                              ? '下载'
-                              : _selectedTitle(view.selection!),
-                          key: ValueKey(view.selection == null),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        child:
+                            view.selection == null && widget.headerChild != null
+                            ? widget.headerChild!
+                            : Text(
+                                view.selection == null
+                                    ? '下载'
+                                    : _selectedTitle(view.selection!),
+                                key: ValueKey(view.selection == null),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                       ),
                     ),
                   ),

@@ -7,7 +7,6 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../playback_preferences.dart';
 import '../../playback_session.dart';
-import '../app_scope.dart';
 import '../settings/sorani_account_view.dart';
 import '../theme/motion.dart';
 import '../widgets/contained_slider.dart';
@@ -17,10 +16,9 @@ import 'danmaku_overlay.dart';
 import 'fade_presence.dart';
 import 'playback_handle.dart';
 import 'playback_sheets.dart';
-import 'player_lock.dart';
 import 'player_status.dart';
-import 'player_gestures.dart';
 import 'player_video.dart';
+import 'swipe_controls.dart';
 
 String formatClock(Duration value) {
   final seconds = value.inSeconds;
@@ -43,7 +41,6 @@ class PlayerSurface extends StatefulWidget {
     required this.onWide,
     this.onMiniWindow,
     required this.onSurface,
-    required this.onSay,
   });
   final PlaybackHandle handle;
   final ValueListenable<String> hint;
@@ -54,7 +51,6 @@ class PlayerSurface extends StatefulWidget {
   final VoidCallback onWide;
   final VoidCallback? onMiniWindow;
   final VoidCallback onSurface;
-  final ValueChanged<String> onSay;
 
   @override
   State<PlayerSurface> createState() => _PlayerSurfaceState();
@@ -81,9 +77,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   Player? _bound;
 
   PlaybackSession get _session => widget.handle.session;
-
-  /// 与全剧TV 同一套手势识别层（方向锁、抬手才 seek、长按倍速抑制快进）。
-  late final _gestures = PlayerGestures(session: _session);
 
   void _endSeek() {
     _seekTimer?.cancel();
@@ -153,28 +146,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   }
 
   bool get _controlsVisible =>
-      !_session.locked &&
-      (_visible || _session.paused || _session.stalled || !_session.ready);
-
-  bool get _lockable => widget.touch && widget.fullscreen && !desktopPlatform;
-
-  void _lock() {
-    _pressEnd();
-    _tapTimer?.cancel();
-    _hideTimer?.cancel();
-    if (_streak != 0) setState(_commitStreak);
-    _close();
-    unawaited(HapticFeedback.selectionClick());
-    _session.setLocked(true);
-    widget.onSay('已锁定，点屏幕显示锁图标');
-  }
-
-  void _unlock() {
-    unawaited(HapticFeedback.selectionClick());
-    _session.setLocked(false);
-    _show();
-    widget.onSay('已解锁');
-  }
+      _visible || _session.paused || _session.stalled || !_session.ready;
 
   void _scheduleHide() {
     _hideTimer?.cancel();
@@ -235,8 +207,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
   }
 
   void _tapUp(TapUpDetails details, double width) {
-    // 刚做完滑动 / 亮度手势时抬手的事件不应再被当成点按。
-    if (_gestures.suppressTap) return;
     widget.onSurface();
     final x = details.localPosition.dx;
     final side = !_session.store.playbackPreferences.doubleTapSeek
@@ -305,7 +275,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
 
   void _pressStart() {
     if (!_session.ready) return;
-    _gestures.setSeekSuspended(true);
     _session.holdBoost();
     unawaited(HapticFeedback.selectionClick());
     _holding = true;
@@ -315,7 +284,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     if (!_holding) return;
     _holding = false;
     _session.endBoost();
-    _gestures.setSeekSuspended(false);
   }
 
   Future<void> _change(Future<void> Function() change) async {
@@ -327,7 +295,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('播放偏好未能保存，请重试')));
+      ).showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
     }
   }
 
@@ -336,7 +304,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
     listenable: _session,
     builder: (context, _) {
       final state = _session.player.state;
-      final locked = _session.locked;
       final visible = _controlsVisible;
       final popup = visible ? _popup : null;
       return MouseRegion(
@@ -360,16 +327,19 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
               style: _session.danmakuStyle,
             ),
             if (widget.touch)
-              LayoutBuilder(
-                builder: (context, constraints) => PlayerGestureArea(
-                  gestures: _gestures,
-                  swipeEnabled: widget.fullscreen && !locked,
-                  onTapUp: locked
-                      ? null
-                      : (details) => _tapUp(details, constraints.maxWidth),
-                  onLongPressStart: locked ? null : (_) => _pressStart(),
-                  onLongPressEnd: locked ? null : (_) => _pressEnd(),
-                  onLongPressCancel: locked ? null : _pressEnd,
+              SwipeControls(
+                session: _session,
+                enabled: widget.fullscreen,
+                levels: _session.store.playbackPreferences.swipeLevels,
+                episodes: _session.store.playbackPreferences.swipeEpisodes,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (details) => _tapUp(details, constraints.maxWidth),
+                    onLongPressStart: (_) => _pressStart(),
+                    onLongPressEnd: (_) => _pressEnd(),
+                    onLongPressCancel: _pressEnd,
+                  ),
                 ),
               )
             else
@@ -464,13 +434,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
                 ),
                 null => null,
               },
-            ),
-            PlayerLockOverlay(
-              locked: locked,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(left: 20),
-              onUnlock: _unlock,
-              onBlocked: () => widget.onSay('已锁定，点击锁图标解锁'),
             ),
           ],
         ),
@@ -576,14 +539,6 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
             ),
           ),
         ),
-        if (_lockable)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 20),
-              child: PlayerLockButton(locked: false, onPressed: _lock),
-            ),
-          ),
         Positioned(
           left: 6,
           right: 6,

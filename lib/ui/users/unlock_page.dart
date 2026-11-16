@@ -31,9 +31,12 @@ class _UnlockPageState extends State<UnlockPage> {
       if (mounted) setState(() => _busy = false);
     }
     if (message != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text(message),
+        ),
+      );
     }
   }
 

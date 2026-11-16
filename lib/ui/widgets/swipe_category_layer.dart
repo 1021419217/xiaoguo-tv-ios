@@ -66,7 +66,9 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     _anim.forward(from: 0);
     widget.onIndexChanged(next);
     _hintTimer?.cancel();
-    setState(() => _hint = next < widget.labels.length ? widget.labels[next] : '');
+    setState(
+      () => _hint = next < widget.labels.length ? widget.labels[next] : '',
+    );
     _hintTimer = Timer(const Duration(milliseconds: 1100), () {
       if (mounted) setState(() => _hint = null);
     });

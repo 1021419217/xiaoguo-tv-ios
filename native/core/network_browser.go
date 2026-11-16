@@ -24,7 +24,7 @@ type browserHTTPClient interface {
 type huangguoBrowserTransport struct {
 	base      http.RoundTripper
 	router    *proxyRouter
-	baseURL   func(string) string
+	hosts     map[string]string
 	insecure  bool
 	record    func(diagnosticEvent)
 	mu        sync.Mutex
@@ -33,8 +33,20 @@ type huangguoBrowserTransport struct {
 }
 
 func newHuangguoBrowserTransport(base http.RoundTripper, downloader *Downloader) *huangguoBrowserTransport {
+	hosts := map[string]string{}
+	for _, descriptor := range registeredDescriptors() {
+		if !descriptor.BrowserFingerprint {
+			continue
+		}
+		if configured, err := url.Parse(downloader.providerBaseURL(descriptor.ID)); err == nil && configured.Host != "" {
+			hosts[strings.ToLower(configured.Host)] = descriptor.ID
+		}
+		for _, alias := range descriptor.Aliases {
+			hosts[strings.ToLower(alias)] = descriptor.ID
+		}
+	}
 	transport := &huangguoBrowserTransport{
-		base: base, router: downloader.proxyRouter, baseURL: downloader.providerBaseURL,
+		base: base, router: downloader.proxyRouter, hosts: hosts,
 		insecure: downloader.cfg.InsecureTLS, record: downloader.recordDiagnostic,
 		clients: make(map[string]browserHTTPClient),
 	}
@@ -49,22 +61,10 @@ func (transport *huangguoBrowserTransport) matches(request *http.Request) bool {
 }
 
 func (transport *huangguoBrowserTransport) source(address *url.URL) string {
-	host, hostname := strings.ToLower(address.Host), strings.ToLower(address.Hostname())
-	for _, descriptor := range registeredDescriptors() {
-		if !descriptor.BrowserFingerprint {
-			continue
-		}
-		names := descriptor.Aliases
-		if configured, err := url.Parse(transport.baseURL(descriptor.ID)); err == nil && configured.Host != "" {
-			names = append([]string{configured.Host}, names...)
-		}
-		for _, name := range names {
-			if name = strings.ToLower(name); name == host || name == hostname {
-				return descriptor.ID
-			}
-		}
+	if source := transport.hosts[strings.ToLower(address.Host)]; source != "" {
+		return source
 	}
-	return ""
+	return transport.hosts[strings.ToLower(address.Hostname())]
 }
 
 func (transport *huangguoBrowserTransport) createClient(proxy string) (browserHTTPClient, error) {

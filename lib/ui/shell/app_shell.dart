@@ -14,9 +14,8 @@ import '../../models.dart';
 import '../app_scope.dart';
 import '../explore/explore_page.dart';
 import '../explore/source_actions.dart';
-import '../follow/follow_page.dart';
-import '../history/history_page.dart';
-import '../mine/mine_page.dart';
+import '../library/library_page.dart';
+import '../settings/settings_page.dart';
 import '../update_prompt.dart';
 import '../modules/module_install.dart';
 import '../widgets/bar_button.dart';
@@ -29,8 +28,7 @@ enum AppTab {
   explore('发现', Icons.explore_outlined, Icons.explore),
   follow('追剧', Icons.bookmark_border_rounded, Icons.bookmark_rounded),
   live('直播', Icons.live_tv_outlined, Icons.live_tv_rounded),
-  history('历史', Icons.history_rounded, Icons.history_rounded),
-  mine('我的', Icons.person_outline_rounded, Icons.person_rounded);
+  settings('设置', Icons.tune_rounded, Icons.tune_rounded);
 
   const AppTab(this.label, this.icon, this.selectedIcon);
   final String label;
@@ -95,7 +93,7 @@ class _AppShellState extends State<AppShell>
   final _tabFocus = [for (final _ in AppTab.values) FocusNode()];
   final _tabScrolls = [for (final _ in AppTab.values) ScrollController()];
   final _followEntry = FocusNode();
-  final _mineEntry = FocusNode();
+  final _settingsEntry = FocusNode();
   final _header = FocusNode();
   final _televisionTabs = GlobalKey();
   final _explore = GlobalKey<ExplorePageState>();
@@ -153,7 +151,7 @@ class _AppShellState extends State<AppShell>
       hero.dispose();
     }
     _followEntry.dispose();
-    _mineEntry.dispose();
+    _settingsEntry.dispose();
     _header.dispose();
     _exitWindow?.cancel();
     _converter?.dispose();
@@ -164,15 +162,7 @@ class _AppShellState extends State<AppShell>
     super.dispose();
   }
 
-  List<AppTab> get _tabs => [
-    for (final tab in AppTab.values)
-      if (switch (tab) {
-        AppTab.history =>
-          widget.store.historyTab && !AppScope.of(context).television,
-        AppTab.explore || AppTab.follow || AppTab.live || AppTab.mine => true,
-      })
-        tab,
-  ];
+  List<AppTab> get _tabs => AppTab.values;
 
   void _select(AppTab tab) {
     if (tab == _tab) return;
@@ -225,7 +215,8 @@ class _AppShellState extends State<AppShell>
   void _mergeFinished(MergeTask task) {
     if (task.state == MergeState.cancelled) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(duration: Duration(milliseconds: 1400), 
+      SnackBar(
+        duration: Duration(milliseconds: 1400),
         content: Text(
           task.state == MergeState.done
               ? '「${task.fileName}」${task.message}'
@@ -277,8 +268,11 @@ class _AppShellState extends State<AppShell>
 
   Widget _root(AppTab tab) => switch (tab) {
     AppTab.explore => ExplorePage(key: _explore, store: widget.store),
-    AppTab.follow => FollowPage(
+    AppTab.follow => LibraryPage(
       store: widget.store,
+      downloads: _downloads!,
+      converter: _converter!,
+      merges: _merges!,
       entryFocus: _followEntry,
       onExitUp: _tabFocus[AppTab.follow.index].requestFocus,
     ),
@@ -287,15 +281,7 @@ class _AppShellState extends State<AppShell>
       store: liveStoreFor(widget.store),
       bottomInset: AppScope.formFactorOf(context) == FormFactor.phone ? 88 : 0,
     ),
-    AppTab.history => HistoryPage(store: widget.store, root: true),
-    AppTab.mine => MinePage(
-      store: widget.store,
-      downloads: _downloads!,
-      converter: _converter!,
-      merges: _merges!,
-      entryFocus: _mineEntry,
-      onExitUp: _tabFocus[AppTab.mine.index].requestFocus,
-    ),
+    AppTab.settings => SettingsPage(store: widget.store),
   };
 
   @override
@@ -307,32 +293,34 @@ class _AppShellState extends State<AppShell>
           return false;
         },
         child: IndexedStack(
-        index: _tab.index,
-        children: [
-          for (final tab in AppTab.values)
-            _TabFade(
-              selected: tab == _tab,
-              child: HeroControllerScope(
-                controller: _heroes[tab.index],
-                child: Navigator(
-                  key: _navigators[tab.index],
-                  routeTraversalEdgeBehavior: TraversalEdgeBehavior.parentScope,
-                  routeDirectionalTraversalEdgeBehavior:
-                      TraversalEdgeBehavior.parentScope,
-                  onGenerateInitialRoutes: (_, _) => [
-                    MaterialPageRoute<void>(
-                      builder: (_) => PrimaryScrollController(
-                        controller: _tabScrolls[tab.index],
-                        child: _root(tab),
+          index: _tab.index,
+          children: [
+            for (final tab in AppTab.values)
+              _TabFade(
+                selected: tab == _tab,
+                child: HeroControllerScope(
+                  controller: _heroes[tab.index],
+                  child: Navigator(
+                    key: _navigators[tab.index],
+                    routeTraversalEdgeBehavior:
+                        TraversalEdgeBehavior.parentScope,
+                    routeDirectionalTraversalEdgeBehavior:
+                        TraversalEdgeBehavior.parentScope,
+                    onGenerateInitialRoutes: (_, _) => [
+                      MaterialPageRoute<void>(
+                        builder: (_) => PrimaryScrollController(
+                          controller: _tabScrolls[tab.index],
+                          child: _root(tab),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
-    ));
+    );
     final pages = ShellForeground(
       foreground: ModalRoute.of(context)?.isCurrent ?? true,
       child: stack,
@@ -360,21 +348,21 @@ class _AppShellState extends State<AppShell>
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                     child: NavigationBar(
-                  selectedIndex: tabs.indexOf(_tab),
-                  onDestinationSelected: (index) {
-                    unawaited(HapticFeedback.selectionClick());
-                    _tap(tabs[index]);
-                  },
-                  destinations: [
-                    for (final tab in tabs)
-                      NavigationDestination(
-                        key: ValueKey('nav-${tab.name}'),
-                        icon: _badged(tab, Icon(tab.icon)),
-                        selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                        label: tab.label,
-                      ),
-                  ],
-                ),
+                      selectedIndex: tabs.indexOf(_tab),
+                      onDestinationSelected: (index) {
+                        unawaited(HapticFeedback.selectionClick());
+                        _tap(tabs[index]);
+                      },
+                      destinations: [
+                        for (final tab in tabs)
+                          NavigationDestination(
+                            key: ValueKey('nav-${tab.name}'),
+                            icon: _badged(tab, Icon(tab.icon)),
+                            selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
+                            label: tab.label,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
         ),
@@ -400,8 +388,8 @@ class _AppShellState extends State<AppShell>
                       onKeyEvent: (_, event) {
                         final entry = switch (_tab) {
                           AppTab.follow => _followEntry,
-                          AppTab.mine => _mineEntry,
-                          AppTab.explore || AppTab.live || AppTab.history => null,
+                          AppTab.settings => _settingsEntry,
+                          AppTab.explore || AppTab.live => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||
@@ -423,7 +411,7 @@ class _AppShellState extends State<AppShell>
     );
   }
 
-  Widget _badged(AppTab tab, Widget icon) => tab == AppTab.mine
+  Widget _badged(AppTab tab, Widget icon) => tab == AppTab.follow
       ? _DownloadBadge(downloads: _downloads!, child: icon)
       : icon;
 

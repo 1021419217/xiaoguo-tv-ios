@@ -143,7 +143,9 @@ class _SourcesViewState extends State<SourcesView> {
                 final site = sites[index];
                 return Padding(
                   key: ValueKey(site.id),
-                  padding: EdgeInsets.only(bottom: index == sites.length - 1 ? 0 : 8),
+                  padding: EdgeInsets.only(
+                    bottom: index == sites.length - 1 ? 0 : 8,
+                  ),
                   child: _SourceRow(
                     site: site,
                     index: index,
@@ -151,7 +153,9 @@ class _SourcesViewState extends State<SourcesView> {
                     latency: _latency[site.id],
                     tested: _latency.containsKey(site.id),
                     dragEnabled: admin && sites.length > 1,
-                    onChanged: admin ? (value) => _toggle(site.id, value) : null,
+                    onChanged: admin
+                        ? (value) => _toggle(site.id, value)
+                        : null,
                     onDelete: admin ? () => _remove(site) : null,
                   ),
                 );
@@ -170,7 +174,10 @@ class _SourcesViewState extends State<SourcesView> {
                     onTap: admin
                         ? () => saveSetting(
                             context,
-                            () => _store.setSourceDeleted(site.id, deleted: false),
+                            () => _store.setSourceDeleted(
+                              site.id,
+                              deleted: false,
+                            ),
                           )
                         : null,
                   ),

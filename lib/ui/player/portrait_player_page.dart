@@ -9,7 +9,6 @@ import 'package:media_kit/media_kit.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../playback_preferences.dart';
-import 'player_gestures.dart';
 import '../../playback_session.dart';
 import '../app_scope.dart';
 import '../downloads/download_actions.dart';
@@ -23,9 +22,9 @@ import 'fade_presence.dart';
 import 'mini_player.dart';
 import 'playback_sheets.dart';
 import 'playback_handle.dart';
-import 'player_lock.dart';
 import 'player_surface.dart';
 import 'player_video.dart';
+import 'swipe_controls.dart';
 
 const _maskHeight = 68.0;
 
@@ -80,14 +79,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   PlaybackSession get _session => widget.handle.session;
 
-  /// 与全剧TV 同一套手势：竖屏上下滑仍交给翻页切集，长按之后才接管亮度；
-  /// 右半屏竖滑不改音量（否则翻页会顺手改音量）。
-  late final _gestures = PlayerGestures(
-    session: _session,
-    requireHold: true,
-    volumeSwipe: false,
-  );
-
   @override
   void initState() {
     super.initState();
@@ -115,7 +106,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       );
     }
     _pages.dispose();
-    _gestures.dispose();
     super.dispose();
   }
 
@@ -166,27 +156,12 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   bool get _chromeShown =>
-      !_session.locked &&
-      (!_session.store.playbackPreferences.autoHideControls ||
-          !_idle ||
-          _dragging ||
-          _session.paused ||
-          _session.error != null ||
-          _session.loading && !_quietSwitch);
-
-  void _lock() {
-    if (_holding) _pressEnd();
-    unawaited(HapticFeedback.selectionClick());
-    _session.setLocked(true);
-    _say('已锁定，点屏幕显示锁图标');
-  }
-
-  void _unlock() {
-    unawaited(HapticFeedback.selectionClick());
-    _session.setLocked(false);
-    _wake();
-    _say('已解锁');
-  }
+      !_session.store.playbackPreferences.autoHideControls ||
+      !_idle ||
+      _dragging ||
+      _session.paused ||
+      _session.error != null ||
+      _session.loading && !_quietSwitch;
 
   void _syncSystemBars() {
     final immersive =
@@ -274,7 +249,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _wheel(PointerSignalEvent event) {
-    if (_session.locked) return;
     if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (_) {
       if (_scrolling) return;
@@ -320,7 +294,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerDown(PointerDownEvent event) {
-    if (_session.locked) return;
     _pointers[event.pointer] = event.position;
     if (_pointers.length != 2) return;
     if (_holding) _pressEnd();
@@ -331,7 +304,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   }
 
   void _pointerMove(PointerMoveEvent event) {
-    if (_session.locked) return;
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.position;
     final from = _pinchFrom;
@@ -379,18 +351,20 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _say(target == VideoFit.crop ? '画面比例：裁切，双指捏合恢复' : '画面比例：自动');
   }
 
-  /// 长按画面任意位置都是「按住倍速」，上滑到下半屏可锁定倍速——
-  /// 与全剧TV 完全一致；播放设置改为控制条上的独立按钮。
-  void _pressStart(LongPressStartDetails details) {
-    if (!_session.ready) return;
-    if (!_session.boostLocked) _session.holdBoost();
-    _gestures.setSeekSuspended(true);
-    unawaited(HapticFeedback.selectionClick());
-    setState(() {
-      _holding = true;
-      _heldIndex = _session.index;
-      _lockArmed = false;
-    });
+  void _pressStart(LongPressStartDetails details, double width) {
+    final x = details.localPosition.dx;
+    if (x < width / 5 || x > width * 4 / 5) {
+      if (!_session.boostLocked) _session.holdBoost();
+      unawaited(HapticFeedback.selectionClick());
+      setState(() {
+        _holding = true;
+        _heldIndex = _session.index;
+        _lockArmed = false;
+      });
+    } else {
+      unawaited(HapticFeedback.selectionClick());
+      unawaited(_openSettings());
+    }
   }
 
   void _pressMove(LongPressMoveUpdateDetails details) {
@@ -407,7 +381,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
 
   void _pressEnd() {
     if (!_holding) return;
-    _gestures.setSeekSuspended(false);
     if (_lockArmed) {
       _session.setBoostLocked(!_session.boostLocked);
     } else if (!_session.boostLocked) {
@@ -447,7 +420,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('播放偏好未能保存，请重试')));
+    ).showSnackBar(const SnackBar(content: Text('播放偏好未能保存，请重试')));
   }
 
   @override
@@ -457,47 +430,31 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       value: AppTheme.systemBars(Brightness.dark),
       child: Theme(
         data: dark,
-        child: PopScope(
-          canPop: !_session.locked,
-          onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) _say('已锁定，点屏幕显示锁图标');
-          },
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                Listener(
-                  onPointerDown: _pointerDown,
-                  onPointerMove: _pointerMove,
-                  onPointerUp: _pointerUp,
-                  onPointerCancel: _pointerUp,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _scrolled,
-                    child: PageView.builder(
-                      controller: _pages,
-                      scrollDirection: Axis.vertical,
-                      physics: _pinching || _session.locked
-                          ? const NeverScrollableScrollPhysics()
-                          : const _PagePhysics(),
-                      itemCount: _session.detail.episodes.length,
-                      itemBuilder: _page,
-                    ),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Listener(
+                onPointerDown: _pointerDown,
+                onPointerMove: _pointerMove,
+                onPointerUp: _pointerUp,
+                onPointerCancel: _pointerUp,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _scrolled,
+                  child: PageView.builder(
+                    controller: _pages,
+                    scrollDirection: Axis.vertical,
+                    physics: _pinching
+                        ? const NeverScrollableScrollPhysics()
+                        : const _PagePhysics(),
+                    itemCount: _session.detail.episodes.length,
+                    itemBuilder: _page,
                   ),
                 ),
-                IgnorePointer(ignoring: _scrolling, child: _controls(context)),
-                PlayerLockOverlay(
-                  locked: _session.locked,
-                  alignment: Alignment.topRight,
-                  padding: EdgeInsets.only(
-                    top: MediaQuery.paddingOf(context).top + 6,
-                    right: 12,
-                  ),
-                  onUnlock: _unlock,
-                  onBlocked: () => _say('已锁定，点击锁图标解锁'),
-                ),
-              ],
-            ),
+              ),
+              IgnorePointer(ignoring: _scrolling, child: _controls(context)),
+            ],
           ),
         ),
       ),
@@ -564,31 +521,22 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               fit: session.videoFit,
               style: session.danmakuStyle,
             ),
-            PlayerGestureArea(
+            SwipeControls(
               key: const ValueKey('gestures'),
-              gestures: _gestures,
-              swipeEnabled: !_pinching && !session.locked,
-              // 单击只唤出控制条：手指碰一下画面就停播太容易误触。
-              onTapUp: _pinching || session.locked
-                  ? null
-                  : (_) {
-                      if (_gestures.suppressTap) return;
-                      setState(_wake);
-                    },
-              // 暂停 / 继续统一走双击。
-              onDoubleTap: _pinching || session.locked
-                  ? null
-                  : () {
-                      if (_gestures.suppressTap) return;
-                      session.togglePlayback();
-                      setState(_wake);
-                    },
-              onLongPressStart: _pinching || session.locked ? null : _pressStart,
-              onLongPressMoveUpdate: _pinching || session.locked
-                  ? null
-                  : _pressMove,
-              onLongPressEnd: (_) => _pressEnd(),
-              onLongPressCancel: _pressEnd,
+              session: session,
+              enabled: !_pinching,
+              child: LayoutBuilder(
+                builder: (context, constraints) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _pinching ? null : session.togglePlayback,
+                  onLongPressStart: _pinching
+                      ? null
+                      : (details) => _pressStart(details, constraints.maxWidth),
+                  onLongPressMoveUpdate: _pressMove,
+                  onLongPressEnd: (_) => _pressEnd(),
+                  onLongPressCancel: _pressEnd,
+                ),
+              ),
             ),
           ],
         ],
@@ -676,8 +624,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             height: bottom,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              // 这块只用来挡住系统手势条，点一下不再暂停。
-              onTap: session.locked ? null : () => setState(_wake),
+              onTap: session.togglePlayback,
               onVerticalDragStart: (_) {},
             ),
           ),
@@ -713,35 +660,10 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         Positioned(
           key: const ValueKey('episodes'),
           left: 16,
-          right: widget.onFullscreen == null ? 68 : 120,
+          right: widget.onFullscreen == null ? 16 : 68,
           bottom: bottom + 16,
           height: 44,
           child: _chrome(_episodeStrip()),
-        ),
-        // 播放设置从「长按画面」挪到控制条，长按统一用于临时倍速。
-        Positioned(
-          key: const ValueKey('settings'),
-          right: widget.onFullscreen == null ? 16 : 68,
-          bottom: bottom + 16,
-          width: 44,
-          height: 44,
-          child: _chrome(
-            IconButton(
-              onPressed: () {
-                setState(_wake);
-                unawaited(_openSettings());
-              },
-              icon: const Icon(Icons.tune_rounded),
-              color: Colors.white,
-              tooltip: '播放设置',
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white.withValues(alpha: .14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
         ),
         if (widget.onFullscreen case final onFullscreen?)
           Positioned(
@@ -917,7 +839,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ],
           ),
         ),
-        if (!desktopPlatform) PlayerLockButton(locked: false, onPressed: _lock),
         FollowIcon(
           store: widget.store,
           drama: session.detail.drama,

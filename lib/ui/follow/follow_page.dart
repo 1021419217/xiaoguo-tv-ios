@@ -31,10 +31,14 @@ class FollowPage extends StatefulWidget {
     required this.store,
     required this.entryFocus,
     required this.onExitUp,
+    this.headerChild,
   });
   final LocalStore store;
   final FocusNode entryFocus;
   final VoidCallback onExitUp;
+
+  /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
+  final Widget? headerChild;
 
   @override
   State<FollowPage> createState() => _FollowPageState();
@@ -295,6 +299,7 @@ class _FollowPageState extends State<FollowPage> {
                   ? PageHeader(
                       key: const ValueKey(false),
                       title: '追剧',
+                      titleChild: widget.headerChild,
                       actions: [_editButtonFor(view, icon: false)],
                     )
                   : PageHeader(
@@ -344,7 +349,9 @@ class _FollowPageState extends State<FollowPage> {
                           child: Row(
                             spacing: 8,
                             children: [
-                              Expanded(child: _title('追剧', 28)),
+                              Expanded(
+                                child: widget.headerChild ?? _title('追剧', 28),
+                              ),
                               SizedBox(
                                 width: (constraints.maxWidth - 400).clamp(
                                   160.0,
@@ -407,6 +414,19 @@ class _FollowPageState extends State<FollowPage> {
           inset: televisionInset,
           top: 14,
           header: [
+            if (widget.headerChild != null && view.selection == null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  televisionInset,
+                  0,
+                  televisionInset,
+                  8,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: widget.headerChild,
+                ),
+              ),
             if (view.follows.isNotEmpty || view.selection != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(

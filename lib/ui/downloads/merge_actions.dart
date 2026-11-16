@@ -15,8 +15,9 @@ Future<bool> enqueueMerges(
   List<List<DownloadJob>> groups,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
-  void say(String text) =>
-      messenger.showSnackBar(SnackBar(duration: Duration(milliseconds: 1400), content: Text(text)));
+  void say(String text) => messenger.showSnackBar(
+    SnackBar(duration: Duration(milliseconds: 1400), content: Text(text)),
+  );
   final ready = [
     for (final jobs in groups)
       if (jobs.length >= 2) jobs,

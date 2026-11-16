@@ -54,9 +54,12 @@ class _DiaryViewState extends State<DiaryView> {
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: DiaryService.fullText));
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(duration: Duration(milliseconds: 1400), content: Text('日记已复制')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(milliseconds: 1400),
+          content: Text('日记已复制'),
+        ),
+      );
     }
   }
 

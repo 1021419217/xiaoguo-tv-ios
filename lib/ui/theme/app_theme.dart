@@ -159,10 +159,7 @@ abstract final class AppTheme {
           shape: const StadiumBorder(),
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-          textStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
         ),
       ),
       // 开关同样走黑白反色：开启是白轨 + 深色圆点，关闭是极淡白轨 + 灰点。

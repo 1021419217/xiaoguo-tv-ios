@@ -248,9 +248,7 @@ class _ModulesPageState extends State<ModulesPage>
       for (final module in modules) module.id,
     ]);
     if (name == null) return;
-    _show(
-      modules.length > 1 ? '已导出 ${modules.length} 个模块：$name' : '已导出：$name',
-    );
+    _show(modules.length > 1 ? '已导出 ${modules.length} 个模块：$name' : '已导出：$name');
   });
 
   Future<void> _toggle(SourceModule module, bool value) {
@@ -831,11 +829,7 @@ class _InstalledCard extends StatelessWidget {
           SoraniAccountButton(admin: admin, style: _cardButton(colors)),
       ],
       actions: [
-        _Pill(
-          icon: Icons.ios_share_rounded,
-          label: '导出',
-          onPressed: onExport,
-        ),
+        _Pill(icon: Icons.ios_share_rounded, label: '导出', onPressed: onExport),
         if (update != null) ...[
           _Pill(
             icon: Icons.arrow_circle_up_outlined,
@@ -881,11 +875,7 @@ class _IndexCard extends StatelessWidget {
       id: entry.id,
       body: [
         if (entry.description.isNotEmpty)
-          Text(
-            entry.description,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(entry.description, maxLines: 2, overflow: TextOverflow.ellipsis),
         if (records != null)
           Text('待恢复：$records', style: TextStyle(color: colors.primary)),
       ],

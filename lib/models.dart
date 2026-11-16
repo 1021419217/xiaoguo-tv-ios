@@ -162,25 +162,35 @@ class Drama {
   final List<String> tags;
   final String releaseStatus;
   final String badge;
+
   /// 作者（上传者）名称，各站源字段名不一，原生层已统一收敛。
   final String author;
+
   /// 作者标识，用于在该源里精确翻该作者的作品。
   final String authorId;
+
   /// 作者主页地址，部分源只给地址不给 ID。
   final String authorUrl;
   bool get hasAuthor => author.isNotEmpty || authorId.isNotEmpty;
+
   /// 主演，多来源字段名不同，原生层已统一。
   final List<String> actors;
+
   /// 番号 / 品番。
   final String serial;
+
   /// 发行日期。
   final String releaseDate;
+
   /// 时长展示文本。
   final String durationText;
+
   /// 片商 / 制作方。
   final String maker;
+
   /// 导演。
   final String director;
+
   /// 源返回的其它资料字段，键为原始字段名。
   final Map<String, String> meta;
   String get releaseLabel => switch (releaseStatus) {
@@ -303,7 +313,9 @@ class Drama {
       actors: fresh.actors.isEmpty ? actors : fresh.actors,
       serial: fresh.serial.isEmpty ? serial : fresh.serial,
       releaseDate: fresh.releaseDate.isEmpty ? releaseDate : fresh.releaseDate,
-      durationText: fresh.durationText.isEmpty ? durationText : fresh.durationText,
+      durationText: fresh.durationText.isEmpty
+          ? durationText
+          : fresh.durationText,
       maker: fresh.maker.isEmpty ? maker : fresh.maker,
       director: fresh.director.isEmpty ? director : fresh.director,
       meta: fresh.meta.isEmpty ? meta : {...meta, ...fresh.meta},
@@ -424,12 +436,13 @@ class QualityProbe {
   final String warning;
 
   factory QualityProbe.fromJson(Map<String, dynamic> json) => QualityProbe(
-    qualities: (json['qualities'] as List? ?? const [])
-        .map(intValue)
-        .where((value) => value > 0)
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a)),
+    qualities:
+        (json['qualities'] as List? ?? const [])
+            .map(intValue)
+            .where((value) => value > 0)
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a)),
     hls: json['hls'] == true,
     warning: json['warning'] as String? ?? '',
   );
