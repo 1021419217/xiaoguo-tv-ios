@@ -8,6 +8,7 @@ const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const LANG = 'kt_rt_lang=zh';
 const SITE_HOST = 'jable.tv';
+const SITE_HOST_ALT = 'fs1.app';
 
 // 只保留站点上确实存在的入口：以前写的 /categories/uncensored/ 是 404，
 // 点进去必然报错，已换成站点导航里真实存在的页面。
@@ -39,12 +40,14 @@ function originOf(address) {
 // 必须成对使用）。以前这里只带一句写死的语言 cookie，验证完了也照样 403，
 // 而且 fetchText 把 403 变成一句普通错误，首页连「去验证」都不给。
 function agent() {
-  const learned = host.challengeUA(SITE_HOST);
+  const learned =
+    host.challengeUA(SITE_HOST) || host.challengeUA(SITE_HOST_ALT);
   return learned || UA;
 }
 
 function cookieHeader() {
-  const learned = host.challengeCookie(SITE_HOST);
+  const learned =
+    host.challengeCookie(SITE_HOST) || host.challengeCookie(SITE_HOST_ALT);
   return learned ? LANG + '; ' + learned : LANG;
 }
 
@@ -365,7 +368,9 @@ function dramaOf(chunk, chunkId, base) {
     totalEpisode: 1,
     episodeCount: 1,
     duration: durationOf(chunk),
-    views: viewsOf(chunk),
+    // views 在 App 的 Drama 结构体里是 string，传数字会报
+    // json: cannot unmarshal number into ... jsDramaPage.items.views of type string
+    views: viewsOf(chunk) > 0 ? String(viewsOf(chunk)) : '',
   };
 }
 
@@ -511,16 +516,21 @@ function resolveMedia(task) {
   }
   const address = resolve(response.base, matched[1]);
   const referer = response.base + '/';
-  return {
-    url: address,
+  const credentials = {
+    origin: response.base,
     referer: referer,
-    credentials: {
-      origin: response.base,
-      referer: referer,
-      userAgent: agent(),
-      cookie: cookieHeader(),
-    },
+    userAgent: agent(),
+    cookie: cookieHeader(),
   };
+  // 预取播放列表（m3u8 在 CDN 上，不受 Cloudflare 保护），播放时 0 请求
+  try {
+    return host.prepareWebMedia(
+      { url: address, referer: referer, quality: 1080, credentials: credentials },
+      'Jable'
+    );
+  } catch (_) {
+    return { url: address, referer: referer, credentials: credentials };
+  }
 }
 
 module.exports = {
