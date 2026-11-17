@@ -483,7 +483,11 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 		lowerType := strings.ToLower(response.Header.Get("Content-Type"))
 		looksTS := strings.Contains(lowerType, "mp2t") ||
 			strings.Contains(lowerType, "octet-stream") ||
-			strings.HasSuffix(strings.ToLower(finalURL.Path), ".ts")
+			strings.HasSuffix(strings.ToLower(finalURL.Path), ".ts") ||
+			// 部分站点把 TS 分片伪装成图片（Content-Type: image/png、后缀 .image），
+			// 这里一并纳入；是否真的剥由 stripFakeTSHeader 的 188 对齐校验决定。
+			strings.HasPrefix(lowerType, "image/") ||
+			strings.HasSuffix(strings.ToLower(finalURL.Path), ".image")
 		if looksTS && (rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-")) {
 			head = make([]byte, 4096)
 			n, _ := io.ReadFull(reader, head)
