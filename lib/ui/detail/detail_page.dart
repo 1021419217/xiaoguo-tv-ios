@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../cover_shape.dart';
 import '../../drama_details.dart';
 import '../../local_store.dart';
 import '../../models.dart';
@@ -587,12 +588,17 @@ class _DetailPageState extends State<DetailPage> {
     child: child,
   );
 
-  Widget _phonePage(DramaDetails details) {
+  Widget _phonePage(DramaDetails details) => ValueListenableBuilder<int>(
+    valueListenable: CoverShapes.revision,
+    builder: (context, _, _) => _phoneScaffold(details),
+  );
+
+  Widget _phoneScaffold(DramaDetails details) {
     const m = _phone;
     final top = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final drama = details.drama;
     final heroWidth = MediaQuery.sizeOf(context).width - 40;
-    final heroHeight = hasLandscapeCovers(drama.source)
+    final heroHeight = CoverShapes.isLandscape(drama.source)
         ? heroWidth * 9 / 16
         : math.min(heroWidth * 1.2, 380.0);
     return Scaffold(

@@ -20,6 +20,7 @@ type nativeSourceInfo struct {
 	Adult           bool   `json:"adult"`
 	VIPPrompt       bool   `json:"vipPrompt"`
 	BaseURL         string `json:"baseUrl"`
+	CoverAspect     string `json:"coverAspect"`
 }
 
 func (engine *nativeEngine) sourceList() []nativeSourceInfo {
@@ -36,6 +37,7 @@ func (engine *nativeEngine) sourceList() []nativeSourceInfo {
 			Group: descriptor.Group, GroupName: descriptor.GroupName, EntryName: descriptor.EntryName,
 			Available: nativeSourceAvailable(id), VIPPrompt: !descriptor.SkipVIPPrompt, Adult: descriptor.Adult,
 			BaseURL: strings.TrimRight(descriptor.BaseURL, "/"),
+			CoverAspect: descriptor.CoverAspect,
 		}
 		_, search := providerAs[Searcher](p)
 		_, warningSearch := providerAs[WarningSearcher](p)

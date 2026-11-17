@@ -18,12 +18,14 @@ import 'picture_in_picture.dart';
 import 'portable_data.dart';
 import 'ui/app.dart';
 import 'ui/theme/app_theme.dart';
+import 'cover_shape.dart';
 import 'window_frame.dart';
 import 'window_on_top.dart';
 import 'windows_data_migration.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(CoverShapes.load());
   if (Platform.isAndroid) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(AppTheme.systemBars(Brightness.dark));

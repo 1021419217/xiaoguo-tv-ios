@@ -2,12 +2,6 @@ import 'dart:convert';
 
 const hongguoSourceId = 'hongguo';
 
-/// 封面为横向 16:9 的站源：列表用两列横版卡片，详情页用宽幅大图。
-const landscapeCoverSources = <String>{'jable', 'missav', 'supjav', 'p91'};
-
-bool hasLandscapeCovers(String source) =>
-    landscapeCoverSources.contains(source);
-
 bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 
 class SourceSite {
@@ -29,6 +23,7 @@ class SourceSite {
     this.adult = false,
     this.vipPrompt = true,
     this.baseUrl = '',
+    this.coverAspect = '',
   });
   factory SourceSite.fromJson(Map<String, dynamic> json) => SourceSite(
     json['id'] as String? ?? '',
@@ -48,6 +43,7 @@ class SourceSite {
     adult: json['adult'] == true,
     vipPrompt: json['vipPrompt'] != false,
     baseUrl: json['baseUrl'] as String? ?? '',
+    coverAspect: json['coverAspect'] as String? ?? '',
   );
   final String id;
   final String name;
@@ -68,6 +64,9 @@ class SourceSite {
 
   /// 站点主页（模块清单里的 baseUrl），人机验证时用它打开 WebView。
   final String baseUrl;
+
+  /// 封面朝向的模块声明：`landscape` / `portrait`，空表示未声明、由运行时探测。
+  final String coverAspect;
   bool get onlineSearch => pagedSearch;
   String get groupId => group.isEmpty ? id : group;
   String get groupName => groupLabel.isEmpty ? name : groupLabel;

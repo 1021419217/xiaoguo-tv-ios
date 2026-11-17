@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core_bridge.dart';
 import '../../cover_loader.dart';
+import '../../cover_shape.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../cover_blur.dart';
@@ -354,13 +355,17 @@ class _CoverImageState extends State<CoverImage> {
         return widget.placeholder;
       }
       if (snapshot.hasError || !snapshot.hasData) return _failure(null);
+      final path = snapshot.data!;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => CoverShapes.learn(widget.drama.source, path),
+      );
       return Image.file(
-        File(snapshot.data!),
+        File(path),
         fit: widget.fit,
         cacheWidth: _decodeWidth,
         excludeFromSemantics: true,
         frameBuilder: fadeInFrameBuilder,
-        errorBuilder: (_, _, _) => _failure(snapshot.data),
+        errorBuilder: (_, _, _) => _failure(path),
       );
     },
   );

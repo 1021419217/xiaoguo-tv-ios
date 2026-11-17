@@ -69,6 +69,7 @@ type ModuleManifest struct {
 	Aliases            []string `json:"aliases"`
 	HostSuffixes       []string `json:"hostSuffixes"`
 	BaseURL            string   `json:"baseUrl"`
+	CoverAspect        string   `json:"coverAspect"`
 	NoHostRotation     bool     `json:"noHostRotation"`
 	KeepDetailEpisodes bool     `json:"keepDetailEpisodes"`
 	ContinuousFeed     bool     `json:"continuousFeed"`
@@ -224,6 +225,7 @@ func (module *jsModule) descriptor() SourceDescriptor {
 		KeepDetailEpisodes: module.manifest.KeepDetailEpisodes,
 		ContinuousFeed:     module.manifest.ContinuousFeed,
 		BrowserFingerprint: module.manifest.BrowserFingerprint,
+		CoverAspect:        module.manifest.CoverAspect,
 	}
 }
 

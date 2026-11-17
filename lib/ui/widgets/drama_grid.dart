@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../cover_shape.dart';
 import '../../drama_feed.dart';
 import '../../models.dart';
 import '../app_scope.dart';
@@ -114,9 +115,13 @@ class DramaSliverGrid extends StatelessWidget {
   final bool showScore;
 
   @override
-  Widget build(BuildContext context) {
-    final wide =
-        items.isNotEmpty && hasLandscapeCovers(items.first.source);
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: CoverShapes.revision,
+    builder: (context, _, _) => _grid(context),
+  );
+
+  Widget _grid(BuildContext context) {
+    final wide = items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
     final (columns, _, _) = _gridLayout(context, width, wide: wide);
     final heroIndex = heroScope == null
         ? const <String, int>{}

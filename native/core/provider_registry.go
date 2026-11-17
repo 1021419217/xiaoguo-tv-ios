@@ -25,6 +25,7 @@ type SourceDescriptor struct {
 	HostSuffixes       []string
 	MatchesHost        func(host string) bool
 	BaseURL            string
+	CoverAspect        string
 	AllowEmptyCatalog  bool
 	NoHostRotation     bool
 	KeepDetailEpisodes bool
