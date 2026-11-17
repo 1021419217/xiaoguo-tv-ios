@@ -202,15 +202,15 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     })()
     """
     func doFetch() {
-      web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], in: nil, contentWorld: .page, completionHandler: { result in
-        switch result {
-        case .success(let value as? String):
-          let html = value ?? ""
-          completion(html.isEmpty ? nil : html)
-        default:
-          completion(nil)
-        }
-      })
+      // 用 async/await 形式（该 SDK 下 callAsyncJavaScript 只有这个重载，
+      // 不接受 completionHandler 闭包/尾随闭包）。结果可能不是 String，做两级转换。
+      Task { @MainActor in
+        let value = try? await web.callAsyncJavaScript(
+          js, arguments: ["u": url.absoluteString], in: nil, contentWorld: .page
+        )
+        let html = (value as? String) ?? (value as? NSNumber)?.stringValue ?? ""
+        completion(html.isEmpty ? nil : html)
+      }
     }
     func waitAndFetch(_ tries: Int) {
       if !web.isLoading || tries >= 50 {
