@@ -28,8 +28,11 @@
     "javmix.tv",
     "*.javmix.tv"
   ],
-  "capabilities": ["search"],
+  "capabilities": [
+    "search"
+  ],
   "baseUrl": "https://supjav.com",
-  "browserFingerprint": true,
-  "aliases": ["supjav.com"]
+  "aliases": [
+    "supjav.com"
+  ]
 }

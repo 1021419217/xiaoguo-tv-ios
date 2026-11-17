@@ -271,9 +271,9 @@ class _FollowPageState extends State<FollowPage> {
     );
   }
 
-  /// 左右滑动切换下方「站源」分类（全部 → 各站源）。顶栏三段胶囊只响应点击，
-  /// 这里只切当前页自己的分类，和下载页「下载中/已下载/合并」的手势一致。
-  /// 和首页同款的横滑层：内容带阻尼跟手、松手后整体侧滑淡入，切换时不黑屏。
+  /// 左右滑动切换下方「站源」分类（全部 → 各站源）。
+  /// 注意只包住**列表本身**：顶栏、搜索框、站源胶囊留在滑动层外面，
+  /// 否则一滑整个追剧画面（标题、搜索框、卡片）一起位移，看着就是在抖。
   Widget _swipe(_View view, Widget child) {
     if (view.selection != null) return child;
     final ids = ['', for (final site in view.sources) site.id];
@@ -294,41 +294,39 @@ class _FollowPageState extends State<FollowPage> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: _swipe(
+        child: _content(
+          context,
           view,
-          _content(
-            context,
-            view,
-            inset: 16,
-            header: [
-              FadeSwitcher(
-                child: selection == null
-                    ? PageHeader(
-                        key: const ValueKey(false),
-                        title: '追剧',
-                        titleChild: widget.headerChild,
-                        actions: [_editButtonFor(view)],
-                      )
-                    : PageHeader(
-                        key: const ValueKey(true),
-                        title: '已选择 ${selection.length} 部',
-                        actions: [
-                          _selectAll(view),
-                          ActionPill(
-                            icon: Icons.done_rounded,
-                            label: '完成',
-                            onPressed: _finishEditing,
-                          ),
-                        ],
-                      ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: _search(),
-              ),
-              ?_sources(view, inset: 16, scroll: true),
-            ],
-          ),
+          inset: 16,
+          swipe: true,
+          header: [
+            FadeSwitcher(
+              child: selection == null
+                  ? PageHeader(
+                      key: const ValueKey(false),
+                      title: '追剧',
+                      titleChild: widget.headerChild,
+                      actions: [_editButtonFor(view)],
+                    )
+                  : PageHeader(
+                      key: const ValueKey(true),
+                      title: '已选择 ${selection.length} 部',
+                      actions: [
+                        _selectAll(view),
+                        ActionPill(
+                          icon: Icons.done_rounded,
+                          label: '完成',
+                          onPressed: _finishEditing,
+                        ),
+                      ],
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _search(),
+            ),
+            ?_sources(view, inset: 16, scroll: true),
+          ],
         ),
       ),
       bottomNavigationBar: selection == null
@@ -507,6 +505,7 @@ class _FollowPageState extends State<FollowPage> {
     required double inset,
     double top = 0,
     required List<Widget> header,
+    bool swipe = false,
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
@@ -534,12 +533,8 @@ class _FollowPageState extends State<FollowPage> {
       final first = view.shown.isEmpty
           ? null
           : (updated.firstOrNull ?? rest.first);
-      return CustomScrollView(
+      final scroll = CustomScrollView(
         slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(top: top),
-            sliver: SliverList.list(children: header),
-          ),
           if (view.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -638,6 +633,17 @@ class _FollowPageState extends State<FollowPage> {
               bottom: AppScope.of(context).television ? 27 : 32,
             ),
           ),
+        ],
+      );
+      // 顶栏固定在上方，滑动层只包列表：横滑切站源时标题与搜索框纹丝不动。
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: top),
+            child: Column(children: header),
+          ),
+          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
         ],
       );
     },

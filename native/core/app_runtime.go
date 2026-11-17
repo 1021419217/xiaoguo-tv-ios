@@ -112,6 +112,9 @@ type nativeInput struct {
 	File            string                  `json:"file"`
 	URL             string                  `json:"url"`
 	Token           string                  `json:"token"`
+	Host            string                  `json:"host"`
+	Cookie          string                  `json:"cookie"`
+	UserAgent       string                  `json:"ua"`
 }
 
 type nativeCatalogResult struct {
@@ -273,6 +276,9 @@ func newNativeEngine(directory, cache, downloads string) (*nativeEngine, error) 
 	router := &proxyRouter{}
 	d := &Downloader{cfg: cfg, providerHosts: map[string]string{}, proxyRouter: router,
 		limiter: newRequestLimiter(3, 0), diagnostics: newDiagnosticLog(directory)}
+	if data, err := d.LoadState(challengeCookieState); err == nil {
+		loadChallengeCookies(data)
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	transport.MaxIdleConnsPerHost = 8
@@ -433,6 +439,16 @@ func nativeDispatch(input nativeInput) (any, error) {
 		root := engine.downloads.root
 		engine.downloads.mu.Unlock()
 		return map[string]string{"directory": root}, nil
+	case "saveChallenge":
+		// WebView 解完站点验证后回填 cookie 与真实 UA，供模块请求复用。
+		key := SetChallenge(input.Host, input.Cookie, input.UserAgent)
+		if key == "" {
+			return map[string]any{"saved": false}, nil
+		}
+		_ = engine.downloader.SaveState(challengeCookieState, dumpChallengeCookies())
+		return map[string]any{"saved": true}, nil
+	case "challenge":
+		return map[string]any{"cookie": ChallengeCookie(input.Host), "ua": ChallengeUserAgent(input.Host)}, nil
 	case "storage":
 		return engine.storage()
 	case "cache":

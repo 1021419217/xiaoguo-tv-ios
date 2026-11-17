@@ -10,8 +10,8 @@ import '../widgets/cover_image.dart';
 ///
 /// 版式照 iDuanJu 的 PosterHero 来：整卡铺一层模糊封面做底、向页面底色压暗，
 /// 前景是竖版封面 + 标题 + 标签 + 查看详情，右下角页码点，6 秒自动翻页。
-/// 首页本身的横滑（切分类）由外层 SwipeCategoryLayer 处理，PageView 会先
-/// 吃掉落在卡片上的横向拖动，两者不冲突。
+/// 卡片内的横滑由 PageView 自己吃下（翻封面），外层的分类横滑用
+/// `reservedTop` 把这一块让出来，两者互不抢手势。
 class HeroCarousel extends StatefulWidget {
   const HeroCarousel({
     super.key,
@@ -93,14 +93,20 @@ class _HeroCarouselState extends State<HeroCarousel> {
                 child: _backdrop(item),
               ),
             ),
-            PageView.builder(
-              controller: _pages,
-              itemCount: items.length,
-              onPageChanged: (index) {
-                setState(() => _index = index);
-                _restartAuto();
-              },
-              itemBuilder: (context, index) => _slide(items[index]),
+            // 点开详情用 GestureDetector 包住 PageView：横向拖交给 PageView
+            // 翻封面，轻点才是打开。以前上面盖一层 InkWell，把横滑全吃掉了。
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.onOpen(item),
+              child: PageView.builder(
+                controller: _pages,
+                itemCount: items.length,
+                onPageChanged: (index) {
+                  setState(() => _index = index);
+                  _restartAuto();
+                },
+                itemBuilder: (context, index) => _slide(items[index]),
+              ),
             ),
             if (items.length > 1)
               Positioned(
@@ -108,16 +114,6 @@ class _HeroCarouselState extends State<HeroCarousel> {
                 bottom: 12,
                 child: IgnorePointer(child: _dots(items.length)),
               ),
-            Positioned.fill(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => widget.onOpen(item),
-                  splashColor: Colors.white.withValues(alpha: .06),
-                  highlightColor: Colors.white.withValues(alpha: .04),
-                ),
-              ),
-            ),
           ],
         ),
       ),

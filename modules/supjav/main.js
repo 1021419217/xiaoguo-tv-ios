@@ -35,11 +35,27 @@ function originOf(address) {
   return matched ? matched[1] : SITE;
 }
 
+// SupJav 由 Cloudflare 托管，纯 HTTP 会拿到 403「Just a moment」。
+// App 里做过站点验证后，host.challengeCookie 会给出 cf_clearance，
+// host.challengeUA 给出解验证时 WebView 的真实 UA——cf_clearance 绑 UA，
+// 所以必须成对使用，不能用写死的 UA。
+const SITE_HOST = 'supjav.com';
+
+function agent() {
+  const learned = host.challengeUA(SITE_HOST);
+  return learned || UA;
+}
+
+function token() {
+  return host.challengeCookie(SITE_HOST);
+}
+
 function fetchPage(path, referer) {
   const response = host.fetchText({
     url: SITE + path,
     referer: referer || SITE + '/',
-    userAgent: UA,
+    userAgent: agent(),
+    cookie: token(),
   });
   return { text: response.body || '', base: originOf(response.url), url: response.url || SITE + path };
 }

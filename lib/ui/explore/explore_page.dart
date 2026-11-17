@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_device.dart';
 import '../../drama_feed.dart';
 import '../../explore_feed.dart';
 import '../../local_store.dart';
@@ -239,6 +241,9 @@ class ExplorePageState extends State<ExplorePage> {
         final topPad = MediaQuery.paddingOf(context).top;
         final topInset = _headerH > 0 ? _headerH : topPad + 112;
         _measureHeader();
+        final heroBottom = _hero(explore) == null
+            ? 0.0
+            : topInset + 12 + 196;
         return Scaffold(
           body: Stack(
             children: [
@@ -247,7 +252,10 @@ class ExplorePageState extends State<ExplorePage> {
                   explore,
                   form,
                   _content(explore, inset, false, tabs, topInset: topInset),
-                  hintTop: topInset + 4,
+                  // 提示胶囊落在大海报下方（和追剧页一样贴在列表顶部），
+                  // 不再压在海报标题上。
+                  hintTop: heroBottom > 0 ? heroBottom + 6 : topInset + 6,
+                  heroBottom: heroBottom,
                 ),
               ),
               Positioned(
@@ -275,6 +283,8 @@ class ExplorePageState extends State<ExplorePage> {
                   explore,
                   form,
                   _content(explore, inset, television, tabs),
+                  hintTop: _hero(explore) == null ? 12 : 16 + 208 + 6,
+                  heroBottom: _hero(explore) == null ? 0 : 16 + 208,
                 ),
               ),
             ],
@@ -292,6 +302,7 @@ class ExplorePageState extends State<ExplorePage> {
     FormFactor form,
     Widget child, {
     double hintTop = 12,
+    double heroBottom = 0,
   }) {
     final tabs = explore.tabs;
     final index = tabs.indexWhere((tab) => tab.id == explore.tab.id);
@@ -303,6 +314,13 @@ class ExplorePageState extends State<ExplorePage> {
       labels: [for (final tab in tabs) tab.name],
       onIndexChanged: (index) => explore.select(tabs[index].id),
       hintTop: hintTop,
+      // 海报那一段的按下留给海报自己翻页；列表滚过去之后这段自动收窄。
+      reservedTop: heroBottom <= 0
+          ? null
+          : () {
+              final offset = _scroll.hasClients ? _scroll.offset : 0.0;
+              return math.max(0, heroBottom - offset);
+            },
       child: child,
     );
   }
@@ -323,7 +341,7 @@ class ExplorePageState extends State<ExplorePage> {
     final hero = _hero(explore);
     final items = explore.items;
     if (feed.items.isEmpty) {
-      final status = FadeSwitcher(child: _status(feed));
+      final status = FadeSwitcher(child: _status(feed, explore.source));
       return topInset > 0
           ? Padding(
               padding: EdgeInsets.only(top: topInset),
@@ -347,18 +365,40 @@ class ExplorePageState extends State<ExplorePage> {
     );
   }
 
-  Widget _status(DramaFeed feed) {
+  /// 站点要人机验证时，直接在应用内起一个 WebView 过验证，拿到 cookie 后重试。
+  Future<void> _verify(SourceSite site, DramaFeed feed) async {
+    final host = Uri.tryParse(site.baseUrl)?.host ?? '';
+    if (host.isEmpty) return;
+    final solved = await AppDevice.solveChallenge(site.baseUrl, host);
+    if (solved == null || !mounted) return;
+    final saved = await AppScope.of(
+      context,
+    ).repository.saveChallenge(host, solved.cookie, userAgent: solved.userAgent);
+    if (saved) await feed.reload(force: true);
+  }
+
+  Widget _status(DramaFeed feed, SourceSite? site) {
     if (feed.loading) {
       return const StatusView.loading(key: ValueKey('loading'));
     }
     if (feed.error.isNotEmpty) {
+      // Cloudflare 这类「站点要求浏览器验证」的错误，纯 HTTP 客户端过不去，
+      // 给一个「去验证」入口，比反复点重试有用。
+      final needsVerify =
+          site != null &&
+          site.baseUrl.isNotEmpty &&
+          feed.error.contains('浏览器验证');
       return StatusView(
         key: const ValueKey('error'),
         title: '暂时无法加载',
-        message: feed.error,
+        message: needsVerify
+            ? '${feed.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+            : feed.error,
         icon: Icons.cloud_off_rounded,
-        action: '重试',
-        onAction: () => feed.reload(force: true),
+        action: needsVerify ? '去验证' : '重试',
+        onAction: needsVerify
+            ? () => unawaited(_verify(site, feed))
+            : () => feed.reload(force: true),
       );
     }
     return StatusView(

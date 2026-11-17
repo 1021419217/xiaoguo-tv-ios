@@ -1,5 +1,7 @@
 package core
 
+import "strings"
+
 type nativeSourceInfo struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
@@ -17,6 +19,7 @@ type nativeSourceInfo struct {
 	Metadata        bool   `json:"metadata"`
 	Adult           bool   `json:"adult"`
 	VIPPrompt       bool   `json:"vipPrompt"`
+	BaseURL         string `json:"baseUrl"`
 }
 
 func (engine *nativeEngine) sourceList() []nativeSourceInfo {
@@ -32,6 +35,7 @@ func (engine *nativeEngine) sourceList() []nativeSourceInfo {
 			ID: id, Name: descriptor.Name, Description: descriptor.Description,
 			Group: descriptor.Group, GroupName: descriptor.GroupName, EntryName: descriptor.EntryName,
 			Available: nativeSourceAvailable(id), VIPPrompt: !descriptor.SkipVIPPrompt, Adult: descriptor.Adult,
+			BaseURL: strings.TrimRight(descriptor.BaseURL, "/"),
 		}
 		_, search := providerAs[Searcher](p)
 		_, warningSearch := providerAs[WarningSearcher](p)

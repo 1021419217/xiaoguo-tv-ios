@@ -370,20 +370,18 @@ class _HistoryPageState extends State<HistoryPage> {
       body: SafeArea(
         top: true,
         bottom: false,
-        child: _swipe(
+        child: _content(
+          context,
           view,
-          _content(
-            context,
-            view,
-            inset: 16,
-            header: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
-                child: _search(),
-              ),
-              ?_sources(view, inset: 16, scroll: true),
-            ],
-          ),
+          inset: 16,
+          swipe: true,
+          header: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
+              child: _search(),
+            ),
+            ?_sources(view, inset: 16, scroll: true),
+          ],
         ),
       ),
       bottomNavigationBar: selection == null
@@ -504,6 +502,7 @@ class _HistoryPageState extends State<HistoryPage> {
     required double inset,
     double top = 0,
     required List<Widget> header,
+    bool swipe = false,
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
@@ -524,12 +523,8 @@ class _HistoryPageState extends State<HistoryPage> {
           id: view.shown[index],
       };
       final first = view.shown.firstOrNull;
-      return CustomScrollView(
+      final scroll = CustomScrollView(
         slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(top: top),
-            sliver: SliverList.list(children: header),
-          ),
           if (view.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -609,6 +604,17 @@ class _HistoryPageState extends State<HistoryPage> {
               bottom: AppScope.of(context).television ? 27 : 32,
             ),
           ),
+        ],
+      );
+      // 顶栏留在滑动层外面，横滑切站源时标题、搜索框不跟着动。
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: top),
+            child: Column(children: header),
+          ),
+          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
         ],
       );
     },

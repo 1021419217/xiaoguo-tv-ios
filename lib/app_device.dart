@@ -11,6 +11,32 @@ class AppDevice {
   final bool television;
   final String version;
   static const channel = MethodChannel('duanju/device');
+
+  /// 站点人机验证：用原生 WKWebView 打开站点走一遍 Cloudflare 挑战，
+  /// 成功后返回它拿到的 cookie 与 WebView 的真实 UA（cf_clearance 绑 UA）。
+  static Future<({String cookie, String userAgent})?> solveChallenge(
+    String url,
+    String host,
+  ) async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    try {
+      final data = await channel
+          .invokeMapMethod<String, dynamic>('challenge', {
+            'url': url,
+            'host': host,
+          })
+          .timeout(const Duration(minutes: 2));
+      final cookie = data?['cookie'];
+      if (cookie is! String || cookie.isEmpty) return null;
+      final agent = data?['ua'];
+      return (
+        cookie: cookie,
+        userAgent: agent is String ? agent : '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
   static var _televisionMode = false;
   static var _phoneMode = false;
 

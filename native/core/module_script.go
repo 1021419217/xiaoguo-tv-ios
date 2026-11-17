@@ -468,6 +468,9 @@ func (p *jsProvider) hostObject(instance *jsInstance) *goja.Object {
 		"saveState": func(name, value string) error {
 			return p.host.SaveState(moduleStatePrefix+id+"-"+name, []byte(value))
 		},
+		// 站点验证拿到的 cookie / UA：模块直接拼进 fetchText 即可。
+		"challengeCookie": ChallengeCookie,
+		"challengeUA":     ChallengeUserAgent,
 		"log": func(message string) {
 			if downloader, ok := p.host.(*Downloader); ok {
 				downloader.recordDiagnostic(diagnosticEvent{Time: time.Now(), Level: "info", Event: "module", Source: id, Message: message})

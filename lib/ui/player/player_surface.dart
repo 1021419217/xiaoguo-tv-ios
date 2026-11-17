@@ -9,6 +9,7 @@ import '../../playback_preferences.dart';
 import '../../playback_session.dart';
 import '../settings/sorani_account_view.dart';
 import '../theme/motion.dart';
+import '../widgets/loading_halo.dart';
 import '../widgets/contained_slider.dart';
 import '../widgets/motion/motion_widgets.dart';
 import 'cast_page.dart';
@@ -353,7 +354,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
               duration: Motion.medium,
               child: _session.ready && _session.stalled
                   ? const IgnorePointer(
-                      child: Center(child: CircularProgressIndicator()),
+                      child: Center(child: LoadingHalo(size: 56)),
                     )
                   : null,
             ),

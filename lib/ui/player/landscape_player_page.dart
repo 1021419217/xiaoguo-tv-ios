@@ -19,6 +19,7 @@ import '../widgets/motion/motion_widgets.dart';
 import 'cast_page.dart';
 import 'danmaku_overlay.dart';
 import '../widgets/follow_button.dart';
+import '../widgets/loading_halo.dart';
 import 'episode_grid.dart';
 import 'mini_player.dart';
 import 'playback_handle.dart';
@@ -499,14 +500,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
           ),
           FadePresence(
             duration: Motion.medium,
-            child: session.ready && session.stalled
-                ? const IgnorePointer(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                : null,
-          ),
-          FadePresence(
-            duration: Motion.medium,
             child: session.loading ? PlaybackLoading(session: session) : null,
           ),
           FadePresence(
@@ -937,30 +930,47 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 _scheduleHide();
                 session.togglePlayback();
               },
-              child: Container(
-                width: 66,
-                height: 66,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: .38),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .22),
-                  ),
-                ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
-                  transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: animation,
-                    child: FadeTransition(opacity: animation, child: child),
-                  ),
-                  child: Icon(
-                    session.paused
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded,
-                    key: ValueKey(session.paused),
-                    size: 40,
-                    color: Colors.white.withValues(alpha: .92),
-                  ),
+              // 缓冲时只在大圈外沿流转一圈弧光，不再往按钮里塞系统小圈。
+              child: SizedBox(
+                width: 90,
+                height: 90,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 66,
+                      height: 66,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .38),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .22),
+                        ),
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        transitionBuilder: (child, animation) => ScaleTransition(
+                          scale: animation,
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        ),
+                        child: Icon(
+                          session.paused
+                              ? Icons.play_arrow_rounded
+                              : Icons.pause_rounded,
+                          key: ValueKey(session.paused),
+                          size: 40,
+                          color: Colors.white.withValues(
+                            alpha: session.stalled ? .55 : .92,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (session.stalled)
+                      const IgnorePointer(child: LoadingHalo(size: 86)),
+                  ],
                 ),
               ),
             ),

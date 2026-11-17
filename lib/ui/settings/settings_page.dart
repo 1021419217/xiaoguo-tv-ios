@@ -337,9 +337,15 @@ class _SettingsPageState extends State<SettingsPage> {
       child: ListenableBuilder(
         listenable: widget.store,
         builder: (context, _) {
-          final groups = SettingsGroup.values;
+          // 站源与诊断按用户要求收进「常用」，紧跟模块入口，不再单独成组。
+          final groups = [
+            for (final group in SettingsGroup.values)
+              if (group != SettingsGroup.modules &&
+                  group != SettingsGroup.diagnostics)
+                group,
+          ];
           // 每 3 个分组一段，段名按内容归组（新增分组时只需补段名）。
-          const sections = ['界面与播放', '内容与站源', '设备与数据', '诊断与备份'];
+          const sections = ['界面与播放', '设备与数据', '账号与关于'];
           return ListView(
             // 底部留出悬浮胶囊导航的空间，避免最后一项被遮住。
             // 顶部不再额外加留白：SafeArea 已经把状态栏与磨砂顶栏让出来了。
@@ -360,6 +366,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       context,
                       (_) => ModulesPage(store: widget.store),
                     ),
+                  ),
+                  SettingsTile(
+                    icon: SettingsGroup.modules.icon,
+                    iconColor: _tileColors[1],
+                    title: SettingsGroup.modules.label,
+                    subtitle: _summary(SettingsGroup.modules),
+                    onTap: () => _openGroup(SettingsGroup.modules),
+                  ),
+                  SettingsTile(
+                    icon: SettingsGroup.diagnostics.icon,
+                    iconColor: _tileColors[2],
+                    title: SettingsGroup.diagnostics.label,
+                    subtitle: _summary(SettingsGroup.diagnostics),
+                    onTap: () => _openGroup(SettingsGroup.diagnostics),
                   ),
                 ],
               ),

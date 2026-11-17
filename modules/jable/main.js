@@ -100,25 +100,104 @@ function codeOf(title) {
   return matched ? matched[1].toUpperCase() + '-' + matched[2] : '';
 }
 
-function chunkList(html) {
-  const chunks = html.split('<div class="video-img-box');
+// 列表页模板不止一种（最近更新 / 热门 / 分类页各用一套），不能只凭
+// `video-img-box` 这个 class 切块，否则换一个分类就整页取不到东西。
+// 这里以「详情链接」为锚点切块：每个 /videos/xxx/ 链接到下一个链接之间
+// 就是一张卡片的 HTML，标题、封面、时长都在这段里找。
+function anchorChunks(html) {
+  const hits = [];
+  const pattern = /<a[^>]+href="[^"]*\/videos\/([^\/"?#]+)\/?"/g;
+  let matched = pattern.exec(html);
+  while (matched) {
+    hits.push({ id: matched[1], start: matched.index });
+    matched = pattern.exec(html);
+  }
   const out = [];
-  for (let index = 1; index < chunks.length; index++) {
-    out.push(chunks[index].slice(0, 4000));
+  const seen = {};
+  for (let index = 0; index < hits.length; index++) {
+    const hit = hits[index];
+    if (seen[hit.id]) continue;
+    seen[hit.id] = true;
+    const until = index + 1 < hits.length ? hits[index + 1].start : html.length;
+    out.push({ id: hit.id, html: html.slice(hit.start, Math.min(until, hit.start + 6000)) });
   }
   return out;
 }
 
-function dramaOf(chunk, base) {
-  const link = /href="([^"]*\/videos\/([^\/"]+)\/?)"/.exec(chunk);
-  if (!link) return null;
-  const sourceId = link[2];
+// 兼容老模板：仍然按 video-img-box 切一遍，作为锚点法取不到时的兜底。
+function classChunks(html) {
+  const parts = html.split('<div class="video-img-box');
+  const out = [];
+  for (let index = 1; index < parts.length; index++) {
+    const chunk = parts[index].slice(0, 4000);
+    const link = /href="[^"]*\/videos\/([^\/"?#]+)\/?"/.exec(chunk);
+    if (link) out.push({ id: link[1], html: chunk });
+  }
+  return out;
+}
+
+function usableCover(url) {
+  const value = String(url || '').trim();
+  if (value === '') return false;
+  // 懒加载占位图 / 1px 透明图 / base64 占位都不能当封面。
+  if (/^data:/i.test(value)) return false;
+  if (/blank|spacer|placeholder|transparent|1x1|lazy\.(gif|png|svg)/i.test(value)) return false;
+  return /\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i.test(value) || /\/(contents|uploads|media)\//i.test(value);
+}
+
+const COVER_ATTRS = [
+  'data-src',
+  'data-original',
+  'data-lazy-src',
+  'data-lazysrc',
+  'data-echo',
+  'data-bg',
+  'data-background',
+  'data-thumb',
+  'data-poster',
+  'data-image',
+  'data-cover',
+  'src',
+];
+
+function coverOf(chunk) {
+  for (const attr of COVER_ATTRS) {
+    const pattern = new RegExp(attr + '\\s*=\\s*["\']([^"\']+)["\']', 'i');
+    const matched = pattern.exec(chunk);
+    if (matched && usableCover(matched[1])) return matched[1];
+  }
+  // 有些模板把封面写成背景图。
+  const styled = /background(?:-image)?\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/i.exec(chunk);
+  if (styled && usableCover(styled[1])) return styled[1];
+  // 响应式图片：srcset 里取第一张。
+  const srcset = /srcset\s*=\s*["']([^"']+)["']/i.exec(chunk);
+  if (srcset) {
+    const first = srcset[1].split(',')[0].trim().split(/\s+/)[0];
+    if (usableCover(first)) return first;
+  }
+  // 最后的兜底：块里出现的第一个站内图片地址。
+  const anywhere = /(https?:\/\/[^"'\s)]+\.(?:jpe?g|png|webp))[^"'\s)]*/i.exec(chunk);
+  if (anywhere && usableCover(anywhere[0])) return anywhere[0];
+  return '';
+}
+
+function titleOf(chunk, chunkId) {
   const heading = /<h6[^>]*>([\s\S]*?)<\/h6>/.exec(chunk);
-  const title = heading ? clean(heading[1]) : sourceId.toUpperCase();
-  const cover =
-    /<img[^>]*?data-src="([^"]+)"/.exec(chunk) ||
-    /<img[^>]*?data-original="([^"]+)"/.exec(chunk) ||
-    /<img[^>]*?\ssrc="(https?:[^"]+)"/.exec(chunk);
+  if (heading) {
+    const text = clean(heading[1]);
+    if (text !== '') return text;
+  }
+  const anchorTitle = /<a[^>]*title="([^"]+)"/.exec(chunk);
+  if (anchorTitle && clean(anchorTitle[1]) !== '') return clean(anchorTitle[1]);
+  const alt = /<img[^>]*alt="([^"]*)"/.exec(chunk);
+  if (alt && clean(alt[1]) !== '') return clean(alt[1]);
+  return String(chunkId || '').toUpperCase();
+}
+
+function dramaOf(chunk, chunkId, base) {
+  const sourceId = chunkId;
+  const title = titleOf(chunk, chunkId);
+  const cover = coverOf(chunk);
   const label = /<span class="label">([^<]+)<\/span>/.exec(chunk);
   const views = /icon-eye[\s\S]{0,60}?<\/svg>\s*([0-9.,KMBkmb]+)/.exec(chunk);
   return {
@@ -129,7 +208,7 @@ function dramaOf(chunk, base) {
     name: title,
     desc: '',
     intro: '',
-    cover: cover ? resolve(base, cover[1]) : '',
+    cover: cover ? resolve(base, cover) : '',
     tags: [],
     totalEpisode: 1,
     episodeCount: 1,
@@ -141,10 +220,13 @@ function dramaOf(chunk, base) {
 function parseList(html, page, base) {
   const items = [];
   const seen = {};
-  for (const chunk of chunkList(html)) {
-    const drama = dramaOf(chunk, base);
-    if (drama === null || seen[drama.sourceId]) continue;
-    seen[drama.sourceId] = true;
+  let chunks = anchorChunks(html);
+  if (chunks.length === 0) chunks = classChunks(html);
+  for (const chunk of chunks) {
+    if (seen[chunk.id]) continue;
+    seen[chunk.id] = true;
+    const drama = dramaOf(chunk.html, chunk.id, base);
+    if (drama.title === '' && drama.cover === '') continue;
     items.push(drama);
   }
   let maxFrom = 0;

@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../theme/motion.dart';
 import '../widgets/contained_slider.dart';
 import '../widgets/follow_button.dart';
+import '../widgets/loading_halo.dart';
 import 'danmaku_overlay.dart';
 import 'episode_grid.dart';
 import 'fade_presence.dart';
@@ -625,45 +626,58 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     setState(_wake);
                     session.togglePlayback();
                   },
-                  child: AnimatedContainer(
-                    duration: Motion.of(context, Motion.short),
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .38),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: .22),
-                      ),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: Motion.of(context, Motion.short),
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: Icon(
-                        session.paused
-                            ? Icons.play_arrow_rounded
-                            : Icons.pause_rounded,
-                        key: ValueKey(session.paused),
-                        size: 44,
-                        color: Colors.white.withValues(alpha: .92),
-                      ),
+                  // 缓冲时不再在按钮中间叠一个系统小圈（颜色跟画面不搭、
+                  // 尺寸也挤），改成大圈外面一圈缓慢流转的光晕。
+                  child: SizedBox(
+                    width: 96,
+                    height: 96,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        AnimatedContainer(
+                          duration: Motion.of(context, Motion.short),
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .38),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .22),
+                            ),
+                          ),
+                          child: AnimatedSwitcher(
+                            duration: Motion.of(context, Motion.short),
+                            transitionBuilder: (child, animation) =>
+                                ScaleTransition(
+                                  scale: animation,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                                ),
+                            child: Icon(
+                              session.paused
+                                  ? Icons.play_arrow_rounded
+                                  : Icons.pause_rounded,
+                              key: ValueKey(session.paused),
+                              size: 44,
+                              color: Colors.white.withValues(
+                                alpha: session.stalled ? .55 : .92,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (session.stalled)
+                          const IgnorePointer(
+                            child: LoadingHalo(size: 92),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        FadePresence(
-          duration: Motion.medium,
-          child: session.ready && session.stalled
-              ? const IgnorePointer(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : null,
         ),
         FadePresence(
           duration: Motion.medium,

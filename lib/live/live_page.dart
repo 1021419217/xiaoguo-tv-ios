@@ -376,8 +376,20 @@ class _LivePageState extends State<LivePage> {
           1,
           ((constraints.maxWidth - inset * 2) / (cell + gap)).ceil(),
         );
-        final usable = constraints.maxHeight - 12 - 32 - widget.bottomInset;
-        final rows = math.max(1, ((usable + gap) / (tile + gap)).floor());
+        // 翻页角标放在顶部：放右下会被底栏导航和最后一行频道卡片压住。
+        int rowsFor(double top) => math.max(
+          1,
+          ((constraints.maxHeight - top - 12 - widget.bottomInset + gap) /
+                  (tile + gap))
+              .floor(),
+        );
+        final plainPages = math.max(
+          1,
+          (_channels.length / (columns * rowsFor(12))).ceil(),
+        );
+        final badge = plainPages > 1;
+        final top = badge ? 42.0 : 12.0;
+        final rows = rowsFor(top);
         final perPage = columns * rows;
         final pages = math.max(1, (_channels.length / perPage).ceil());
         return Stack(
@@ -395,15 +407,16 @@ class _LivePageState extends State<LivePage> {
                 final to = math.min(from + perPage, _channels.length);
                 return _grid(
                   _channels.sublist(from, to),
-                  bottom: 44 + widget.bottomInset,
+                  top: top,
+                  bottom: 12 + widget.bottomInset,
                   scrollable: false,
                 );
               },
             ),
-            if (pages > 1)
+            if (badge)
               Positioned(
                 right: 16,
-                bottom: 10 + widget.bottomInset,
+                top: 8,
                 child: IgnorePointer(
                   child: _PageBadge(page: _page, pages: pages),
                 ),
@@ -416,10 +429,11 @@ class _LivePageState extends State<LivePage> {
 
   Widget _grid(
     List<LiveChannel> channels, {
+    double top = 12,
     required double bottom,
     bool scrollable = true,
   }) => GridView.builder(
-    padding: EdgeInsets.fromLTRB(16, 12, 16, bottom),
+    padding: EdgeInsets.fromLTRB(16, top, 16, bottom),
     physics: scrollable ? null : const NeverScrollableScrollPhysics(),
     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
       maxCrossAxisExtent: 220,

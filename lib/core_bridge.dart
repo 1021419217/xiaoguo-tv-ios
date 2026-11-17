@@ -98,6 +98,12 @@ abstract class AppRepository {
     required int startMs,
     required int durationMs,
   }) async => throw AppFailure('当前环境不支持弹幕');
+  /// 保存 WebView 解站点验证拿到的 cookie 与真实 UA。
+  Future<bool> saveChallenge(
+    String host,
+    String cookie, {
+    String userAgent = '',
+  }) async => false;
   Future<void> cancelCatalog() async {}
   Future<void> cancelSuggestions() async {}
   Future<void> cancelRecommendations() async {}

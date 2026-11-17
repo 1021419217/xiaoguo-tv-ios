@@ -22,6 +22,7 @@ class SourceSite {
     this.metadata = false,
     this.adult = false,
     this.vipPrompt = true,
+    this.baseUrl = '',
   });
   factory SourceSite.fromJson(Map<String, dynamic> json) => SourceSite(
     json['id'] as String? ?? '',
@@ -40,6 +41,7 @@ class SourceSite {
     metadata: json['metadata'] == true,
     adult: json['adult'] == true,
     vipPrompt: json['vipPrompt'] != false,
+    baseUrl: json['baseUrl'] as String? ?? '',
   );
   final String id;
   final String name;
@@ -57,6 +59,9 @@ class SourceSite {
   final bool metadata;
   final bool adult;
   final bool vipPrompt;
+
+  /// 站点主页（模块清单里的 baseUrl），人机验证时用它打开 WebView。
+  final String baseUrl;
   bool get onlineSearch => pagedSearch;
   String get groupId => group.isEmpty ? id : group;
   String get groupName => groupLabel.isEmpty ? name : groupLabel;
