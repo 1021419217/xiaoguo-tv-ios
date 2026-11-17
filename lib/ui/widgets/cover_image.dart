@@ -72,13 +72,32 @@ class DramaCover extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         placeholder,
-        if (!imagesDisabled && drama.id.isNotEmpty)
+        if (!imagesDisabled && drama.id.isNotEmpty) ...[
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(
+              sigmaX: 18,
+              sigmaY: 18,
+              tileMode: TileMode.clamp,
+            ),
+            child: Opacity(
+              opacity: 0.6,
+              child: CoverImage(
+                key: ValueKey('${drama.id}\u0000${drama.cover}\u0000fill'),
+                drama: drama,
+                repository: AppScope.of(context).repository,
+                placeholder: const SizedBox.shrink(),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
           CoverImage(
             key: ValueKey('${drama.id}\u0000${drama.cover}'),
             drama: drama,
             repository: AppScope.of(context).repository,
-            placeholder: placeholder,
+            placeholder: const SizedBox.shrink(),
+            fit: BoxFit.contain,
           ),
+        ],
       ],
     );
     // Always build the same wrapper so the CoverImage state is kept when the
@@ -200,11 +219,13 @@ class CoverImage extends StatefulWidget {
     required this.repository,
     required this.placeholder,
     this.retryable = true,
+    this.fit = BoxFit.cover,
   });
   final Drama drama;
   final AppRepository repository;
   final Widget placeholder;
   final bool retryable;
+  final BoxFit fit;
 
   @override
   State<CoverImage> createState() => _CoverImageState();
@@ -335,7 +356,7 @@ class _CoverImageState extends State<CoverImage> {
       if (snapshot.hasError || !snapshot.hasData) return _failure(null);
       return Image.file(
         File(snapshot.data!),
-        fit: BoxFit.cover,
+        fit: widget.fit,
         cacheWidth: _decodeWidth,
         excludeFromSemantics: true,
         frameBuilder: fadeInFrameBuilder,
