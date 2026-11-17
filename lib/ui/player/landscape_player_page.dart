@@ -237,6 +237,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       _show();
     }
   }
+
   void _tapUp(TapUpDetails details, double width, bool full) {
     final x = details.localPosition.dx;
     final side =
@@ -502,6 +503,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             duration: Motion.medium,
             child: session.loading ? PlaybackLoading(session: session) : null,
           ),
+          _bufferingHalo(),
           FadePresence(
             duration: Motion.medium,
             child: switch (session.error) {
@@ -949,27 +951,24 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                       ),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 160),
-                        transitionBuilder: (child, animation) => ScaleTransition(
-                          scale: animation,
-                          child: FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          ),
-                        ),
+                        transitionBuilder: (child, animation) =>
+                            ScaleTransition(
+                              scale: animation,
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
+                            ),
                         child: Icon(
                           session.paused
                               ? Icons.play_arrow_rounded
                               : Icons.pause_rounded,
                           key: ValueKey(session.paused),
                           size: 40,
-                          color: Colors.white.withValues(
-                            alpha: session.stalled ? .55 : .92,
-                          ),
+                          color: Colors.white.withValues(alpha: .92),
                         ),
                       ),
                     ),
-                    if (session.stalled)
-                      const IgnorePointer(child: LoadingHalo(size: 74)),
                   ],
                 ),
               ),
@@ -979,6 +978,15 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       ),
     );
   }
+
+  /// 缓冲光圈独立成层：只跟 stalled 走，不跟播控显隐走。控件自动隐藏后
+  /// 光圈仍在正中，避免只剩纯黑屏。与中央按钮平级放在视频 Stack 里。
+  Widget _bufferingHalo() => FadePresence(
+    duration: Motion.medium,
+    child: _session.ready && _session.stalled
+        ? const IgnorePointer(child: Center(child: LoadingHalo(size: 80)))
+        : null,
+  );
 
   Widget _icon(
     IconData icon,

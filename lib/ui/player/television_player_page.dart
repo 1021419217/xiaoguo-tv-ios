@@ -9,6 +9,7 @@ import '../../playback_session.dart';
 import '../app_scope.dart';
 import '../theme/app_theme.dart';
 import '../theme/motion.dart';
+import '../widgets/loading_halo.dart';
 import '../widgets/motion/motion_widgets.dart';
 import 'danmaku_overlay.dart';
 import 'fade_presence.dart';
@@ -460,7 +461,9 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
                     FadePresence(
                       duration: Motion.medium,
                       child: _session.ready && _session.stalled
-                          ? const Center(child: CircularProgressIndicator())
+                          ? const IgnorePointer(
+                              child: Center(child: LoadingHalo(size: 80)),
+                            )
                           : null,
                     ),
                     FadePresence(

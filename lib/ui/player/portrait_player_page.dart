@@ -27,7 +27,6 @@ import 'player_surface.dart';
 import 'player_video.dart';
 import 'swipe_controls.dart';
 
-
 String _status(Drama drama) =>
     drama.releaseLabel == '状态未知' ? '' : '${drama.releaseLabel} · ';
 
@@ -515,7 +514,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        if (current) const CircularProgressIndicator(),
+                        // 切集加载圈统一成中央键同款光晕，别再冒出系统白色小圈。
+                        if (current) const LoadingHalo(size: 80),
                       ],
                     ),
                   )
@@ -596,58 +596,57 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     setState(_wake);
                     session.togglePlayback();
                   },
-                  // 缓冲时不再在按钮中间叠一个系统小圈（颜色跟画面不搭、
-                  // 尺寸也挤），改成贴着按钮外沿流转的一圈细弧光。
+                  // 缓冲光圈不画在按钮里：它改成下面独立的居中层，
+                  // 这样控件自动隐藏后光圈仍在，不会只剩纯黑屏。
                   child: SizedBox(
                     width: 92,
                     height: 92,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AnimatedContainer(
-                          duration: Motion.of(context, Motion.short),
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: .38),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: .22),
-                            ),
-                          ),
-                          child: AnimatedSwitcher(
-                            duration: Motion.of(context, Motion.short),
-                            transitionBuilder: (child, animation) =>
-                                ScaleTransition(
-                                  scale: animation,
-                                  child: FadeTransition(
-                                    opacity: animation,
-                                    child: child,
-                                  ),
-                                ),
-                            child: Icon(
-                              session.paused
-                                  ? Icons.play_arrow_rounded
-                                  : Icons.pause_rounded,
-                              key: ValueKey(session.paused),
-                              size: 44,
-                              color: Colors.white.withValues(
-                                alpha: session.stalled ? .55 : .92,
-                              ),
-                            ),
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: Motion.of(context, Motion.short),
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .38),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .22),
                           ),
                         ),
-                        if (session.stalled)
-                          const IgnorePointer(
-                            child: LoadingHalo(size: 80),
+                        child: AnimatedSwitcher(
+                          duration: Motion.of(context, Motion.short),
+                          transitionBuilder: (child, animation) =>
+                              ScaleTransition(
+                                scale: animation,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: Icon(
+                            session.paused
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded,
+                            key: ValueKey(session.paused),
+                            size: 44,
+                            color: Colors.white.withValues(alpha: .92),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
+        ),
+        // 缓冲光圈独立成层：只跟 stalled 走，不跟播控显隐走。控件自动隐藏后
+        // 它依然留在画面正中，杜绝「白圈 → 黑屏 → 再点又变大圈」的割裂感。
+        FadePresence(
+          duration: Motion.medium,
+          child: session.ready && session.stalled
+              ? const IgnorePointer(child: Center(child: LoadingHalo(size: 80)))
+              : null,
         ),
         FadePresence(
           duration: Motion.medium,

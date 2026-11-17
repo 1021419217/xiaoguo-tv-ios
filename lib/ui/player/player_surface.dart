@@ -1142,7 +1142,9 @@ class PlaybackLoading extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
+          // 加载圈也统一成中央键同款光晕，避免切集时冒出一个系统白色小圈，
+          // 和播放中缓冲的大圈样式打架。
+          const LoadingHalo(size: 56),
           const SizedBox(height: 16),
           Text(
             session.loadingMessage,
