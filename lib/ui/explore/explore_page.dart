@@ -377,6 +377,8 @@ class ExplorePageState extends State<ExplorePage> {
       _tell('没有拿到通行 cookie，可以再点一次「去验证」');
       return;
     }
+    // 先取出待抓队列：saveChallenge 会清空页缓存和这个队列，必须提前拿。
+    final pending = await repository.pendingWebPages();
     final saved = await repository.saveChallenge(
       host,
       solved.cookie,
@@ -388,7 +390,6 @@ class ExplorePageState extends State<ExplorePage> {
     // 关键一步：Go 的客户端指纹和真 WebKit 对不上，光有 cookie 重发还是会被拦。
     // 把刚才被挑战的页面 URL 交给那台验证过的 WKWebView，用同一指纹抓回 HTML，
     // 注入 Go 页缓存——模块下次取页命中缓存，就绕开了 TLS 指纹这一关。
-    final pending = await repository.pendingWebPages();
     var primed = 0;
     for (final url in pending) {
       final pageHost = Uri.tryParse(url)?.host ?? host;

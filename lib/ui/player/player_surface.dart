@@ -1202,13 +1202,14 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
         );
         return;
       }
+      // 先取待抓队列，saveChallenge 会把它一起清空。
+      final pending = await repository.pendingWebPages();
       await repository.saveChallenge(
         host,
         solved.cookie,
         userAgent: solved.userAgent,
       );
       if (!mounted) return;
-      final pending = await repository.pendingWebPages();
       var primed = 0;
       for (final url in pending) {
         final pageHost = Uri.tryParse(url)?.host ?? host;
