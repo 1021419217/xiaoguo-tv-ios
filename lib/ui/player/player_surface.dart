@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../app_device.dart';
+import '../../models.dart';
 import '../../playback_preferences.dart';
 import '../../playback_session.dart';
+import '../app_scope.dart';
 import '../settings/sorani_account_view.dart';
 import '../theme/motion.dart';
 import '../widgets/loading_halo.dart';
@@ -1156,7 +1159,7 @@ class PlaybackLoading extends StatelessWidget {
   );
 }
 
-class PlaybackFailure extends StatelessWidget {
+class PlaybackFailure extends StatefulWidget {
   const PlaybackFailure({
     super.key,
     required this.session,
@@ -1168,8 +1171,70 @@ class PlaybackFailure extends StatelessWidget {
   final FocusNode? retryFocus;
 
   @override
+  State<PlaybackFailure> createState() => _PlaybackFailureState();
+}
+
+class _PlaybackFailureState extends State<PlaybackFailure> {
+  bool _verifying = false;
+
+  /// 播放环节的站点验证入口，逻辑与「发现」页的验证同源。
+  ///
+  /// 背景：取播放地址的接口常被 Cloudflare 挑战，而它在播放页只报
+  /// 「站源未返回播放地址」，既不会自动弹验证、也没有手动入口，用户卡死。
+  /// Go 的 HTTP 客户端指纹和真 WebKit 对不上，光有 cookie 重发仍会被拦，
+  /// 必须用验证过的那台 WKWebView 把被挑战的页面重抓一遍注入页缓存，
+  /// 模块重新取地址时命中缓存才能绕过 TLS 指纹这一关。
+  Future<void> _verify() async {
+    final session = widget.session;
+    final source = SourceSite.byId(session.detail.drama.sourceId);
+    final baseUrl = source.baseUrl;
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (baseUrl.isEmpty || host.isEmpty || _verifying) return;
+    setState(() => _verifying = true);
+    final repository = AppScope.of(context).repository;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final solved = await AppDevice.solveChallenge(baseUrl, host);
+      if (!mounted) return;
+      if (solved == null) {
+        messenger?.showSnackBar(
+          const SnackBar(content: Text('没有拿到通行 cookie，可以再点一次「去验证」')),
+        );
+        return;
+      }
+      await repository.saveChallenge(
+        host,
+        solved.cookie,
+        userAgent: solved.userAgent,
+      );
+      if (!mounted) return;
+      final pending = await repository.pendingWebPages();
+      var primed = 0;
+      for (final url in pending) {
+        final pageHost = Uri.tryParse(url)?.host ?? host;
+        final html = await AppDevice.webFetch(url, pageHost);
+        if (html == null || html.isEmpty) continue;
+        if (await repository.setWebPage(url, html)) primed++;
+      }
+      if (!mounted) return;
+      if (primed > 0) {
+        messenger?.showSnackBar(
+          SnackBar(content: Text('已载入 $primed 页，正在重试播放…')),
+        );
+      }
+      await session.retry();
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final session = widget.session;
+    final source = SourceSite.byId(session.detail.drama.sourceId);
+    // 在线站源且有主页可验证时，才给「去验证」入口；本地播放不显示。
+    final canVerify = !session.localFailure && source.baseUrl.isNotEmpty;
     return ColoredBox(
       color: Colors.black.withValues(alpha: .9),
       child: Center(
@@ -1196,7 +1261,9 @@ class PlaybackFailure extends StatelessWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: Text(
-                  error,
+                  canVerify
+                      ? '${widget.error}\n若站点要求人机验证，点「去验证」后再重试。'
+                      : widget.error,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .78),
@@ -1213,7 +1280,7 @@ class PlaybackFailure extends StatelessWidget {
                 children: [
                   if (session.loginRequired)
                     FilledButton(
-                      focusNode: retryFocus,
+                      focusNode: widget.retryFocus,
                       onPressed: () async {
                         if (await showSoraniLogin(context) != null) {
                           await session.retry();
@@ -1223,9 +1290,30 @@ class PlaybackFailure extends StatelessWidget {
                     )
                   else
                     FilledButton(
-                      focusNode: retryFocus,
+                      focusNode: widget.retryFocus,
                       onPressed: session.retry,
                       child: Text(session.localFailure ? '重试本地播放' : '重试'),
+                    ),
+                  if (canVerify)
+                    OutlinedButton.icon(
+                      onPressed: _verifying ? null : _verify,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: .5),
+                        ),
+                      ),
+                      icon: _verifying
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.verified_user_outlined, size: 16),
+                      label: Text(_verifying ? '验证中…' : '去验证'),
                     ),
                   if (session.localFailure)
                     TextButton(
