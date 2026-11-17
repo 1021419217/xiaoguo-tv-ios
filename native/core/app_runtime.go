@@ -482,6 +482,9 @@ func nativeDispatch(input nativeInput) (any, error) {
 		return map[string]int{"added": added}, err
 	case "controlDownloads":
 		return true, engine.downloads.control(input.JobID, input.Command)
+	case "eraseSourceDownloads":
+		// 彻底删除站源时，连它的下载任务和文件一起清掉。
+		return true, engine.downloads.eraseSource(input.Source)
 	case "beginConversion":
 		return engine.downloads.beginConversion(input.JobID)
 	case "finishConversion":

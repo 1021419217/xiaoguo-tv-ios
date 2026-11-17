@@ -166,6 +166,7 @@ abstract class AppRepository {
     int quality = 0,
   }) async => throw AppFailure('当前环境不支持下载');
   Future<void> controlDownloads(String command, {String id = ''}) async {}
+  Future<void> eraseSourceDownloads(String source) async {}
   Future<DownloadConversion> beginConversion(String id) async =>
       throw AppFailure('当前环境不支持处理下载');
   Future<void> finishConversion(String id, String result) async {}
@@ -1261,6 +1262,12 @@ class NativeRepository extends AppRepository {
       'command': command,
       'jobId': id,
     });
+  }
+
+  @override
+  Future<void> eraseSourceDownloads(String source) async {
+    _downloadPermission();
+    await _call({'action': 'eraseSourceDownloads', 'source': source});
   }
 
   @override

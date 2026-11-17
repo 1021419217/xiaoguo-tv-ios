@@ -42,25 +42,36 @@ class _SourcesViewState extends State<SourcesView> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('删除「${site.name}」'),
-        content: const Text('删除后这个源不再出现在发现、搜索、下载与观看记录里，记录本身保留。'),
+        title: Text('彻底删除「${site.name}」？'),
+        content: const Text(
+          '将永久删除这个站源在本机的追剧、观看记录和已下载的视频，无法恢复。'
+          '站源模块本身不会被卸载，之后可从「设置 › 模块」重新安装。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('取消'),
           ),
-          TextButton(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('删除'),
+            child: const Text('彻底删除'),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    await saveSetting(
-      context,
-      () => _store.setSourceDeleted(site.id, deleted: true),
-    );
+    await saveSetting(context, () async {
+      final repository = AppScope.of(context).repository;
+      // 先暂停并删除该源的下载任务与文件，再清本机追剧/历史/偏好。
+      if (repository.supportsDownloads) {
+        await repository.eraseSourceDownloads(site.id);
+      }
+      await _store.eraseSourceData(site.id);
+    });
   }
 
   void _reorder(int oldIndex, int newIndex) {
@@ -117,10 +128,6 @@ class _SourcesViewState extends State<SourcesView> {
     builder: (context, _) {
       final admin = _store.profile.admin;
       final sites = _store.permittedSources;
-      final deleted = [
-        for (final id in _store.deletedSources)
-          if (SourceSite.isAvailable(id)) SourceSite.byId(id),
-      ];
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -161,33 +168,11 @@ class _SourcesViewState extends State<SourcesView> {
                 );
               },
             ),
-          if (deleted.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            SettingsCard(
-              children: [
-                for (final site in deleted)
-                  SettingsTile(
-                    icon: Icons.restore_rounded,
-                    title: '恢复「${site.name}」',
-                    subtitle: '已在本机删除，点一下让它回到列表',
-                    enabled: admin,
-                    onTap: admin
-                        ? () => saveSetting(
-                            context,
-                            () => _store.setSourceDeleted(
-                              site.id,
-                              deleted: false,
-                            ),
-                          )
-                        : null,
-                  ),
-              ],
-            ),
-          ],
           const SizedBox(height: 12),
           const _Note(
             '关闭的站源不在发现、搜索、追剧、观看记录和下载中显示，记录保留，重新开启后恢复。'
-            '删除只在本机隐藏这个源，不影响其它用户。长期按住的拖动按钮可以调整顺序。',
+            '删除会永久清除该源的追剧、观看记录和下载，无法恢复；站源模块本身保留，'
+            '之后可从「设置 › 模块」重新安装。长期按住的拖动按钮可以调整顺序。',
           ),
         ],
       );

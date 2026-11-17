@@ -428,6 +428,51 @@ class LocalStore extends ChangeNotifier {
     });
   }
 
+  /// 彻底删除一个站源：连它在本机的追剧、观看记录、相关追剧状态和站源偏好
+  /// （开关、排序、已删除标记）一起永久清除，无法恢复。
+  /// 下载的视频文件由上层单独调用仓库侧清理，这里只管本机偏好与记录。
+  Future<void> eraseSourceData(String source) {
+    final epoch = _epoch;
+    return _queue(() async {
+      _requireAdmin();
+      if (epoch != _epoch) throw StateError('当前用户已变更，请重试');
+      final favoriteIds = {
+        for (final entry in _favorites.entries)
+          if (entry.value.source == source) entry.key,
+      };
+      final historyIds = {
+        for (final id in _history.keys)
+          if (_history[id]!.drama.source == source) id,
+      };
+      await _saveStates(
+        Map.of(_followStates)..removeWhere((id, _) => favoriteIds.contains(id)),
+      );
+      await _saveFavorites(
+        Map.of(_favorites)..removeWhere((id, _) => favoriteIds.contains(id)),
+      );
+      await _saveHistory(
+        _history.entries
+            .where((entry) => !historyIds.contains(entry.key))
+            .map((entry) => entry.value),
+      );
+      final switches = {..._map(_settings['sourceSwitches'])}..remove(source);
+      final order = [
+        for (final id in _list(_settings['sourceOrder']))
+          if ('$id' != source) '$id',
+      ];
+      // 数据已清空，但模块还在；保留「已删除」标记把这个源藏起来，否则它下次
+      // 又会回到列表里。用户想找回它，只能去「设置 › 模块」重新安装模块。
+      final gone = {...deletedSources}..add(source);
+      await _saveSettings({
+        ..._settings,
+        'sourceSwitches': switches,
+        'sourceOrder': order,
+        'sourceDeleted': gone.toList(),
+      });
+      _notify();
+    });
+  }
+
   /// 重新安装模块后调用：清掉本机「已删除」标记，让站源立刻回到列表。
   ///
   /// 卸载模块不会清这个标记，所以以前删过的源即使重新装回来也会继续被过滤掉；

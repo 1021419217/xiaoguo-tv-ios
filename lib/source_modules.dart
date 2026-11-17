@@ -11,6 +11,7 @@ class SourceModule {
     this.previous = '',
     this.token = '',
     this.error = '',
+    this.pinned = false,
   });
   factory SourceModule.fromJson(Map<String, dynamic> json) => SourceModule(
     id: json['id'] as String? ?? '',
@@ -26,6 +27,7 @@ class SourceModule {
     previous: json['previous'] as String? ?? '',
     token: json['token'] as String? ?? '',
     error: json['error'] as String? ?? '',
+    pinned: json['pinned'] == true,
   );
   final String id;
   final String name;
@@ -38,6 +40,8 @@ class SourceModule {
   final String previous;
   final String token;
   final String error;
+  /// 用户手动安装的自定义版本：启动时不许内置版本回灌，也不提示更新。
+  final bool pinned;
 }
 
 class ModuleIndexEntry {

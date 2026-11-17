@@ -76,8 +76,13 @@ func (d *Downloader) installBundledModulesLocked() {
 		d.recordModuleFailure("", err)
 	}
 	removed := d.removedBundledModules()
+	pinned := d.pinnedModules()
 	for id, module := range modules {
 		if removed[id] {
+			continue
+		}
+		// 用户手动装的版本已锁定：即使内置版本更高，也不回灌覆盖。
+		if pinned[id] {
 			continue
 		}
 		if installed, err := readModule(filepath.Join(d.moduleRoot(), id)); err == nil &&

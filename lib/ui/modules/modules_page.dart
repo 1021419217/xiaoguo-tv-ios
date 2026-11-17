@@ -32,6 +32,8 @@ class ModulesPage extends StatefulWidget {
 ModuleIndexEntry? _updateFor(SourceModule module, ModuleIndexEntry? entry) =>
     entry != null &&
         module.error.isEmpty &&
+        // 手动装的版本由用户自己负责更新，不再拿内置/仓库的高版本来提示。
+        !module.pinned &&
         isNewerModuleVersion(entry.version, module.version)
     ? entry
     : null;
@@ -328,6 +330,11 @@ class _ModulesPageState extends State<ModulesPage>
   Widget _catalogTab({required bool bundled}) {
     final enabled = _canInstall;
     final installed = {for (final module in _modules ?? const []) module.id};
+    // 被用户手动锁定版本的模块，在「内置」分类里仍然列出，方便装回内置版本。
+    final pinned = {
+      for (final module in _modules ?? const [])
+        if (module.pinned) module.id,
+    };
     final missing = _missingSources(_store, _repository);
     final warning = bundled ? '' : _index?.warning ?? '';
     final listed = [
@@ -337,7 +344,9 @@ class _ModulesPageState extends State<ModulesPage>
     final entries =
         [
           for (final entry in listed)
-            if (!installed.contains(entry.id)) entry,
+            if (!installed.contains(entry.id) ||
+                bundled && pinned.contains(entry.id))
+            entry,
         ]..sort(
           (a, b) => (missing.containsKey(a.id) ? 0 : 1).compareTo(
             missing.containsKey(b.id) ? 0 : 1,
@@ -370,6 +379,7 @@ class _ModulesPageState extends State<ModulesPage>
           _IndexCard(
             entry: entry,
             records: missing[entry.id],
+            restoreBuiltin: bundled && pinned.contains(entry.id),
             onInstall: enabled ? () => _installIndexed(entry) : null,
           ),
     ]);
@@ -687,6 +697,25 @@ class _InstalledCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+          if (module.pinned)
+            Row(
+              spacing: 4,
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 13,
+                  color: colors.onSurface.withValues(alpha: .7),
+                ),
+                Text(
+                  '手动安装 · 已锁定版本',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurface.withValues(alpha: .75),
+                  ),
+                ),
+              ],
+            ),
           if (update case final update?)
             Row(
               spacing: 4,
@@ -749,10 +778,12 @@ class _IndexCard extends StatelessWidget {
     required this.entry,
     required this.records,
     required this.onInstall,
+    this.restoreBuiltin = false,
   });
   final ModuleIndexEntry entry;
   final String? records;
   final VoidCallback? onInstall;
+  final bool restoreBuiltin;
 
   @override
   Widget build(BuildContext context) {
@@ -763,6 +794,11 @@ class _IndexCard extends StatelessWidget {
       version: entry.version,
       id: entry.id,
       body: [
+        if (restoreBuiltin)
+          Text(
+            '当前使用手动安装的版本，装回内置版会解除版本锁定',
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
         if (entry.description.isNotEmpty)
           Text(entry.description, maxLines: 2, overflow: TextOverflow.ellipsis),
         if (records != null)
@@ -771,8 +807,8 @@ class _IndexCard extends StatelessWidget {
       trailing: Padding(
         padding: const EdgeInsets.only(top: 2, left: 8),
         child: ActionPill(
-          icon: Icons.download_rounded,
-          label: '安装',
+          icon: restoreBuiltin ? Icons.restore_rounded : Icons.download_rounded,
+          label: restoreBuiltin ? '恢复内置版' : '安装',
           tone: ActionTone.accent,
           onPressed: onInstall,
         ),

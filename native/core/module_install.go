@@ -38,6 +38,10 @@ type nativeModuleInfo struct {
 	Previous     string   `json:"previous,omitempty"`
 	Token        string   `json:"token,omitempty"`
 	Error        string   `json:"error,omitempty"`
+	// Pinned 表示这是用户手动装的版本，启动时不许内置版本回灌覆盖。
+	Pinned bool `json:"pinned,omitempty"`
+	// FromBuiltin 标记本次 prepare 的来源是内置清单，install 时据此解除锁定。
+	FromBuiltin bool `json:"-"`
 }
 
 func moduleInfo(manifest ModuleManifest) nativeModuleInfo {
@@ -64,6 +68,7 @@ func (engine *nativeEngine) modules() ([]nativeModuleInfo, error) {
 			continue
 		}
 		info := moduleInfo(module.manifest)
+		info.Pinned = engine.downloader.pinnedModules()[module.manifest.ID]
 		if !registeredProviderSource(module.manifest.ID) {
 			info.Error = "模块未能加载，详见诊断日志"
 		}
@@ -107,14 +112,29 @@ func (engine *nativeEngine) prepareModule(ctx context.Context, file, address, in
 	_, _ = rand.Read(token)
 	info := moduleInfo(module.manifest)
 	info.Token = hex.EncodeToString(token)
+	info.FromBuiltin = bundled
 	if err := os.WriteFile(filepath.Join(folder, info.Token+".zip"), raw, 0o600); err != nil {
+		return nativeModuleInfo{}, err
+	}
+	// 记录本次安装来源。手动/地址来源要锁定，防止下次启动被内置版本回灌覆盖；
+	// 但来源信息只在 prepare 阶段知道，install 阶段只有 token，所以落到 sidecar 文件。
+	if err := os.WriteFile(filepath.Join(folder, info.Token+".origin"), []byte(installOrigin(info)), 0o600); err != nil {
 		return nativeModuleInfo{}, err
 	}
 	if installed, err := readModule(filepath.Join(engine.downloader.moduleRoot(), module.manifest.ID)); err == nil {
 		info.Installed, info.Previous = true, installed.manifest.Version
 	}
+	info.Pinned = !bundled
 	return info, nil
 }
+
+func installOrigin(info nativeModuleInfo) string {
+	if info.FromBuiltin {
+		return "builtin"
+	}
+	return "manual"
+}
+
 
 func (engine *nativeEngine) installModule(token string) (map[string]any, error) {
 	if !modulePackageToken.MatchString(token) {
@@ -125,6 +145,8 @@ func (engine *nativeEngine) installModule(token string) (map[string]any, error) 
 	if err != nil {
 		return nil, errors.New("安装包已失效，请重新选择")
 	}
+	origin, _ := os.ReadFile(filepath.Join(engine.cacheDirectory, modulePackageFolder, token+".origin"))
+	fromBuiltin := string(origin) == "builtin"
 	manifest, code, err := modulePackageFiles(raw)
 	if err != nil {
 		return nil, err
@@ -143,10 +165,23 @@ func (engine *nativeEngine) installModule(token string) (map[string]any, error) 
 	if err := d.writeModuleLocked(id, manifest, code); err != nil {
 		return nil, err
 	}
-	if err := d.markBundledRemoved(id, false); err != nil {
-		return nil, err
+	// 从内置分类安装：解除「已移除内置」标记，允许内置版本正常回灌更新。
+	// 手动/地址/在线仓库安装：保持锁定——既不动内置移除标记，也记上 pin，
+	// 这样下次启动不会被内置的高版本覆盖用户主动选的版本，也不再提示更新。
+	if fromBuiltin {
+		if err := d.markBundledRemoved(id, false); err != nil {
+			return nil, err
+		}
+		if err := d.markModulePinned(id, false); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := d.markModulePinned(id, true); err != nil {
+			return nil, err
+		}
 	}
 	_ = os.Remove(staged)
+	_ = os.Remove(filepath.Join(engine.cacheDirectory, modulePackageFolder, token+".origin"))
 	d.reloadModuleLocked(id)
 	if !registeredProviderSource(id) {
 		return nil, errors.New("模块已写入但未能加载，详见诊断日志")
@@ -167,6 +202,14 @@ func (engine *nativeEngine) uninstallModule(name string) (map[string]any, error)
 	if err := d.markBundledRemoved(name, true); err != nil {
 		return nil, err
 	}
+	// 卸载即解除用户锁定：这样下次无论从内置还是别处装，都按新来源重新判定。
+	if err := d.markModulePinned(name, false); err != nil {
+		return nil, err
+	}
+	// 清掉缓存目录里可能残存的暂存安装包。这是「明明卸载了，装新版本却还是读到旧包」
+	// 的常见来源——暂存 zip 按随机 token 命名，跟模块目录分离，之前卸载从不清理，
+	// 只有手动清缓存才会消失。
+	_ = os.RemoveAll(filepath.Join(engine.cacheDirectory, modulePackageFolder))
 	d.reloadModuleLocked(name)
 	return map[string]any{"sources": engine.sourceList()}, nil
 }

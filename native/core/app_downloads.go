@@ -329,6 +329,45 @@ func (manager *nativeDownloads) enqueueContext(ctx context.Context, input native
 	return len(added) + repaired, nil
 }
 
+// eraseSource 永久删除某个站源的全部下载任务及其文件。
+// 活跃任务标记 removing 并取消，由 run 的收尾逻辑删文件；其余任务直接删文件与记录。
+func (manager *nativeDownloads) eraseSource(source string) error {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.loadErr != nil {
+		return manager.loadErr
+	}
+	if manager.moving {
+		return errors.New("下载目录正在迁移或队列已关闭，请稍后重试")
+	}
+	var cancelIDs []string
+	for id, job := range manager.jobs {
+		if job.Drama.Source != source {
+			continue
+		}
+		if manager.active[id] != nil || manager.converting[id] {
+			job.State, job.Error = "removing", ""
+			cancelIDs = append(cancelIDs, id)
+			continue
+		}
+		if err := manager.removeFiles(*job); err != nil && !os.IsNotExist(err) {
+			job.Error = "文件无法删除，请在下载列表里手动清理"
+			continue
+		}
+		delete(manager.jobs, id)
+	}
+	if err := manager.saveLocked(); err != nil {
+		return err
+	}
+	for _, id := range cancelIDs {
+		if cancel := manager.active[id]; cancel != nil {
+			cancel()
+		}
+	}
+	manager.scheduleLocked()
+	return nil
+}
+
 func (manager *nativeDownloads) control(id, action string) error {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
