@@ -9,7 +9,9 @@ let activeBase = SITE;
 const BOUNCE = 'https://lk1.supremejav.com/supjav.php?c=';
 const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-const SERVER_ORDER = ['EVS', 'FST', 'VAS', 'VOE', 'TV', 'ST'];
+// VOE 的嵌入域名是随机词（如 arianathankspecial.com），模块清单的通配
+// 只支持固定后缀，覆盖不到，直接跳过省时间。
+const SERVER_ORDER = ['EVS', 'FST', 'VAS', 'TV', 'ST'];
 
 const CATEGORIES = [
   { id: 'latest', name: '最近更新', path: '/' },
@@ -720,51 +722,67 @@ function resolveFromHtml(html, id) {
   if (servers.length === 0) throw new Error('页面里没有找到播放线路');
 
   const failures = [];
+  const resolved = [];
+
+  // 最多解析 3 条线路：够切换，又不至于让首次播放等太久
   for (const server of servers) {
+    if (resolved.length >= 3) break;
     try {
       const stream = resolveServer(server);
-      const credentials = {
-        origin: stream.origin,
+      resolved.push({
+        name: server.name,
+        url: stream.url,
         referer: stream.referer,
-        userAgent: UA,
-      };
-
-      // 必须抓到有效播放列表才算成功——只拿到裸地址播放器播不了
-      let media = null;
-      try {
-        media = host.prepareWebMedia(
-          { url: stream.url, referer: stream.referer, quality: 1080, credentials: credentials },
-          'SupJav'
-        );
-      } catch (e) {
-        failures.push(server.name + ': 抓播放列表失败 ' + String((e && e.message) || e).slice(0, 40));
-        continue;
-      }
-
-      const isDirect = /\.mp4(\?|$)/i.test(String((media && media.url) || ''));
-      if (!media || !media.url) {
-        failures.push(server.name + ': 没返回地址');
-        continue;
-      }
-      if (!media.playlist && !isDirect) {
-        // 没有播放列表又不是 .mp4 直链，一律视为坏地址，换下一条线路
-        failures.push(server.name + ': 拿到地址但没有播放列表');
-        continue;
-      }
-
-      // 只把主力线路记成"上次成功"，避免辅助线路拿到坏地址后被长期优先
-      if (server.name === 'FST' || server.name === 'EVS') {
-        try { host.saveState('lastServer', server.name); } catch (_) {}
-      }
-      return media;
+        origin: stream.origin,
+      });
     } catch (error) {
-      failures.push(server.name + ': ' + String((error && error.message) || error).slice(0, 50));
+      failures.push(server.name + ': ' + String((error && error.message) || error).slice(0, 45));
     }
   }
 
-  throw new Error('所有线路都无法播放 → ' + failures.join(' | '));
-}
-// 播放地址的短时缓存窗口：embed 播放器签发的地址有时效，
+  if (resolved.length === 0) {
+    throw new Error('所有线路都无法播放 → ' + failures.join(' | '));
+  }
+
+  // 主力线路：抓播放列表，做到秒开
+  const primary = resolved[0];
+  const primaryCredentials = {
+    origin: primary.origin,
+    referer: primary.referer,
+    userAgent: UA,
+  };
+  let media = null;
+  try {
+    media = host.prepareWebMedia(
+      { url: primary.url, referer: primary.referer, quality: 1080, credentials: primaryCredentials },
+      'SupJav'
+    );
+  } catch (_) {
+    media = {
+      url: primary.url,
+      referer: primary.referer,
+      quality: 1080,
+      credentials: primaryCredentials,
+    };
+  }
+
+  // 其余线路挂成 variants：不抓播放列表，用户切过去时播放器自己拉，
+  // 这样多一条备用线路几乎不增加首播等待。
+  const variants = [];
+  for (let i = 1; i < resolved.length; i++) {
+    const v = resolved[i];
+    variants.push({
+      url: v.url,
+      referer: v.referer,
+      quality: 720,
+      credentials: { origin: v.origin, referer: v.referer, userAgent: UA },
+    });
+  }
+  if (variants.length > 0) media.variants = variants;
+
+  try { host.saveState('lastServer', primary.name); } catch (_) {}
+  return media;
+}// 播放地址的短时缓存窗口：embed 播放器签发的地址有时效，
 // 5 分钟太长（会拿到过期地址导致播放器报错），90 秒是保守值。
 var READY_TTL_MS = 90 * 1000;
 
@@ -786,6 +804,7 @@ function resolveMedia(task) {
           quality: 1080,
           durationMs: Number(m.durationMs || 0),
           credentials: m.credentials || undefined,
+          variants: m.variants || undefined,
         };
       }
     }
@@ -817,6 +836,7 @@ function resolveMedia(task) {
         durationMs: media.durationMs || 0,
         at: Date.now(),
         credentials: media.credentials || null,
+        variants: media.variants || null,
       }),
       READY_TTL_MS
     );
