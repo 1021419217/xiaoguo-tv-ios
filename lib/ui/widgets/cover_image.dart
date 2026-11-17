@@ -357,7 +357,7 @@ class _CoverImageState extends State<CoverImage> {
       if (snapshot.hasError || !snapshot.hasData) return _failure(null);
       final path = snapshot.data!;
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => CoverShapes.learn(widget.drama.source, path),
+        (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
       );
       return Image.file(
         File(path),

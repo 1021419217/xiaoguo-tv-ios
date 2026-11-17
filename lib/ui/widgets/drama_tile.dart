@@ -135,6 +135,7 @@ class DramaTile extends StatelessWidget {
     this.showScore = false,
     this.exploreBlur = false,
     this.wide = false,
+    this.aspect,
   });
   final Drama drama;
   final VoidCallback onTap;
@@ -142,6 +143,7 @@ class DramaTile extends StatelessWidget {
   final bool showScore;
   final bool exploreBlur;
   final bool wide;
+  final double? aspect;
   final String? subtitle;
   final int? rank;
   final VoidCallback? onMore;
@@ -184,7 +186,7 @@ class DramaTile extends StatelessWidget {
           ? null
           : heroScope,
     ),
-    aspect: wide ? 16 / 9 : 2 / 3,
+    aspect: aspect ?? (wide ? 16 / 9 : 2 / 3),
     label:
         '${rank == null ? '' : '第$rank名，'}'
         '${drama.title}，${drama.episodes}集${drama.vip ? '，VIP' : ''}'

@@ -117,8 +117,17 @@ class DramaSliverGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
     valueListenable: CoverShapes.revision,
-    builder: (context, _, _) => _grid(context),
+    builder: (context, _, _) => _layout(context),
   );
+
+  Widget _layout(BuildContext context) {
+    final source = items.isEmpty ? '' : items.first.source;
+    if (AppScope.formFactorOf(context) == FormFactor.phone &&
+        CoverShapes.isMixed(source)) {
+      return _masonry(context);
+    }
+    return _grid(context);
+  }
 
   Widget _grid(BuildContext context) {
     final wide = items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
@@ -129,36 +138,103 @@ class DramaSliverGrid extends StatelessWidget {
     return SliverGrid.builder(
       gridDelegate: dramaGridDelegate(context, width, wide: wide),
       itemCount: items.length,
-      itemBuilder: (context, index) {
-        final drama = items[index];
-        final tile = Focus(
-          key: ValueKey(drama.id),
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: (_, event) =>
-              wrapGridRow(index, columns, items.length, event),
-          child: DramaTile(
-            drama: drama,
-            wide: wide,
-            rank: rankOf?.call(drama),
-            autofocus: autofocus && index == 0,
-            heroScope: heroIndex[drama.id] == index ? heroScope : null,
-            showScore: showScore,
-            exploreBlur: exploreBlur,
-            onTap: () => onOpen(drama),
-            onMore: onMore == null ? null : () => onMore!(drama),
-          ),
-        );
-        final played = entered;
-        if (played == null) return tile;
-        return EnterOnce(
-          key: ValueKey(drama.id),
-          id: drama.id,
-          played: played,
-          index: index,
-          child: tile,
-        );
-      },
+      itemBuilder: (context, index) => _cell(
+        context,
+        index,
+        aspect: wide ? 16 / 9 : 2 / 3,
+        columns: columns,
+        heroIndex: heroIndex,
+      ),
+    );
+  }
+
+  Widget _masonry(BuildContext context) {
+    const spacing = 10.0;
+    final tileWidth = (width - 20 - spacing) / 2;
+    final heroIndex = heroScope == null
+        ? const <String, int>{}
+        : firstIndexById(items, (drama) => drama.id);
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftHeight = 0.0;
+    var rightHeight = 0.0;
+    for (var index = 0; index < items.length; index++) {
+      final drama = items[index];
+      final ratio = CoverShapes.ratioOf(drama.id);
+      final aspect = ratio > 0 ? ratio : 2 / 3;
+      final cell = Padding(
+        padding: const EdgeInsets.only(bottom: spacing),
+        child: _cell(
+          context,
+          index,
+          aspect: aspect,
+          columns: 2,
+          heroIndex: heroIndex,
+        ),
+      );
+      final estimate = DramaTile.extentFor(
+        context,
+        tileWidth,
+        wide: aspect > 1.25,
+      );
+      if (leftHeight <= rightHeight) {
+        left.add(cell);
+        leftHeight += estimate + spacing;
+      } else {
+        right.add(cell);
+        rightHeight += estimate + spacing;
+      }
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: tileWidth, child: Column(children: left)),
+            const SizedBox(width: spacing),
+            SizedBox(width: tileWidth, child: Column(children: right)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(
+    BuildContext context,
+    int index, {
+    required double aspect,
+    required int columns,
+    required Map<String, int> heroIndex,
+  }) {
+    final drama = items[index];
+    final tile = Focus(
+      key: ValueKey(drama.id),
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) =>
+          wrapGridRow(index, columns, items.length, event),
+      child: DramaTile(
+        drama: drama,
+        aspect: aspect,
+        wide: aspect > 1.25,
+        rank: rankOf?.call(drama),
+        autofocus: autofocus && index == 0,
+        heroScope: heroIndex[drama.id] == index ? heroScope : null,
+        showScore: showScore,
+        exploreBlur: exploreBlur,
+        onTap: () => onOpen(drama),
+        onMore: onMore == null ? null : () => onMore!(drama),
+      ),
+    );
+    final played = entered;
+    if (played == null) return tile;
+    return EnterOnce(
+      key: ValueKey(drama.id),
+      id: drama.id,
+      played: played,
+      index: index,
+      child: tile,
     );
   }
 }
