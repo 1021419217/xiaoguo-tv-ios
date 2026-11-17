@@ -46,12 +46,16 @@ class DramaCover extends StatelessWidget {
     this.heroScope,
     this.showScore = false,
     this.exploreBlur = false,
+    this.crop = false,
+    this.alignment = Alignment.center,
   });
   final Drama drama;
   final double radius;
   final bool details;
   final bool exploreBlur;
   final bool showScore;
+  final bool crop;
+  final Alignment alignment;
   final int? rank;
   final String? heroScope;
   static const imagesDisabled = bool.fromEnvironment('DISABLE_REMOTE_IMAGES');
@@ -74,29 +78,48 @@ class DramaCover extends StatelessWidget {
       children: [
         placeholder,
         if (!imagesDisabled && drama.id.isNotEmpty) ...[
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(
-              sigmaX: 18,
-              sigmaY: 18,
-              tileMode: TileMode.clamp,
-            ),
-            child: Opacity(
-              opacity: 0.6,
-              child: CoverImage(
-                key: ValueKey('${drama.id}\u0000${drama.cover}\u0000fill'),
-                drama: drama,
-                repository: AppScope.of(context).repository,
-                placeholder: const SizedBox.shrink(),
-                fit: BoxFit.cover,
+          if (!crop)
+            ClipRect(
+              child: Transform.scale(
+                scale: 1.15,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: 28,
+                    sigmaY: 28,
+                    tileMode: TileMode.clamp,
+                  ),
+                  child: Opacity(
+                    opacity: 0.5,
+                    child: CoverImage(
+                      key: ValueKey('${drama.id}\u0000${drama.cover}\u0000fill'),
+                      drama: drama,
+                      repository: AppScope.of(context).repository,
+                      placeholder: const SizedBox.shrink(),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+          if (!crop)
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x12000000), Color(0x33000000)],
+                  ),
+                ),
+              ),
+            ),
           CoverImage(
             key: ValueKey('${drama.id}\u0000${drama.cover}'),
             drama: drama,
             repository: AppScope.of(context).repository,
             placeholder: const SizedBox.shrink(),
-            fit: BoxFit.contain,
+            alignment: alignment,
+            fit: crop ? BoxFit.cover : BoxFit.contain,
           ),
         ],
       ],
@@ -221,12 +244,14 @@ class CoverImage extends StatefulWidget {
     required this.placeholder,
     this.retryable = true,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
   });
   final Drama drama;
   final AppRepository repository;
   final Widget placeholder;
   final bool retryable;
   final BoxFit fit;
+  final Alignment alignment;
 
   @override
   State<CoverImage> createState() => _CoverImageState();
@@ -362,6 +387,7 @@ class _CoverImageState extends State<CoverImage> {
       return Image.file(
         File(path),
         fit: widget.fit,
+        alignment: widget.alignment,
         cacheWidth: _decodeWidth,
         excludeFromSemantics: true,
         frameBuilder: fadeInFrameBuilder,

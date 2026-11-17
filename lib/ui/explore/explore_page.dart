@@ -27,6 +27,7 @@ import '../widgets/source_bar.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../widgets/status_view.dart';
 import 'source_actions.dart';
+import '../widgets/cover_backdrop.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key, required this.store});
@@ -445,6 +446,27 @@ class ExplorePageState extends State<ExplorePage> {
     );
   }
 
+  Widget _pageBackdrop(Drama drama) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return IgnorePointer(
+      child: CoverBackdrop(
+        drama: drama,
+        sigma: 48,
+        opacity: 0.22,
+        overlay: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0, 0.45, 1],
+          colors: [
+            surface.withValues(alpha: 0.72),
+            surface.withValues(alpha: 0.92),
+            surface,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _grid(
     ExploreFeed explore,
     DramaFeed feed,
@@ -522,6 +544,8 @@ class ExplorePageState extends State<ExplorePage> {
         );
         return Stack(
           children: [
+            if (!television && items.isNotEmpty)
+              Positioned.fill(child: _pageBackdrop(items.first)),
             AutoLoadMore(
               feed: feed,
               child: television

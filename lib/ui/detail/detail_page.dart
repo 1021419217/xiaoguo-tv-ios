@@ -597,10 +597,11 @@ class _DetailPageState extends State<DetailPage> {
     const m = _phone;
     final top = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final drama = details.drama;
+    final landscape = CoverShapes.isLandscape(drama.source);
     final heroWidth = MediaQuery.sizeOf(context).width - 40;
-    final heroHeight = CoverShapes.isLandscape(drama.source)
+    final heroHeight = landscape
         ? heroWidth * 9 / 16
-        : math.min(heroWidth * 1.2, 380.0);
+        : math.min(heroWidth * 1.25, 460.0);
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: _appBar(details, kToolbarHeight),
@@ -622,10 +623,37 @@ class _DetailPageState extends State<DetailPage> {
                       SizedBox(
                         width: heroWidth,
                         height: heroHeight,
-                        child: DramaCover(
-                          drama: drama,
-                          radius: 16,
-                          details: false,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            DramaCover(
+                              drama: drama,
+                              radius: 16,
+                              details: false,
+                              crop: true,
+                              alignment: landscape
+                                  ? Alignment.center
+                                  : Alignment.topCenter,
+                            ),
+                            const IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(16),
+                                  ),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    stops: [0.7, 1],
+                                    colors: [
+                                      Color(0x00000000),
+                                      Color(0x59000000),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 16),
