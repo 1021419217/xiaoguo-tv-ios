@@ -610,7 +610,6 @@ class PlaybackSession extends ChangeNotifier {
     await platform.setProperty('network-timeout', '20');
     if (!plan.local) {
       await platform.setProperty('demuxer-readahead-secs', '30');
-      await platform.setProperty('cache-pause-wait', '2');
     }
   }
 
