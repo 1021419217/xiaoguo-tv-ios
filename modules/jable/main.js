@@ -7,6 +7,7 @@ const MIRRORS = ['https://jable.tv', 'https://fs1.app'];
 const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const LANG = 'kt_rt_lang=zh';
+const SITE_HOST = 'jable.tv';
 
 // 只保留站点上确实存在的入口：以前写的 /categories/uncensored/ 是 404，
 // 点进去必然报错，已换成站点导航里真实存在的页面。
@@ -32,15 +33,82 @@ function originOf(address) {
   return matched ? matched[1] : SITE;
 }
 
-function fetchPage(path, referer) {
-  const response = host.fetchText({
-    url: SITE + path,
-    referer: referer || SITE + '/',
-    userAgent: UA,
-    cookie: LANG,
-    mirrors: MIRRORS.map((mirror) => mirror + path),
+// Jable 也挂在 Cloudflare 后面：纯 HTTP 会拿到 403「Just a moment」。
+// App 里做过站点验证后，host.challengeCookie 给出 cf_clearance，
+// host.challengeUA 给出解验证时 WebView 的真实 UA（cf_clearance 绑 UA，
+// 必须成对使用）。以前这里只带一句写死的语言 cookie，验证完了也照样 403，
+// 而且 fetchText 把 403 变成一句普通错误，首页连「去验证」都不给。
+function agent() {
+  const learned = host.challengeUA(SITE_HOST);
+  return learned || UA;
+}
+
+function cookieHeader() {
+  const learned = host.challengeCookie(SITE_HOST);
+  return learned ? LANG + '; ' + learned : LANG;
+}
+
+function looksLikeChallenge(status, text) {
+  if (status === 403 || status === 429 || status === 503) return true;
+  const head = String(text || '').slice(0, 6000);
+  return /_cf_chl_opt|cf-chl-|just a moment|attention required|checking your browser|verify you are human|请稍候|請稍候/i.test(
+    head
+  );
+}
+
+function request(base, path, referer) {
+  const response = host.fetch({
+    url: base + path,
+    headers: {
+      Accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Upgrade-Insecure-Requests': '1',
+      Referer: referer || SITE + '/',
+      'User-Agent': agent(),
+      Cookie: cookieHeader(),
+    },
+    anyStatus: true,
+    followRedirects: true,
+    timeoutMs: 25000,
   });
-  return { text: response.body || '', base: originOf(response.url) };
+  return {
+    status: response.status || 0,
+    text: response.body || '',
+    base: base,
+  };
+}
+
+function fetchPage(path, referer) {
+  let status = 0;
+  let text = '';
+  let failed = false;
+  for (const base of MIRRORS) {
+    try {
+      const response = request(base, path, referer);
+      if (!looksLikeChallenge(response.status, response.text) && response.status < 400) {
+        return { text: response.text, base: originOf(response.base) };
+      }
+      status = response.status;
+      text = response.text;
+      failed = true;
+    } catch (_) {
+      failed = true;
+    }
+  }
+  if (!failed) throw new Error('Jable 无法连接，请检查网络');
+  if (looksLikeChallenge(status, text)) {
+    const error = new Error(
+      cookieHeader() !== LANG
+        ? '站点仍然要求浏览器验证（通行 cookie 未被接受），请再验证一次'
+        : 'Jable 要求浏览器验证，请点「去验证」完成验证后再试'
+    );
+    error.retryable = true;
+    throw error;
+  }
+  const error = new Error('Jable 返回 HTTP ' + status);
+  error.retryable = status >= 500 || status === 408;
+  throw error;
 }
 
 function pageURL(base, page) {
@@ -449,8 +517,8 @@ function resolveMedia(task) {
     credentials: {
       origin: response.base,
       referer: referer,
-      userAgent: UA,
-      cookie: LANG,
+      userAgent: agent(),
+      cookie: cookieHeader(),
     },
   };
 }

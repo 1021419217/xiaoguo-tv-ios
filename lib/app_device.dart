@@ -37,6 +37,20 @@ class AppDevice {
       return null;
     }
   }
+
+  /// 用那台验证过的 WKWebView 抓页面 HTML（指纹与过验证那次一致）。
+  /// 返回原始 HTML；失败返回 null。仅在 iOS 有效。
+  static Future<String?> webFetch(String url, String host) async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    try {
+      return await channel
+          .invokeMethod<String>('webFetch', {'url': url, 'host': host})
+          .timeout(const Duration(seconds: 25));
+    } catch (_) {
+      return null;
+    }
+  }
+
   static var _televisionMode = false;
   static var _phoneMode = false;
 

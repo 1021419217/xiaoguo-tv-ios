@@ -104,6 +104,10 @@ abstract class AppRepository {
     String cookie, {
     String userAgent = '',
   }) async => false;
+  /// 注入 WebView 抓回的页面，模块取页时命中即用。
+  Future<bool> setWebPage(String url, String body) async => false;
+  /// 取出被 Cloudflare 挑战、待 WebView 重抓的 URL。
+  Future<List<String>> pendingWebPages() async => const [];
   Future<void> cancelCatalog() async {}
   Future<void> cancelSuggestions() async {}
   Future<void> cancelRecommendations() async {}
@@ -833,6 +837,42 @@ class NativeRepository extends AppRepository {
     access?.sourcesChanged();
   }
 
+  @override
+  Future<bool> saveChallenge(
+    String host,
+    String cookie, {
+    String userAgent = '',
+  }) async {
+    // 这一步以前只有基类的空实现，验证拿到的 cookie 从来没进过核心，
+    // 于是「验证完成」之后模块照旧 403——表现就是验证了也没内容。
+    if (host.isEmpty || cookie.isEmpty) return false;
+    final result = await _call({
+      'action': 'saveChallenge',
+      'host': host,
+      'cookie': cookie,
+      'ua': userAgent,
+    });
+    if (result['saved'] != true) return false;
+    return true;
+  }
+  @override
+  Future<bool> setWebPage(String url, String body) async {
+    if (url.isEmpty || body.isEmpty) return false;
+    final result = await _call({
+      'action': 'setWebPage',
+      'pageUrl': url,
+      'body': body,
+    });
+    return result['saved'] == true;
+  }
+  @override
+  Future<List<String>> pendingWebPages() async {
+    final result = await _call({'action': 'pendingWebPages'});
+    return [
+      for (final item in result['urls'] as List? ?? const [])
+        if (item is String) item,
+    ];
+  }
   @override
   Future<List<SourceModule>> modules() async {
     _adminPermission();

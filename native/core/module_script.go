@@ -555,6 +555,14 @@ func (p *jsProvider) fetchText(ctx context.Context, request jsTextRequest) (jsTe
 	if err := p.allowedAddress(request.URL); err != nil {
 		return jsTextResponse{}, err
 	}
+	// 验证过的站点：优先用 App 那台真 WebView 抓回的页面。
+	// tls-client 的 Safari 指纹和真 WebKit 对不上，Cloudflare 会二次拦截，
+	// 缓存命中就等于复用了「过验证那次」的指纹会话。
+	if hostOfURL(request.URL) != "" && ChallengeCookie(hostOfURL(request.URL)) != "" {
+		if body, ok := WebPage(request.URL); ok {
+			return jsTextResponse{Body: body, URL: request.URL}, nil
+		}
+	}
 	var mirrors []string
 	for _, mirror := range request.Mirrors {
 		if p.allowedAddress(mirror) == nil {
@@ -563,12 +571,23 @@ func (p *jsProvider) fetchText(ctx context.Context, request jsTextRequest) (jsTe
 	}
 	response, err := p.host.FetchText(ctx, TextRequest{URL: request.URL, Referer: request.Referer, UserAgent: request.UserAgent,
 		Cookie: request.Cookie, NoCache: request.NoCache, Body: moduleBody(request.Body), Mirrors: mirrors})
+	// 被 Cloudflare 挑战：记下 URL，待 App 用验证过的 WebView 重抓。
+	// 不要求已验证——首次进入正是先被挑战、验证后才回来重抓的。
+	if looksLikeChallengeBody(response.Body) {
+		NoteChallenged(request.URL)
+	}
 	return jsTextResponse{Body: response.Body, URL: response.URL}, err
 }
 
 func (p *jsProvider) fetch(ctx context.Context, request jsFetchRequest) (jsFetchResponse, error) {
 	if err := p.allowedAddress(request.URL); err != nil {
 		return jsFetchResponse{}, err
+	}
+	// 同 fetchText：验证过的站点先查 WebView 抓回的页面缓存。
+	if hostOfURL(request.URL) != "" && ChallengeCookie(hostOfURL(request.URL)) != "" {
+		if body, ok := WebPage(request.URL); ok {
+			return jsFetchResponse{Status: 200, Body: body}, nil
+		}
 	}
 	if request.Background {
 		ctx = context.WithValue(ctx, BackgroundCatalogKey{}, true)
@@ -579,6 +598,11 @@ func (p *jsProvider) fetch(ctx context.Context, request jsFetchRequest) (jsFetch
 		FollowRedirects: request.FollowRedirects, AnyStatus: request.AnyStatus, AcceptJSONStatus: request.AcceptStatus, Ticket: request.Ticket,
 		Direct: request.Direct,
 	})
+	// 被 Cloudflare 挑战（403/429/503 或挑战特征）：记下 URL 供 WebView 重抓。
+	if response.Status == 403 || response.Status == 429 || response.Status == 503 ||
+		looksLikeChallengeBody(string(response.Body)) {
+		NoteChallenged(request.URL)
+	}
 	if err != nil {
 		return jsFetchResponse{Status: response.Status, Body: string(response.Body), Blocked: response.Blocked, Oversized: response.Oversized}, err
 	}

@@ -1,7 +1,7 @@
 {
   "id": "jable",
   "name": "Jable",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Jable 影视 · 直链 HLS",
   "runtime": "js",
   "api": 1,

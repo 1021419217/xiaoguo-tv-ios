@@ -63,6 +63,18 @@ import WebKit
             result(["cookie": cookie, "ua": agent ?? ""])
           }
           return
+        case "webFetch":
+          // 用验证过的 WebView 抓页面，指纹与过验证那次一致，绕开 Go 客户端被拦的问题。
+          guard let urlText = arguments?["url"] as? String,
+                let address = URL(string: urlText) else {
+            result(nil)
+            return
+          }
+          let host = (arguments?["host"] as? String) ?? address.host ?? ""
+          ChallengeWebView.shared.webFetch(url: address, host: host) { html in
+            result(html)
+          }
+          return
         case "getBrightness":
           result(self.screen.map { Double($0.brightness) })
           return
@@ -139,6 +151,86 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
   private var poll: Timer?
   private var deadline: Date?
   private var finished = false
+
+  /// 验证通过的 WKWebView 按 host 常驻。Cloudflare 的放行绑着整条浏览器指纹
+  /// （TLS/JS/HTTP2），Go 的 tls-client 模拟不出来。同一台 WebView 再发 fetch 才
+  /// 能和「过验证那次」的指纹完全一致——这正是 iDuanJu 复用 WebView 取页的做法。
+  private var solved: [String: WKWebView] = [:]
+
+  /// 用一个已验证的 WebView 抓页面 HTML。若该 host 还没有常驻 WebView，
+  /// 就用持久化 cookie store 新建一台（验证 cookie 已同步进去），加载目标页后取文本。
+  func webFetch(url: URL, host: String, completion: @escaping (String?) -> Void) {
+    DispatchQueue.main.async {
+      let key = Self.hostKey(host)
+      let web: WKWebView
+      if let cached = self.solved[key] {
+        web = cached
+      } else {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        web = WKWebView(frame: .zero, configuration: config)
+        self.solved[key] = web
+      }
+      // 用页面上下文里的 fetch 取原始 HTML：和验证同 origin、同 cookie、同指纹。
+      // 目标页若还没加载，先 load 一次；onFinish 后再取。
+      self.fetchPage(web, url: url, completion: completion)
+    }
+  }
+
+  private static func hostKey(_ host: String) -> String {
+    var key = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+    if key.hasPrefix("www.") { key = String(key.dropFirst(4)) }
+    return key
+  }
+
+  private static func keyWindow() -> UIWindow? {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first { $0.isKeyWindow }
+  }
+
+  private func fetchPage(_ web: WKWebView, url: URL, completion: @escaping (String?) -> Void) {
+    // callAsyncJavaScript 在页面 world 执行 fetch，带上同源 cookie；返回的是原始文本，
+    // 交给 Go 模块按服务端 HTML 解析（和验证前模块拿到的结构一致）。
+    let js = """
+    (async function(u) {
+      try {
+        const r = await fetch(u, {credentials: 'include', cache: 'no-store'});
+        return await r.text();
+      } catch (e) { return ''; }
+    })(arguments[0])
+    """
+    func doFetch() {
+      web.callAsyncJavaScript(js, arguments: [url.absoluteString], in: nil, contentWorld: .page) { result in
+        switch result {
+        case .success(let value as? String):
+          let html = value ?? ""
+          completion(html.isEmpty ? nil : html)
+        default:
+          completion(nil)
+        }
+      }
+    }
+    func waitAndFetch(_ tries: Int) {
+      if !web.isLoading || tries >= 50 {
+        doFetch()
+      } else {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          waitAndFetch(tries + 1)
+        }
+      }
+    }
+    // fetch 必须和目标同源才带得上 cf_clearance。常驻的验证 WebView 通常就在
+    // 该 host 上；若不在（比如验证的是主域、要抓的是镜像），先导航过去再取。
+    let sameHost = web.url?.host?.lowercased() == url.host?.lowercased()
+    if sameHost {
+      doFetch()
+    } else {
+      web.load(URLRequest(url: url))
+      waitAndFetch(0)
+    }
+  }
 
   func solve(url: URL, host: String, completion: @escaping (String?, String?) -> Void) {
     DispatchQueue.main.async {
@@ -323,8 +415,26 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     let callback = completion
     completion = nil
     let page = controller
-    webView?.stopLoading()
-    webView?.navigationDelegate = nil
+    let web = webView
+    // 拿到通行 cookie 就说明这台 WebView 过了验证，留着复用它的指纹取页。
+    // 从验证页视图里摘出来、垫到 keyWindow 底层保活（离屏后 WKWebView 的
+    // 渲染与 JS 上下文可能被系统回收，垫在底层既不被看见也不会被收走）。
+    if cookie != nil, let web = web {
+      let key = Self.hostKey(host)
+      // 同一 host 若已有旧的常驻 WebView，先移除，避免叠加。
+      solved[key]?.removeFromSuperview()
+      if let window = Self.keyWindow() {
+        web.frame = window.bounds
+        web.alpha = 0.01
+        web.isUserInteractionEnabled = false
+        window.insertSubview(web, at: 0)
+      }
+      web.navigationDelegate = nil
+      solved[key] = web
+    } else {
+      web?.stopLoading()
+      web?.navigationDelegate = nil
+    }
     webView = nil
     statusLabel = nil
     controller = nil

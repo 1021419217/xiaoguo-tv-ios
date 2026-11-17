@@ -115,6 +115,8 @@ type nativeInput struct {
 	Host            string                  `json:"host"`
 	Cookie          string                  `json:"cookie"`
 	UserAgent       string                  `json:"ua"`
+	PageURL         string                  `json:"pageUrl"`
+	Body            string                  `json:"body"`
 }
 
 type nativeCatalogResult struct {
@@ -445,10 +447,19 @@ func nativeDispatch(input nativeInput) (any, error) {
 		if key == "" {
 			return map[string]any{"saved": false}, nil
 		}
+		// 验证凭据变了，旧的缓存页清掉，避免继续喂上一轮抓的旧 HTML。
+		ClearWebPages()
 		_ = engine.downloader.SaveState(challengeCookieState, dumpChallengeCookies())
 		return map[string]any{"saved": true}, nil
 	case "challenge":
 		return map[string]any{"cookie": ChallengeCookie(input.Host), "ua": ChallengeUserAgent(input.Host)}, nil
+	case "setWebPage":
+		// 验证过的 WebView 抓回的页面，模块取页时命中即用，绕开对不上的 TLS 指纹。
+		SetWebPage(input.PageURL, input.Body)
+		return map[string]any{"saved": true}, nil
+	case "pendingWebPages":
+		// 取出本轮被 Cloudflare 挑战、待 WebView 重抓的 URL（取完即清空）。
+		return map[string]any{"urls": TakePendingWebPages()}, nil
 	case "storage":
 		return engine.storage()
 	case "cache":

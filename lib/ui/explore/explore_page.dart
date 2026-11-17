@@ -369,12 +369,46 @@ class ExplorePageState extends State<ExplorePage> {
   Future<void> _verify(SourceSite site, DramaFeed feed) async {
     final host = Uri.tryParse(site.baseUrl)?.host ?? '';
     if (host.isEmpty) return;
+    final repository = AppScope.of(context).repository;
     final solved = await AppDevice.solveChallenge(site.baseUrl, host);
-    if (solved == null || !mounted) return;
-    final saved = await AppScope.of(
-      context,
-    ).repository.saveChallenge(host, solved.cookie, userAgent: solved.userAgent);
-    if (saved) await feed.reload(force: true);
+    if (!mounted) return;
+    if (solved == null) {
+      _tell('没有拿到通行 cookie，可以再点一次「去验证」');
+      return;
+    }
+    final saved = await repository.saveChallenge(
+      host,
+      solved.cookie,
+      userAgent: solved.userAgent,
+    );
+    if (!mounted) return;
+    if (!saved) _tell('验证结果没能写入，请再试一次');
+
+    // 关键一步：Go 的客户端指纹和真 WebKit 对不上，光有 cookie 重发还是会被拦。
+    // 把刚才被挑战的页面 URL 交给那台验证过的 WKWebView，用同一指纹抓回 HTML，
+    // 注入 Go 页缓存——模块下次取页命中缓存，就绕开了 TLS 指纹这一关。
+    final pending = await repository.pendingWebPages();
+    var primed = 0;
+    for (final url in pending) {
+      final pageHost = Uri.tryParse(url)?.host ?? host;
+      final html = await AppDevice.webFetch(url, pageHost);
+      if (html == null || html.isEmpty) continue;
+      if (await repository.setWebPage(url, html)) primed++;
+    }
+    if (!mounted) return;
+    if (primed > 0) {
+      _tell('已载入 $primed 页，正在重试…');
+    }
+    await feed.reload(force: true);
+  }
+
+  void _tell(String text) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1800),
+        content: Text(text),
+      ),
+    );
   }
 
   Widget _status(DramaFeed feed, SourceSite? site) {
