@@ -145,10 +145,12 @@ class AppDevice {
       await SystemChrome.setPreferredOrientations(switch (_televisionMode
           ? PlayerOrientation.landscape
           : orientation) {
-        PlayerOrientation.landscape ||
-        PlayerOrientation.lockedLandscape => const [
+        PlayerOrientation.landscape => const [
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
+        ],
+        PlayerOrientation.lockedLandscape => const [
+          DeviceOrientation.landscapeLeft,
         ],
         PlayerOrientation.portrait || PlayerOrientation.lockedPortrait =>
           const [DeviceOrientation.portraitUp],

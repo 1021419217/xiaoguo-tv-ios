@@ -345,7 +345,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     desktopPlatform
         ? setWindowFullScreen(!full)
         : AppDevice.setPlayerOrientation(
-            full ? PlayerOrientation.portrait : PlayerOrientation.landscape,
+            full ? PlayerOrientation.portrait : PlayerOrientation.lockedLandscape,
           ),
   );
 
