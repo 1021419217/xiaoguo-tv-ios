@@ -1,13 +1,14 @@
 {
   "id": "supjav",
   "name": "SupJav",
-  "version": "1.0.3",
-  "description": "SupJav 影视 · 多线路解析",
+  "version": "1.2.0",
+  "description": "SupJav - JAV streaming with multiple mirrors",
   "runtime": "js",
   "api": 1,
   "adult": true,
   "hosts": [
     "supjav.com",
+    "www.supjav.com",
     "*.supjav.com",
     "supremejav.com",
     "*.supremejav.com",
@@ -26,7 +27,15 @@
     "streamtape.to",
     "*.streamtape.to",
     "javmix.tv",
-    "*.javmix.tv"
+    "*.javmix.tv",
+    "vvaassjjav.xyz",
+    "*.vvaassjjav.xyz",
+    "arianathankspecial.com",
+    "*.arianathankspecial.com",
+    "*.dood.ws",
+    "japopav.tv",
+    "*.japopav.tv",
+    "*.dood.so"
   ],
   "capabilities": [
     "search"
