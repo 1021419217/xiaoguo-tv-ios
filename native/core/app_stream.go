@@ -479,7 +479,12 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	var head []byte
 	if request.Method == http.MethodGet {
 		rangeHeader := strings.TrimSpace(request.Header.Get("Range"))
-		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
+		// 只处理 TS 分片：MP4、播放列表、图片一律不进这段，避免任何误判
+		lowerType := strings.ToLower(response.Header.Get("Content-Type"))
+		looksTS := strings.Contains(lowerType, "mp2t") ||
+			strings.Contains(lowerType, "octet-stream") ||
+			strings.HasSuffix(strings.ToLower(finalURL.Path), ".ts")
+		if looksTS && (rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-")) {
 			head = make([]byte, 4096)
 			n, _ := io.ReadFull(reader, head)
 			head = head[:n]
