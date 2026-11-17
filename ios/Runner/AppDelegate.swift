@@ -194,15 +194,15 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     // callAsyncJavaScript 在页面 world 执行 fetch，带上同源 cookie；返回的是原始文本，
     // 交给 Go 模块按服务端 HTML 解析（和验证前模块拿到的结构一致）。
     let js = """
-    (async function(u) {
+    (async function() {
       try {
         const r = await fetch(u, {credentials: 'include', cache: 'no-store'});
         return await r.text();
       } catch (e) { return ''; }
-    })(arguments[0])
+    })()
     """
     func doFetch() {
-      web.callAsyncJavaScript(js, arguments: [url.absoluteString], in: nil, contentWorld: .page) { result in
+      web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], in: nil, contentWorld: .page) { result in
         switch result {
         case .success(let value as? String):
           let html = value ?? ""
