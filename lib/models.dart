@@ -2,6 +2,12 @@ import 'dart:convert';
 
 const hongguoSourceId = 'hongguo';
 
+/// 封面为横向 16:9 的站源：列表用两列横版卡片，详情页用宽幅大图。
+const landscapeCoverSources = <String>{'jable', 'missav', 'supjav', 'p91'};
+
+bool hasLandscapeCovers(String source) =>
+    landscapeCoverSources.contains(source);
+
 bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 
 class SourceSite {

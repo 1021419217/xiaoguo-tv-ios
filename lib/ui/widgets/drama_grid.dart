@@ -115,7 +115,8 @@ class DramaSliverGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = items.isNotEmpty && SourceSite.byId(items.first.source).adult;
+    final wide =
+        items.isNotEmpty && hasLandscapeCovers(items.first.source);
     final (columns, _, _) = _gridLayout(context, width, wide: wide);
     final heroIndex = heroScope == null
         ? const <String, int>{}

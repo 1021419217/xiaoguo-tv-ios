@@ -591,6 +591,10 @@ class _DetailPageState extends State<DetailPage> {
     const m = _phone;
     final top = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final drama = details.drama;
+    final heroWidth = MediaQuery.sizeOf(context).width - 40;
+    final heroHeight = hasLandscapeCovers(drama.source)
+        ? heroWidth * 9 / 16
+        : math.min(heroWidth * 1.2, 380.0);
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: _appBar(details, kToolbarHeight),
@@ -603,27 +607,28 @@ class _DetailPageState extends State<DetailPage> {
             SliverToBoxAdapter(
               child: _withBackdrop(
                 drama,
-                top + 250,
+                top + heroHeight + 230,
                 Padding(
                   padding: EdgeInsets.fromLTRB(20, top + 4, 20, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        spacing: 16,
-                        children: [
-                          _cover(drama, m),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: _enter(
-                                0,
-                                _followingHeadline(details, m, 6),
-                              ),
-                            ),
-                          ),
-                        ],
+                      SizedBox(
+                        width: heroWidth,
+                        height: heroHeight,
+                        child: DramaCover(
+                          drama: drama,
+                          radius: 16,
+                          details: false,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _enter(0, _headline(details, m)),
+                      const SizedBox(height: 12),
+                      FollowPill(
+                        store: widget.store,
+                        drama: drama,
+                        height: m.follow,
                       ),
                       if (_stats(drama, m) case final stats?)
                         Padding(
