@@ -202,7 +202,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     })()
     """
     func doFetch() {
-      web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], in: nil, contentWorld: .page) { result in
+      web.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], in: nil, contentWorld: .page, completionHandler: { result in
         switch result {
         case .success(let value as? String):
           let html = value ?? ""
@@ -210,7 +210,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         default:
           completion(nil)
         }
-      }
+      })
     }
     func waitAndFetch(_ tries: Int) {
       if !web.isLoading || tries >= 50 {
