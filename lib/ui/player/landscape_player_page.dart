@@ -14,7 +14,7 @@ import '../app_scope.dart';
 import '../downloads/download_actions.dart';
 import '../theme/app_theme.dart';
 import '../theme/motion.dart';
-import '../widgets/contained_slider.dart';
+import '../widgets/seek_bar.dart';
 import '../widgets/motion/motion_widgets.dart';
 import 'cast_page.dart';
 import 'danmaku_overlay.dart';
@@ -1041,60 +1041,38 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
         : 1.0;
     final position = (_seekValue ?? state.position.inMilliseconds.toDouble())
         .clamp(0.0, max);
-    final colors = Theme.of(context).colorScheme;
-    return SliderTheme(
-      data: SliderTheme.of(context).copyWith(
-        trackHeight: 3,
-        padding: EdgeInsets.zero,
-        activeTrackColor: colors.primary,
-        thumbColor: colors.primary,
-        inactiveTrackColor: Colors.white.withValues(alpha: .25),
-        secondaryActiveTrackColor: Colors.white.withValues(alpha: .4),
-        thumbShape: RoundSliderThumbShape(enabledThumbRadius: thumb),
-        overlayShape: SliderComponentShape.noOverlay,
-        trackShape: const RoundedRectSliderTrackShape(),
-      ),
-      child: ContainedSlider(
-        slider: Slider(
-          value: position,
-          max: max,
-          secondaryTrackValue: state.buffer.inMilliseconds.toDouble().clamp(
-            0.0,
-            max,
-          ),
-          semanticFormatterCallback: (value) =>
-              formatClock(Duration(milliseconds: value.round())),
-          onChangeStart: seekable
-              ? (value) {
-                  _seekTimer?.cancel();
-                  _seekTarget = null;
-                  _hideTimer?.cancel();
-                  setState(() {
-                    _dragging = true;
-                    _seekValue = value;
-                  });
-                }
-              : null,
-          onChanged: seekable
-              ? (value) => setState(() => _seekValue = value)
-              : null,
-          onChangeEnd: (value) {
-            _dragging = false;
-            if (seekable) {
-              _seekTarget = value;
-              _seekTimer?.cancel();
-              _seekTimer = Timer(const Duration(seconds: 2), () {
-                if (mounted) setState(_endSeek);
-              });
-              unawaited(session.seekTo(Duration(milliseconds: value.round())));
-              setState(() {});
-            } else {
-              setState(_endSeek);
-            }
-            _scheduleHide();
-          },
-        ),
-      ),
+    return SeekBar(
+      value: position,
+      duration: duration.inMilliseconds.toDouble(),
+      buffered: state.buffer.inMilliseconds.toDouble(),
+      enabled: seekable,
+      showTimes: false,
+      thumbRadius: thumb,
+      onStart: (value) {
+        _seekTimer?.cancel();
+        _seekTarget = null;
+        _hideTimer?.cancel();
+        setState(() {
+          _dragging = true;
+          _seekValue = value;
+        });
+      },
+      onChanged: (value) => setState(() => _seekValue = value),
+      onEnd: (value) {
+        _dragging = false;
+        if (seekable) {
+          _seekTarget = value;
+          _seekTimer?.cancel();
+          _seekTimer = Timer(const Duration(seconds: 2), () {
+            if (mounted) setState(_endSeek);
+          });
+          unawaited(session.seekTo(Duration(milliseconds: value.round())));
+          setState(() {});
+        } else {
+          setState(_endSeek);
+        }
+        _scheduleHide();
+      },
     );
   }
 
