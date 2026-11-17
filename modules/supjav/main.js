@@ -4,22 +4,24 @@
 // 远端 embed 页需要跳转与反混淆，全部在模块里做完，只把最终地址交给播放器。
 
 const SITE = 'https://supjav.com';
+const MIRRORS = ['https://supjav.com', 'https://www.supjav.com'];
+let activeBase = SITE;
 const BOUNCE = 'https://lk1.supremejav.com/supjav.php?c=';
 const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const SERVER_ORDER = ['EVS', 'FST', 'VAS', 'VOE', 'TV', 'ST'];
 
 const CATEGORIES = [
-  { id: 'latest', name: '最近更新', path: '/zh/' },
-  { id: 'popular', name: '热门总榜', path: '/zh/popular' },
-  { id: 'popular-week', name: '本周热门', path: '/zh/popular?sort=week' },
-  { id: 'popular-month', name: '本月热门', path: '/zh/popular?sort=month' },
-  { id: 'chinese-subtitles', name: '中文字幕', path: '/zh/category/chinese-subtitles' },
-  { id: 'censored', name: '有码', path: '/zh/category/censored-jav' },
-  { id: 'uncensored', name: '无码', path: '/zh/category/uncensored-jav' },
-  { id: 'amateur', name: '素人', path: '/zh/category/amateur' },
-  { id: 'reducing-mosaic', name: '破解', path: '/zh/category/reducing-mosaic' },
-  { id: 'english-subtitles', name: '英文字幕', path: '/zh/category/english-subtitles' },
+  { id: 'latest', name: '最近更新', path: '/' },
+  { id: 'popular', name: '热门总榜', path: '/popular' },
+  { id: 'popular-week', name: '本周热门', path: '/popular?sort=week' },
+  { id: 'popular-month', name: '本月热门', path: '/popular?sort=month' },
+  { id: 'chinese-subtitles', name: '中文字幕', path: '/category/chinese-subtitles' },
+  { id: 'censored', name: '有码', path: '/category/censored-jav' },
+  { id: 'uncensored', name: '无码', path: '/category/uncensored-jav' },
+  { id: 'amateur', name: '素人', path: '/category/amateur' },
+  { id: 'reducing-mosaic', name: '破解', path: '/category/reducing-mosaic' },
+  { id: 'english-subtitles', name: '英文字幕', path: '/category/english-subtitles' },
 ];
 
 function categories() {
@@ -39,15 +41,20 @@ function originOf(address) {
 // App 里做过站点验证后，host.challengeCookie 会给出 cf_clearance，
 // host.challengeUA 给出解验证时 WebView 的真实 UA——cf_clearance 绑 UA，
 // 所以必须成对使用，不能用写死的 UA。
-const SITE_HOST = 'supjav.com';
+const SITE_HOST = 'www.supjav.com';
+// 详情页缓存 10 分钟（resolveMedia 复用，省一次请求）
+const PAGE_TTL = 10 * 60 * 1000;
+// 验证可能在裸域上做的，两个都查
+const SITE_HOST_ALT = 'supjav.com';
 
 function agent() {
-  const learned = host.challengeUA(SITE_HOST);
+  const learned =
+    host.challengeUA(SITE_HOST) || host.challengeUA(SITE_HOST_ALT);
   return learned || UA;
 }
 
 function token() {
-  return host.challengeCookie(SITE_HOST);
+  return host.challengeCookie(SITE_HOST) || host.challengeCookie(SITE_HOST_ALT) || '';
 }
 
 // 用 host.fetch 而不是 fetchText：需要自己带 Accept / Accept-Language，
@@ -65,17 +72,47 @@ function fetchPage(path, referer) {
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
     'Upgrade-Insecure-Requests': '1',
-    Referer: referer || SITE + '/',
+    Referer: (activeBase || SITE) + '/',
     'User-Agent': agent(),
   };
   if (cookie) headers.Cookie = cookie;
-  const response = host.fetch({
-    url: SITE + path,
-    headers: headers,
-    anyStatus: true,
-    followRedirects: true,
-    timeoutMs: 25000,
-  });
+
+  // 两个域名依次试，优先用上次成功的
+  var order = [activeBase || SITE];
+  for (var mi = 0; mi < MIRRORS.length; mi++) {
+    if (MIRRORS[mi] !== order[0]) order.push(MIRRORS[mi]);
+  }
+  var response = null;
+  var lastBody = '';
+  var lastStatus = 0;
+  var errors = [];
+  for (var oi = 0; oi < order.length; oi++) {
+    try {
+      var got = host.fetch({
+        url: order[oi] + path,
+        headers: headers,
+        anyStatus: true,
+        followRedirects: true,
+        timeoutMs: 20000,
+      });
+      lastStatus = got.status || 0;
+      lastBody = got.body || '';
+      response = got;
+      // 拿到明确状态码就停（403/429/503 也停，交给下面判定挑战页）
+      if (lastStatus > 0) {
+        activeBase = order[oi];
+        break;
+      }
+    } catch (e) {
+      errors.push(order[oi] + ' ≠ ' + String((e && e.message) || e));
+      response = null;
+    }
+  }
+  if (!response) {
+    // 所有域名都失败：把真实错误抛出去，不要静默返回空文本
+    var detailMsg = errors.length ? errors.join(' | ') : '无响应';
+    throw new Error('SupJav 连接失败: ' + detailMsg);
+  }
   const text = response.body || '';
   const url = response.url || SITE + path;
   const status = response.status || 0;
@@ -93,7 +130,7 @@ function fetchPage(path, referer) {
     error.retryable = status >= 500 || status === 408;
     throw error;
   }
-  return { text: text, base: originOf(url), url: url };
+  return { text: text, base: originOf(url), url: url, status: status };
 }
 
 function pageURL(path, page) {
@@ -223,7 +260,8 @@ function dramaOf(card, base) {
     tags: [],
     totalEpisode: 1,
     episodeCount: 1,
-    views: views ? count(clean(views[1])) : 0,
+    // views 在 App 的 Drama 结构体里是 string
+    views: views ? String(count(clean(views[1])) || '') : '',
     onlineDate: date ? clean(date[1]) : '',
     remark: code === '' ? '' : code,
   };
@@ -232,8 +270,28 @@ function dramaOf(card, base) {
 function parseList(html, page, base) {
   const items = [];
   const seen = {};
-  const chunks = html.split('<div class="post">');
-  for (let index = 1; index < chunks.length; index++) {
+
+  // 首页和热门页的卡片是 <div class="post">，但分类页
+  // （/category/xxx）用的是另一套模板，按 class 切会一条都切不出来。
+  // 所以标准切法切不到时，退回到「按视频链接位置切」——不依赖任何 class。
+  let chunks = html.split('<div class="post">');
+  let startIndex = 1;
+  if (chunks.length < 2) {
+    chunks = [];
+    startIndex = 0;
+    const linkRe = /<a\s[^>]*href="[^"]*?\d+\.html"[^>]*>/g;
+    const positions = [];
+    let mm;
+    while ((mm = linkRe.exec(html)) !== null) positions.push(mm.index);
+    for (let i = 0; i < positions.length; i++) {
+      // 封面图通常写在链接前面，往前多取一点
+      const from = Math.max(0, positions[i] - 900);
+      const to = i + 1 < positions.length ? positions[i + 1] : html.length;
+      chunks.push(html.slice(from, to));
+    }
+  }
+
+  for (let index = startIndex; index < chunks.length; index++) {
     const drama = dramaOf(chunks[index].slice(0, 4000), base);
     if (drama === null || seen[drama.sourceId]) continue;
     seen[drama.sourceId] = true;
@@ -249,15 +307,56 @@ function parseList(html, page, base) {
 
 function catalogPage(page, category) {
   const chosen = CATEGORIES.filter((entry) => entry.id === category)[0] || CATEGORIES[0];
-  const response = fetchPage(pageURL(chosen.path, page));
-  const result = parseList(response.text, page, response.base);
+  const path = pageURL(chosen.path, page);
+
+  try {
+    host.log('[supjav] start ' + chosen.path + ' page=' + page);
+  } catch (_) {}
+
+  let response;
+  try {
+    response = fetchPage(path);
+  } catch (e) {
+    // 请求阶段失败：把路径和真实原因一起抛给 UI
+    const reason = String((e && e.message) || e);
+    try {
+      host.log('[supjav] fetch failed ' + chosen.path + ': ' + reason);
+    } catch (_) {}
+    throw new Error('分类「' + chosen.name + '」加载失败：' + reason);
+  }
+
+  const body = String(response.text || '');
+  const result = parseList(body, page, response.base);
+
+  // 拿到页面但解析不出条目：把状态码/长度/片段一起抛出来，方便定位
+  if (result.items.length === 0) {
+    const head = body.slice(0, 140).replace(/\s+/g, ' ');
+    const linkHits = (body.match(/href="[^"]*?\d+\.html"/g) || []).length;
+    const hasPostClass = body.indexOf('class="post"') >= 0;
+    const msg =
+      '分类「' + chosen.name + '」没有解析到内容' +
+      '｜HTTP ' + response.status +
+      '｜页面 ' + body.length + ' 字节' +
+      '｜链接 ' + linkHits + ' 个' +
+      '｜post块 ' + (hasPostClass ? '有' : '无') +
+      '｜开头：' + head;
+    try {
+      host.log('[supjav] empty ' + chosen.path + ' ' + msg);
+    } catch (_) {}
+    throw new Error(msg);
+  }
+
+  try {
+    host.log('[supjav] ok ' + chosen.path + ' items=' + result.items.length);
+  } catch (_) {}
+
   return { items: result.items, hasMore: result.hasMore };
 }
 
 function search(page, query) {
   const text = String(query || '').trim();
   if (text === '') return { items: [], hasMore: false };
-  const base = pageURL('/zh/', page);
+  const base = pageURL('/', page);
   const path = base + '?s=' + encodeURIComponent(text);
   const response = fetchPage(path);
   const result = parseList(response.text, page, response.base);
@@ -277,6 +376,21 @@ function serversOf(html) {
     seen[name] = true;
     out.push({ name: name, link: link[1] });
   }
+  // 上次成功的线路排最前，避免每次都从失败的线路开始等超时
+  let lastGood = '';
+  try {
+    lastGood = host.loadState('lastServer') || '';
+  } catch (_) {}
+  // 只认主力线路；历史上记过 ST 之类的一律忽略
+  if (lastGood !== 'FST' && lastGood !== 'EVS') lastGood = '';
+  if (lastGood !== '') {
+    out.sort((left, right) => {
+      if (left.name === lastGood) return -1;
+      if (right.name === lastGood) return 1;
+      return 0;
+    });
+    return out;
+  }
   out.sort((left, right) => {
     const leftRank = SERVER_ORDER.indexOf(left.name);
     const rightRank = SERVER_ORDER.indexOf(right.name);
@@ -286,7 +400,7 @@ function serversOf(html) {
 }
 
 function detailPath(sourceId) {
-  return '/zh/' + sourceId + '.html';
+  return '/' + sourceId + '.html';
 }
 
 function parseDetail(html, sourceId, base) {
@@ -348,6 +462,10 @@ function detail(sourceId) {
   const id = String(sourceId || '').trim();
   if (id === '') throw new Error('SupJav 缺少影片 ID');
   const response = fetchPage(detailPath(id));
+  // 缓存详情页：播放时直接复用，不再重复请求
+  try {
+    host.cacheSet('page:' + id, response.text, PAGE_TTL);
+  } catch (_) {}
   const parsed = parseDetail(response.text, id, response.base);
   return {
     drama: parsed.drama,
@@ -405,10 +523,45 @@ function voeSource(html) {
   return json.source || json.direct_access_url || null;
 }
 
+// Dean Edwards Packer 解包：eval(function(p,a,c,k,e,d){...}('...',62,62,'...'.split('|'),0,{}))
+// SupJav 的 FST 播放器把整段 JS 打包了，地址藏在解包后的代码里。
+function unpackPacker(script) {
+  const m = /eval\(function\(p,a,c,k,e,[dr]\)\{[\s\S]*?\}\('([\s\S]*?)',(\d+),(\d+),'([\s\S]*?)'\.split\('\|'\)/i.exec(script);
+  if (!m) return '';
+  const p = m[1];
+  const radix = parseInt(m[2], 10) || 62;
+  const count = parseInt(m[3], 10);
+  const words = m[4].split('|');
+  let out = p;
+  for (let i = count - 1; i >= 0; i--) {
+    if (!words[i]) continue;
+    try {
+      out = out.replace(new RegExp('\\b' + i.toString(radix) + '\\b', 'g'), words[i]);
+    } catch (_) {}
+  }
+  return out;
+}
+
 function fstSource(html, embed) {
   const scripts = scriptsOf(html);
   scripts.push(html);
   for (const script of scripts) {
+    // 先试 packer 解包（FST 的页面是打包过的）
+    const unpacked = unpackPacker(script);
+    if (unpacked) {
+      const direct = /(https?:\/\/[^'"\s\\]+\.m3u8[^'"\s\\]*)/.exec(unpacked);
+      if (direct) return direct[1].replace(/\\\//g, '/');
+      const boxed = /var\s+links\s*=\s*(\{[\s\S]*?\})/.exec(unpacked);
+      if (boxed) {
+        const linkMap = parseLooseObject(boxed[1]);
+        if (linkMap) {
+          for (const name of ['hls4', 'hls3', 'hls2', 'hls1']) {
+            if (linkMap[name]) return resolve(embed, linkMap[name]);
+          }
+        }
+      }
+    }
+
     const matched = /var\s+links\s*=\s*(\{[\s\S]*?\})/.exec(script);
     if (!matched) continue;
     const links = parseLooseObject(matched[1]);
@@ -500,6 +653,7 @@ function resolveServer(server) {
     url: BOUNCE + encodeAlnum(reversed),
     referer: SITE + '/',
     userAgent: UA,
+    timeoutMs: 8000,
   });
   let html = first.body || '';
   let embed = first.url || '';
@@ -508,7 +662,7 @@ function resolveServer(server) {
     if (html.indexOf('application/json') >= 0) break;
     const jump = /window\.location\.href\s*=\s*'(https?:\/\/[^']+\/e\/[^']+)'/.exec(html);
     if (!jump) break;
-    const next = host.fetchText({ url: jump[1], referer: SITE + '/', userAgent: UA });
+    const next = host.fetchText({ url: jump[1], referer: SITE + '/', userAgent: UA, timeoutMs: 8000 });
     html = next.body || '';
     embed = next.url || jump[1];
   }
@@ -529,7 +683,23 @@ function resolveServer(server) {
     address = streamtapeSource(html);
   }
   if (!address) address = genericSource(html);
-  if (!address) throw new Error(server.name + ' 未找到播放地址');
+  if (!address) {
+    // 把最长的 <script> 片段带出来——播放地址基本都藏在脚本里
+    let scriptText = '';
+    const sre = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+    let sm;
+    while ((sm = sre.exec(html)) !== null) {
+      const body = sm[1] || '';
+      if (body.length > scriptText.length) scriptText = body;
+    }
+    const peek = (scriptText || html || '')
+      .replace(/\s+/g, ' ')
+      .slice(0, 220);
+    throw new Error(
+      server.name + ' 未找到播放地址｜页面 ' + String(html || '').length +
+      ' 字节｜脚本：' + peek
+    );
+  }
   return {
     url: address,
     referer: embed,
@@ -544,30 +714,115 @@ function sourceIdOf(task) {
   return (parts.length >= 2 ? parts[1] : raw).trim();
 }
 
-function resolveMedia(task) {
-  const id = sourceIdOf(task);
-  if (id === '') throw new Error('SupJav 缺少影片 ID');
-  const response = fetchPage(detailPath(id));
-  const servers = serversOf(response.text);
-  if (servers.length === 0) throw new Error('SupJav 页面里没有找到播放线路');
-  const errors = [];
+// 从详情页 HTML 解析播放地址（VOE 优先，它通常最快）
+function resolveFromHtml(html, id) {
+  const servers = serversOf(html);
+  if (servers.length === 0) throw new Error('页面里没有找到播放线路');
+
+  const failures = [];
   for (const server of servers) {
     try {
       const stream = resolveServer(server);
-      return {
-        url: stream.url,
+      const credentials = {
+        origin: stream.origin,
         referer: stream.referer,
-        credentials: {
-          origin: stream.origin,
-          referer: stream.referer,
-          userAgent: UA,
-        },
+        userAgent: UA,
       };
+
+      // 必须抓到有效播放列表才算成功——只拿到裸地址播放器播不了
+      let media = null;
+      try {
+        media = host.prepareWebMedia(
+          { url: stream.url, referer: stream.referer, quality: 1080, credentials: credentials },
+          'SupJav'
+        );
+      } catch (e) {
+        failures.push(server.name + ': 抓播放列表失败 ' + String((e && e.message) || e).slice(0, 40));
+        continue;
+      }
+
+      const isDirect = /\.mp4(\?|$)/i.test(String((media && media.url) || ''));
+      if (!media || !media.url) {
+        failures.push(server.name + ': 没返回地址');
+        continue;
+      }
+      if (!media.playlist && !isDirect) {
+        // 没有播放列表又不是 .mp4 直链，一律视为坏地址，换下一条线路
+        failures.push(server.name + ': 拿到地址但没有播放列表');
+        continue;
+      }
+
+      // 只把主力线路记成"上次成功"，避免辅助线路拿到坏地址后被长期优先
+      if (server.name === 'FST' || server.name === 'EVS') {
+        try { host.saveState('lastServer', server.name); } catch (_) {}
+      }
+      return media;
     } catch (error) {
-      errors.push(server.name + ': ' + (error && error.message ? error.message : '解析失败'));
+      failures.push(server.name + ': ' + String((error && error.message) || error).slice(0, 50));
     }
   }
-  throw new Error('SupJav 所有线路解析失败（' + errors.join('；') + '）');
+
+  throw new Error('所有线路都无法播放 → ' + failures.join(' | '));
+}
+// 播放地址的短时缓存窗口：embed 播放器签发的地址有时效，
+// 5 分钟太长（会拿到过期地址导致播放器报错），90 秒是保守值。
+var READY_TTL_MS = 90 * 1000;
+
+function resolveMedia(task) {
+  const id = sourceIdOf(task);
+  if (id === '') throw new Error('SupJav 缺少影片 ID');
+
+  // ① 90 秒内重复播放：直接用缓存，0 请求
+  try {
+    const cached = host.cacheGet('ready:' + id);
+    if (cached) {
+      const m = JSON.parse(cached);
+      const age = Date.now() - Number(m.at || 0);
+      if (m.url && age >= 0 && age < READY_TTL_MS) {
+        return {
+          url: m.url,
+          playlist: m.playlist || '',
+          referer: m.referer || SITE + '/',
+          quality: 1080,
+          durationMs: Number(m.durationMs || 0),
+          credentials: m.credentials || undefined,
+        };
+      }
+    }
+  } catch (_) {}
+
+  // ② 复用详情页 HTML（10 分钟内不重复抓）
+  let html = '';
+  try {
+    html = host.cacheGet('page:' + id) || '';
+  } catch (_) {}
+  if (!html) {
+    html = fetchPage(detailPath(id)).text;
+    try {
+      host.cacheSet('page:' + id, html, PAGE_TTL);
+    } catch (_) {}
+  }
+
+  // ③ 现解析（每次都拿新地址，保证时效）
+  const media = resolveFromHtml(html, id);
+
+  // ④ 存 90 秒短缓存，credentials 一并保存（之前漏了 cookie 会导致分片被拒）
+  try {
+    host.cacheSet(
+      'ready:' + id,
+      JSON.stringify({
+        url: media.url,
+        playlist: media.playlist || '',
+        referer: media.referer || SITE + '/',
+        durationMs: media.durationMs || 0,
+        at: Date.now(),
+        credentials: media.credentials || null,
+      }),
+      READY_TTL_MS
+    );
+  } catch (_) {}
+
+  return media;
 }
 
 module.exports = {
