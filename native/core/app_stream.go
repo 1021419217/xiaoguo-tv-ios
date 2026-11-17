@@ -476,6 +476,21 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 		_, _ = io.WriteString(writer, stream.lanPlaylist(request, rewritten))
 		return
 	}
+	var head []byte
+	if request.Method == http.MethodGet {
+		rangeHeader := strings.TrimSpace(request.Header.Get("Range"))
+		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
+			head = make([]byte, 4096)
+			n, _ := io.ReadFull(reader, head)
+			head = head[:n]
+			if stripped := stripFakeTSHeader(head); len(stripped) < len(head) {
+				head = stripped
+				response.Header.Del("Content-Length")
+				response.Header.Del("Content-Range")
+				response.Header.Del("Accept-Ranges")
+			}
+		}
+	}
 	for _, name := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
 		if value := response.Header.Get(name); value != "" {
 			writer.Header().Set(name, value)
@@ -483,6 +498,38 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	}
 	writer.WriteHeader(response.StatusCode)
 	if request.Method == http.MethodGet {
+		if len(head) > 0 {
+			_, _ = writer.Write(head)
+		}
 		_, _ = io.Copy(writer, reader)
 	}
+}
+
+func stripFakeTSHeader(data []byte) []byte {
+	if len(data) <= 188*5 || data[0] == 0x47 {
+		return data
+	}
+	limit := len(data) - 188*4 - 1
+	if limit > 4096 {
+		limit = 4096
+	}
+	if limit <= 0 {
+		return data
+	}
+	for i := 0; i < limit; i++ {
+		if data[i] != 0x47 {
+			continue
+		}
+		ok := true
+		for k := 1; k < 5; k++ {
+			if i+188*k >= len(data) || data[i+188*k] != 0x47 {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return data[i:]
+		}
+	}
+	return data
 }
