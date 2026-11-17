@@ -156,6 +156,8 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
   /// （TLS/JS/HTTP2），Go 的 tls-client 模拟不出来。同一台 WebView 再发 fetch 才
   /// 能和「过验证那次」的指纹完全一致——这正是 iDuanJu 复用 WebView 取页的做法。
   private var solved: [String: WKWebView] = [:]
+  private var solvedOrder: [String] = []
+  private let maxSolvedWebViews = 3
 
   /// 用一个已验证的 WebView 抓页面 HTML。若该 host 还没有常驻 WebView，
   /// 就用持久化 cookie store 新建一台（验证 cookie 已同步进去），加载目标页后取文本。
@@ -169,11 +171,23 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         web = WKWebView(frame: .zero, configuration: config)
-        self.solved[key] = web
+        self.retain(web, for: key)
       }
       // 用页面上下文里的 fetch 取原始 HTML：和验证同 origin、同 cookie、同指纹。
       // 目标页若还没加载，先 load 一次；onFinish 后再取。
       self.fetchPage(web, url: url, completion: completion)
+    }
+  }
+
+  /// 常驻 WebView 只保留最近验证过的几台，避免验证站点越多内存越大。
+  private func retain(_ web: WKWebView, for key: String) {
+    solvedOrder.removeAll { $0 == key }
+    solvedOrder.append(key)
+    solved[key] = web
+    while solvedOrder.count > maxSolvedWebViews {
+      let oldest = solvedOrder.removeFirst()
+      solved[oldest]?.removeFromSuperview()
+      solved[oldest] = nil
     }
   }
 
@@ -391,15 +405,18 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         return host == domain || host.hasSuffix("." + domain) || domain.hasSuffix("." + host)
       }
       let hasClearance = mine.contains { $0.name == "cf_clearance" }
-      if !hasClearance {
+      // 自动收尾只认 Cloudflare 的通行 cookie；手动点「完成」时放宽，
+      // 让 hCaptcha / PerimeterX 这类非 CF 的校验也能把 cookie 存下来。
+      if !manual && !hasClearance {
+        self.note("已过验证页，正在等待通行 cookie…")
+        return
+      }
+      guard !mine.isEmpty else {
         if manual {
-          self.note("还没拿到通行 cookie，若页面已能正常浏览，请再点一次「完成」")
-        } else {
-          self.note("已过验证页，正在等待通行 cookie…")
+          self.note("没有拿到任何 cookie，请确认页面已正常打开后再点「完成」")
         }
         return
       }
-      guard !mine.isEmpty else { return }
       let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
       web.evaluateJavaScript("navigator.userAgent") { agent, _ in
         self.finish(header, agent as? String)
@@ -430,7 +447,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         window.insertSubview(web, at: 0)
       }
       web.navigationDelegate = nil
-      solved[key] = web
+      retain(web, for: key)
     } else {
       web?.stopLoading()
       web?.navigationDelegate = nil
