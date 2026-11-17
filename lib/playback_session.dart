@@ -608,7 +608,8 @@ class PlaybackSession extends ChangeNotifier {
       ].join(','),
     );
     await platform.setProperty('network-timeout', '20');
-    if (!plan.local) {
+    if (!plan.local &&
+        (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
     }
   }
