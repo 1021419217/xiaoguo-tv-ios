@@ -132,7 +132,12 @@ class _HeroCarouselState extends State<HeroCarousel> {
             scale: 1.3,
             child: Opacity(
               opacity: .72,
-              child: DramaCover(drama: item, radius: 0, details: false),
+              child: DramaCover(
+                drama: item,
+                radius: 0,
+                details: false,
+                crop: true,
+              ),
             ),
           ),
         ),
@@ -154,11 +159,16 @@ class _HeroCarouselState extends State<HeroCarousel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 92,
-          height: 132,
+          width: 156,
+          height: 88,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: DramaCover(drama: item, radius: 12, details: false),
+            child: DramaCover(
+              drama: item,
+              radius: 12,
+              details: false,
+              crop: true,
+            ),
           ),
         ),
         const SizedBox(width: 14),
