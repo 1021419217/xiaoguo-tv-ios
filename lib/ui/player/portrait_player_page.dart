@@ -576,21 +576,17 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
             ),
           ),
         ),
-        // 屏幕中央的播放 / 暂停按钮：播控可见时出现，暂停时一直保留，
-        // 点一下就能继续。单击画面本身只显隐播控，不再直接暂停。
+        // 屏幕中央的播放 / 暂停按钮：跟着播控一起显隐——单击画面时它必须
+        // 和其他控件一起走掉，否则会一直悬在画面中间，看着像点击失灵。
         Center(
           child: IgnorePointer(
-            ignoring: !(session.ready && (!session.paused || _chromeShown)),
+            ignoring: !(session.ready && _chromeShown),
             child: AnimatedOpacity(
-              opacity: session.ready && (!session.paused || _chromeShown)
-                  ? 1
-                  : 0,
+              opacity: session.ready && _chromeShown ? 1 : 0,
               duration: Motion.of(context, Motion.short),
               curve: Motion.standard,
               child: AnimatedScale(
-                scale: session.ready && (!session.paused || _chromeShown)
-                    ? 1
-                    : .86,
+                scale: session.ready && _chromeShown ? 1 : .86,
                 duration: Motion.of(context, Motion.short),
                 curve: Motion.enter,
                 child: GestureDetector(
@@ -601,10 +597,10 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     session.togglePlayback();
                   },
                   // 缓冲时不再在按钮中间叠一个系统小圈（颜色跟画面不搭、
-                  // 尺寸也挤），改成大圈外面一圈缓慢流转的光晕。
+                  // 尺寸也挤），改成贴着按钮外沿流转的一圈细弧光。
                   child: SizedBox(
-                    width: 96,
-                    height: 96,
+                    width: 92,
+                    height: 92,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -643,7 +639,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                         ),
                         if (session.stalled)
                           const IgnorePointer(
-                            child: LoadingHalo(size: 92),
+                            child: LoadingHalo(size: 80),
                           ),
                       ],
                     ),

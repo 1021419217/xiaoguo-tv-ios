@@ -212,13 +212,14 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _seekValue = null;
   }
 
-  bool get _pinned =>
-      _session.paused || !_session.ready || _dragging || _panel != null;
+  /// 暂停不再把播控钉死：一旦钉死，单击画面就永远隐藏不了中央按钮。
+  /// 暂停时只是不再自动隐藏，交给用户单击决定。
+  bool get _pinned => !_session.ready || _dragging || _panel != null;
 
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || _pinned || !_visible) return;
+      if (!mounted || _pinned || _session.paused || !_visible) return;
       setState(() => _visible = false);
     });
   }
@@ -236,7 +237,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       _show();
     }
   }
-
   void _tapUp(TapUpDetails details, double width, bool full) {
     final x = details.localPosition.dx;
     final side =
@@ -906,12 +906,12 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     );
   }
 
-  /// 中央播放 / 暂停按钮：播控可见时出现，暂停时一直保留。
+  /// 中央播放 / 暂停按钮：跟播控一起显隐。
   /// 单击画面只显隐播控，暂停只走这里，避免连点画面误停。
   Widget _centerPlayButton() {
     final session = _session;
     final visible = _visible || _pinned;
-    final shown = session.ready && (!session.paused || visible);
+    final shown = session.ready && visible;
     return Center(
       child: IgnorePointer(
         ignoring: !shown,
@@ -969,7 +969,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                       ),
                     ),
                     if (session.stalled)
-                      const IgnorePointer(child: LoadingHalo(size: 86)),
+                      const IgnorePointer(child: LoadingHalo(size: 74)),
                   ],
                 ),
               ),
