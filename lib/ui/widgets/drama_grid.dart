@@ -11,35 +11,55 @@ import 'drama_tile.dart';
 import 'focus_ring.dart';
 import 'motion/motion_widgets.dart';
 
-(int, double, double) _gridLayout(BuildContext context, double width) =>
-    switch (AppScope.formFactorOf(context)) {
-      FormFactor.phone => (3, 10.0, 22.0),
-      FormFactor.television => (
-        ((width + 20) / 120).floor().clamp(3, 8),
-        20.0,
-        24.0,
-      ),
-      FormFactor.window => (
-        math.max(2, ((width + 18) / 178).floor()),
-        18.0,
-        24.0,
-      ),
-      FormFactor.pad => ((width / 180).floor().clamp(4, 9), 18.0, 22.0),
-    };
+(int, double, double) _gridLayout(
+  BuildContext context,
+  double width, {
+  bool wide = false,
+}) => switch (AppScope.formFactorOf(context)) {
+  FormFactor.phone =>
+    wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
+  FormFactor.television => (
+    ((width + 20) / (wide ? 200 : 120)).floor().clamp(3, 8),
+    20.0,
+    24.0,
+  ),
+  FormFactor.window => (
+    math.max(2, ((width + 18) / (wide ? 300 : 178)).floor()),
+    18.0,
+    24.0,
+  ),
+  FormFactor.pad => (
+    (width / (wide ? 280 : 180)).floor().clamp(3, 9),
+    18.0,
+    22.0,
+  ),
+};
 
-double dramaTileWidth(BuildContext context, double width) {
-  final (columns, spacing, _) = _gridLayout(context, width);
+double dramaTileWidth(
+  BuildContext context,
+  double width, {
+  bool wide = false,
+}) {
+  final (columns, spacing, _) = _gridLayout(context, width, wide: wide);
   return (width - (columns - 1) * spacing) / columns;
 }
 
-SliverGridDelegate dramaGridDelegate(BuildContext context, double width) {
-  final (columns, spacing, runSpacing) = _gridLayout(context, width);
-  final tile = dramaTileWidth(context, width);
+SliverGridDelegate dramaGridDelegate(
+  BuildContext context,
+  double width, {
+  bool wide = false,
+}) {
+  final (columns, spacing, runSpacing) = _gridLayout(
+    context,
+    width,
+    wide: wide,
+  );
+  final tile = dramaTileWidth(context, width, wide: wide);
   return SliverGridDelegateWithFixedCrossAxisCount(
     crossAxisCount: columns,
     crossAxisSpacing: spacing,
     mainAxisSpacing: runSpacing,
-    mainAxisExtent: DramaTile.extentFor(context, tile),
+    mainAxisExtent: DramaTile.extentFor(context, tile, wide: wide),
   );
 }
 
@@ -95,12 +115,13 @@ class DramaSliverGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (columns, _, _) = _gridLayout(context, width);
+    final wide = items.isNotEmpty && SourceSite.byId(items.first.source).adult;
+    final (columns, _, _) = _gridLayout(context, width, wide: wide);
     final heroIndex = heroScope == null
         ? const <String, int>{}
         : firstIndexById(items, (drama) => drama.id);
     return SliverGrid.builder(
-      gridDelegate: dramaGridDelegate(context, width),
+      gridDelegate: dramaGridDelegate(context, width, wide: wide),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final drama = items[index];
@@ -112,6 +133,7 @@ class DramaSliverGrid extends StatelessWidget {
               wrapGridRow(index, columns, items.length, event),
           child: DramaTile(
             drama: drama,
+            wide: wide,
             rank: rankOf?.call(drama),
             autofocus: autofocus && index == 0,
             heroScope: heroIndex[drama.id] == index ? heroScope : null,

@@ -20,6 +20,7 @@ class _PosterButton extends StatefulWidget {
     this.focusNode,
     this.autofocus = false,
     this.checked,
+    this.aspect = 2 / 3,
   });
   final Widget cover;
   final List<Widget> caption;
@@ -29,6 +30,7 @@ class _PosterButton extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   final bool? checked;
+  final double aspect;
 
   @override
   State<_PosterButton> createState() => _PosterButtonState();
@@ -58,7 +60,7 @@ class _PosterButtonState extends State<_PosterButton> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: 2 / 3,
+            aspectRatio: widget.aspect,
             child: FocusOutline(
               visible: visible,
               radius: _coverRadius,
@@ -132,12 +134,14 @@ class DramaTile extends StatelessWidget {
     this.heroScope,
     this.showScore = false,
     this.exploreBlur = false,
+    this.wide = false,
   });
   final Drama drama;
   final VoidCallback onTap;
   final String? heroScope;
   final bool showScore;
   final bool exploreBlur;
+  final bool wide;
   final String? subtitle;
   final int? rank;
   final VoidCallback? onMore;
@@ -156,11 +160,16 @@ class DramaTile extends StatelessWidget {
     color: Theme.of(context).colorScheme.onSurfaceVariant,
   );
 
-  static double extentFor(BuildContext context, double width) {
+  static double extentFor(
+    BuildContext context,
+    double width, {
+    bool wide = false,
+  }) {
     final scaler = MediaQuery.textScalerOf(context);
     final title = scaler.scale(titleStyle(context).fontSize!) * 1.3 * 2;
     final subtitle = scaler.scale(subtitleStyle(context).fontSize!) * 1.3;
-    return (width * 1.5 + 9 + title + 4 + subtitle).ceilToDouble();
+    final cover = wide ? width * 9 / 16 : width * 1.5;
+    return (cover + 9 + title + 4 + subtitle).ceilToDouble();
   }
 
   @override
@@ -175,6 +184,7 @@ class DramaTile extends StatelessWidget {
           ? null
           : heroScope,
     ),
+    aspect: wide ? 16 / 9 : 2 / 3,
     label:
         '${rank == null ? '' : '第$rank名，'}'
         '${drama.title}，${drama.episodes}集${drama.vip ? '，VIP' : ''}'
