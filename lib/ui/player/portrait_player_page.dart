@@ -27,7 +27,6 @@ import 'player_surface.dart';
 import 'player_video.dart';
 import 'swipe_controls.dart';
 
-const _maskHeight = 68.0;
 
 String _status(Drama drama) =>
     drama.releaseLabel == '状态未知' ? '' : '${drama.releaseLabel} · ';
@@ -59,7 +58,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
   bool _scrolling = false;
   bool _edgeHinted = false;
   bool _holding = false;
-  bool _lockArmed = false;
   int _heldIndex = -1;
   bool _dragging = false;
   double? _seekValue;
@@ -334,7 +332,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     setState(() {
       _holding = true;
       _heldIndex = _session.index;
-      _lockArmed = false;
     });
   }
 
@@ -349,7 +346,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
         _holdFrom = null;
       }
     }
-    if (_holding) _moveLock(event.position);
     final from = _pinchFrom;
     if (from == null || _pointers.length != 2) return;
     final (low, high) = _zoomRange;
@@ -398,31 +394,10 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     _say(target == VideoFit.crop ? '画面比例：裁切，双指捏合恢复' : '画面比例：自动');
   }
 
-  /// 按住后往下拖：越过屏幕三分之一或拖到底部条，松手即锁定倍速。
-  void _moveLock(Offset position) {
-    final origin = _holdFrom;
-    if (origin == null) return;
-    final height = MediaQuery.sizeOf(context).height;
-    final armed =
-        position.dy - origin.dy >= height / 3 ||
-        position.dy >= height - _bars.bottom - _maskHeight;
-    if (armed != _lockArmed) {
-      unawaited(HapticFeedback.selectionClick());
-      setState(() => _lockArmed = armed);
-    }
-  }
-
   void _pressEnd() {
     if (!_holding) return;
-    if (_lockArmed) {
-      _session.setBoostLocked(!_session.boostLocked);
-    } else if (!_session.boostLocked) {
-      _session.endBoost();
-    }
-    setState(() {
-      _holding = false;
-      _lockArmed = false;
-    });
+    _session.endBoost();
+    setState(() => _holding = false);
   }
 
   Future<void> _openSettings() => showPlayerSheet(
@@ -581,7 +556,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       bottom: math.max(_bars.bottom, live.bottom),
     );
     final bottom = padding.bottom;
-    final locked = session.boostLocked;
     _syncSystemBars();
     return Stack(
       fit: StackFit.expand,
@@ -771,45 +745,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 : null,
           ),
         ),
-        if (_holding) ...[
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: bottom + _maskHeight,
-            child: IgnorePointer(
-              child: ColoredBox(
-                color: Colors.black,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: bottom),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Icon(
-                        !_lockArmed
-                            ? Icons.fast_forward_rounded
-                            : locked
-                            ? Icons.lock_open_rounded
-                            : Icons.lock_rounded,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                      Text(
-                        '${_lockArmed ? '' : '下滑'}松手${locked ? '取消' : '锁定'} ${session.store.playbackPreferences.boostLabel}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
         FadePresence(
           child: _hint.isEmpty
               ? null

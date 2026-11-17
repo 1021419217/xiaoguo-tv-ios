@@ -50,14 +50,50 @@ function token() {
   return host.challengeCookie(SITE_HOST);
 }
 
+// 用 host.fetch 而不是 fetchText：需要自己带 Accept / Accept-Language，
+// 并且要看真实状态码——Cloudflare 的挑战页是 403 + 一段「Just a moment」，
+// 拿到这种页面要明确告诉用户去验证，而不是当成空列表。
+function looksLikeChallenge(status, text) {
+  if (status === 403 || status === 429 || status === 503) return true;
+  const head = String(text || '').slice(0, 6000);
+  return /_cf_chl_opt|cf-chl-|just a moment|attention required|checking your browser|verify you are human/i.test(head);
+}
+
 function fetchPage(path, referer) {
-  const response = host.fetchText({
+  const cookie = token();
+  const headers = {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'Upgrade-Insecure-Requests': '1',
+    Referer: referer || SITE + '/',
+    'User-Agent': agent(),
+  };
+  if (cookie) headers.Cookie = cookie;
+  const response = host.fetch({
     url: SITE + path,
-    referer: referer || SITE + '/',
-    userAgent: agent(),
-    cookie: token(),
+    headers: headers,
+    anyStatus: true,
+    followRedirects: true,
+    timeoutMs: 25000,
   });
-  return { text: response.body || '', base: originOf(response.url), url: response.url || SITE + path };
+  const text = response.body || '';
+  const url = response.url || SITE + path;
+  const status = response.status || 0;
+  if (looksLikeChallenge(status, text)) {
+    const error = new Error(
+      cookie
+        ? '站点仍然要求浏览器验证（通行 cookie 未被接受），请再验证一次'
+        : '站点要求浏览器验证，请点「去验证」完成验证后再试'
+    );
+    error.retryable = true;
+    throw error;
+  }
+  if (status >= 400) {
+    const error = new Error('SupJav 返回 HTTP ' + status);
+    error.retryable = status >= 500 || status === 408;
+    throw error;
+  }
+  return { text: text, base: originOf(url), url: url };
 }
 
 function pageURL(path, page) {

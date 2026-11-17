@@ -29,7 +29,7 @@ type huangguoBrowserTransport struct {
 	record    func(diagnosticEvent)
 	mu        sync.Mutex
 	clients   map[string]browserHTTPClient
-	newClient func(string) (browserHTTPClient, error)
+	newClient func(string, profiles.ClientProfile) (browserHTTPClient, error)
 }
 
 func newHuangguoBrowserTransport(base http.RoundTripper, downloader *Downloader) *huangguoBrowserTransport {
@@ -67,10 +67,13 @@ func (transport *huangguoBrowserTransport) source(address *url.URL) string {
 	return transport.hosts[strings.ToLower(address.Hostname())]
 }
 
-func (transport *huangguoBrowserTransport) createClient(proxy string) (browserHTTPClient, error) {
+func (transport *huangguoBrowserTransport) createClient(
+	proxy string,
+	profile profiles.ClientProfile,
+) (browserHTTPClient, error) {
 	idleTimeout := 90 * time.Second
 	options := []tlsclient.HttpClientOption{
-		tlsclient.WithClientProfile(profiles.Chrome_150),
+		tlsclient.WithClientProfile(profile),
 		tlsclient.WithRandomTLSExtensionOrder(),
 		tlsclient.WithDisableHttp3(),
 		tlsclient.WithNotFollowRedirects(),
@@ -88,6 +91,16 @@ func (transport *huangguoBrowserTransport) createClient(proxy string) (browserHT
 	return tlsclient.NewHttpClient(tlsclient.NewNoopLogger(), options...)
 }
 
+// 做过站点验证的主机，通行 cookie 绑的是 WebView（iOS Safari）的 UA 与指纹，
+// 继续按 Chrome 指纹发请求会被 Cloudflare 判成换了浏览器的机器人。这里对这类
+// 主机改用 Safari iOS 指纹，和 WebView 保持一致。
+func (transport *huangguoBrowserTransport) profileFor(request *http.Request) (profiles.ClientProfile, string) {
+	if ChallengeCookie(request.URL.Hostname()) != "" {
+		return profiles.Safari_IOS_17_0, "Safari 17 iOS"
+	}
+	return profiles.Chrome_150, huangguoBrowserProfile
+}
+
 func (transport *huangguoBrowserTransport) client(request *http.Request) (browserHTTPClient, error) {
 	transport.mu.Lock()
 	defer transport.mu.Unlock()
@@ -99,11 +112,12 @@ func (transport *huangguoBrowserTransport) client(request *http.Request) (browse
 	if proxy != nil {
 		proxyURL = proxy.String()
 	}
-	key := request.URL.Scheme + "://" + strings.ToLower(request.URL.Host) + "|" + proxyURL
+	profile, profileName := transport.profileFor(request)
+	key := request.URL.Scheme + "://" + strings.ToLower(request.URL.Host) + "|" + proxyURL + "|" + profileName
 	if client := transport.clients[key]; client != nil {
 		return client, nil
 	}
-	client, err := transport.newClient(proxyURL)
+	client, err := transport.newClient(proxyURL, profile)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +133,32 @@ func (transport *huangguoBrowserTransport) client(request *http.Request) (browse
 }
 
 func huangguoBrowserHeaders(request *http.Request) fhttp.Header {
+	// 站点做过人机验证时，必须原样带上解挑战那次的 UA（cf_clearance 绑 UA），
+	// 否则 cookie 直接作废。这种情况也不能再塞 Chrome 的 sec-ch-ua。
+	if verified := ChallengeUserAgent(request.URL.Hostname()); verified != "" {
+		headers := fhttp.Header{
+			"user-agent":                {verified},
+			"upgrade-insecure-requests": {"1"},
+			"accept":                    {"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+			"accept-language":           {"zh-CN,zh;q=0.9"},
+			fhttp.HeaderOrderKey:        {"user-agent", "accept", "accept-language", "referer", "accept-encoding", "cookie"},
+		}
+		if referer := request.Header.Get("Referer"); referer != "" {
+			headers["referer"] = []string{referer}
+		}
+		if cookie := request.Header.Get("Cookie"); cookie != "" {
+			headers["cookie"] = []string{cookie}
+		}
+		for key, values := range request.Header {
+			lower := strings.ToLower(key)
+			if _, fixed := headers[lower]; fixed || lower == "host" || lower == "connection" ||
+				lower == "user-agent" || lower == "cookie" {
+				continue
+			}
+			headers[lower] = append([]string(nil), values...)
+		}
+		return headers
+	}
 	headers := fhttp.Header{
 		"sec-ch-ua":                 {`"Chromium";v="150", "Google Chrome";v="150", "Not_A Brand";v="24"`},
 		"sec-ch-ua-mobile":          {"?0"},

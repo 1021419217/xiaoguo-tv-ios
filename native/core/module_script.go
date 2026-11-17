@@ -186,6 +186,14 @@ func (module *jsModule) provider(host Host) Provider {
 }
 
 func (module *jsModule) validCategory(category string) bool {
+	if category == "" {
+		return true
+	}
+	// 分类列表拿过一次就以它为准：既快，也不会因为实例池排队超时被误判成
+	// 「内容分类无效」。
+	if known, ok := module.knownCategory(category); ok && known {
+		return true
+	}
 	p := module.active.Load()
 	if p == nil {
 		return false
@@ -193,7 +201,16 @@ func (module *jsModule) validCategory(category string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), moduleQuickTimeout)
 	defer cancel()
 	var valid bool
-	return p.call(ctx, "validCategory", &valid, category) == nil && valid
+	if p.call(ctx, "validCategory", &valid, category) != nil || !valid {
+		return false
+	}
+	module.categoryMu.Lock()
+	if module.categoryIDs == nil {
+		module.categoryIDs = map[string]bool{}
+	}
+	module.categoryIDs[category] = true
+	module.categoryMu.Unlock()
+	return true
 }
 
 func (p *jsProvider) Descriptor() SourceDescriptor { return p.module.descriptor() }
@@ -209,6 +226,7 @@ func (p *jsProvider) Categories(ctx context.Context, force bool) ([]Category, er
 	}
 	var categories []Category
 	if json.Unmarshal(raw, &categories) == nil {
+		p.module.rememberCategoryIDs(categories)
 		return categories, nil
 	}
 	var partial struct {
@@ -218,6 +236,7 @@ func (p *jsProvider) Categories(ctx context.Context, force bool) ([]Category, er
 	if err := json.Unmarshal(raw, &partial); err != nil {
 		return nil, err
 	}
+	p.module.rememberCategoryIDs(partial.Items)
 	if partial.Incomplete {
 		return partial.Items, ErrCategoriesIncomplete
 	}

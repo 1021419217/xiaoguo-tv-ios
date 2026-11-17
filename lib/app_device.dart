@@ -25,7 +25,7 @@ class AppDevice {
             'url': url,
             'host': host,
           })
-          .timeout(const Duration(minutes: 2));
+          .timeout(const Duration(minutes: 4));
       final cookie = data?['cookie'];
       if (cookie is! String || cookie.isEmpty) return null;
       final agent = data?['ua'];

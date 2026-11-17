@@ -8,15 +8,15 @@ const UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const LANG = 'kt_rt_lang=zh';
 
+// 只保留站点上确实存在的入口：以前写的 /categories/uncensored/ 是 404，
+// 点进去必然报错，已换成站点导航里真实存在的页面。
 const CATEGORIES = [
   { id: 'latest', name: '最近更新', path: '/latest-updates/' },
   { id: 'new', name: '新片上架', path: '/new-release/' },
   { id: 'hot-today', name: '今日热门', path: '/hot/?sort_by=video_viewed_today' },
   { id: 'hot-week', name: '本周热门', path: '/hot/?sort_by=video_viewed_week' },
-  { id: 'hot-month', name: '本月热门', path: '/hot/?sort_by=video_viewed_month' },
   { id: 'hot', name: '热门总榜', path: '/hot/' },
   { id: 'zh-sub', name: '中文字幕', path: '/categories/chinese-subtitle/' },
-  { id: 'uncensored', name: '无码', path: '/categories/uncensored/' },
 ];
 
 function categories() {
@@ -83,8 +83,9 @@ function clock(text) {
 }
 
 function count(text) {
+  // 观看数会用空格做千分位（`2 436`），先去掉千分位再解析。
   const raw = String(text || '')
-    .replace(/,/g, '')
+    .replace(/[,\s]/g, '')
     .trim()
     .toUpperCase();
   const matched = /^([0-9.]+)\s*([KMB]?)/.exec(raw);
@@ -100,38 +101,95 @@ function codeOf(title) {
   return matched ? matched[1].toUpperCase() + '-' + matched[2] : '';
 }
 
-// 列表页模板不止一种（最近更新 / 热门 / 分类页各用一套），不能只凭
-// `video-img-box` 这个 class 切块，否则换一个分类就整页取不到东西。
-// 这里以「详情链接」为锚点切块：每个 /videos/xxx/ 链接到下一个链接之间
-// 就是一张卡片的 HTML，标题、封面、时长都在这段里找。
-function anchorChunks(html) {
-  const hits = [];
-  const pattern = /<a[^>]+href="[^"]*\/videos\/([^\/"?#]+)\/?"/g;
+// —— HTML 解析 ——
+// Jable 的页面会被站点的优化插件压成「无引号属性」形式：
+//   <a href=https://jable.tv/videos/mfyd-215/>
+//   <div class=img-box><img class=lazyloaded src="data:..." data-src=https://... 1.jpg>
+// 只认 href="..." 的写法会一条都匹配不到，整页空列表。
+// 所以属性一律用下面这个兼容三种写法的解析器取值。
+
+function attrOf(tag, name) {
+  const pattern = new RegExp(
+    '(?:^|[\\s"\'])(' + name + ')\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))',
+    'i'
+  );
+  const matched = pattern.exec(tag);
+  if (!matched) return '';
+  if (matched[2] !== undefined) return matched[2];
+  if (matched[3] !== undefined) return matched[3];
+  return matched[4] || '';
+}
+
+function classOf(tag) {
+  return attrOf(tag, 'class');
+}
+
+// 懒加载占位的 base64 图有几十 KB，切块前先整段清掉，否则一张卡的
+// HTML 会被占位图撑爆、真正的 data-src 落到切块范围之外。
+function stripDataURIs(html) {
+  return String(html || '')
+    .replace(/([\w:-]+)\s*=\s*"data:[^"]*"/gi, '$1=""')
+    .replace(/([\w:-]+)\s*=\s*'data:[^']*'/gi, "$1=''")
+    .replace(/([\w:-]+)\s*=\s*data:[^\s>]+/gi, '$1=""');
+}
+
+function videoIdOf(href) {
+  const matched = /\/videos\/([A-Za-z0-9_-]+)\/?/.exec(href || '');
+  return matched ? matched[1] : '';
+}
+
+function videoAnchors(html) {
+  const out = [];
+  const pattern = /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
   let matched = pattern.exec(html);
   while (matched) {
-    hits.push({ id: matched[1], start: matched.index });
+    const href = matched[1] || matched[2] || matched[3] || '';
+    const id = videoIdOf(href);
+    if (id !== '') out.push({ id: id, start: matched.index, href: href });
     matched = pattern.exec(html);
-  }
-  const out = [];
-  const seen = {};
-  for (let index = 0; index < hits.length; index++) {
-    const hit = hits[index];
-    if (seen[hit.id]) continue;
-    seen[hit.id] = true;
-    const until = index + 1 < hits.length ? hits[index + 1].start : html.length;
-    out.push({ id: hit.id, html: html.slice(hit.start, Math.min(until, hit.start + 6000)) });
   }
   return out;
 }
 
-// 兼容老模板：仍然按 video-img-box 切一遍，作为锚点法取不到时的兜底。
-function classChunks(html) {
-  const parts = html.split('<div class="video-img-box');
+// 优先按卡片容器切块（封面、标题、时长都在同一个 video-img-box 里），
+// 这样同一部片子的封面链接和标题链接不会被切成两段。
+function boxChunks(html) {
   const out = [];
-  for (let index = 1; index < parts.length; index++) {
-    const chunk = parts[index].slice(0, 4000);
-    const link = /href="[^"]*\/videos\/([^\/"?#]+)\/?"/.exec(chunk);
-    if (link) out.push({ id: link[1], html: chunk });
+  const pattern = /<div\b[^>]*>/gi;
+  const starts = [];
+  let matched = pattern.exec(html);
+  while (matched) {
+    const cls = classOf(matched[0]);
+    if (/(^|\s)video-img-box(\s|$)/.test(cls)) {
+      starts.push({ start: matched.index, tag: matched[0] });
+    }
+    matched = pattern.exec(html);
+  }
+  for (let index = 0; index < starts.length; index++) {
+    const from = starts[index].start;
+    const to = index + 1 < starts.length ? starts[index + 1].start : html.length;
+    out.push(html.slice(from, Math.min(to, from + 12000)));
+  }
+  return out;
+}
+
+// 兜底：按「详情链接首次出现」切块。同一张卡里标题也链到同一部片子，
+// 所以必须以「第一次出现」为界，否则会把 h6 标题切到下一块去。
+function anchorChunks(html) {
+  const anchors = videoAnchors(html);
+  const first = {};
+  const order = [];
+  for (const anchor of anchors) {
+    if (first[anchor.id] === undefined) {
+      first[anchor.id] = anchor.start;
+      order.push(anchor.id);
+    }
+  }
+  const out = [];
+  for (let index = 0; index < order.length; index++) {
+    const from = first[order[index]];
+    const to = index + 1 < order.length ? first[order[index + 1]] : html.length;
+    out.push(html.slice(from, Math.min(to, from + 12000)));
   }
   return out;
 }
@@ -139,10 +197,14 @@ function classChunks(html) {
 function usableCover(url) {
   const value = String(url || '').trim();
   if (value === '') return false;
-  // 懒加载占位图 / 1px 透明图 / base64 占位都不能当封面。
   if (/^data:/i.test(value)) return false;
+  // 懒加载占位图 / 1px 透明图 / 纯色块都不能当封面。
   if (/blank|spacer|placeholder|transparent|1x1|lazy\.(gif|png|svg)/i.test(value)) return false;
-  return /\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i.test(value) || /\/(contents|uploads|media)\//i.test(value);
+  if (/\.svg(\?|#|$)/i.test(value)) return false;
+  return (
+    /\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i.test(value) ||
+    /\/(contents|uploads|media|screenshots)\//i.test(value)
+  );
 }
 
 const COVER_ATTRS = [
@@ -151,8 +213,6 @@ const COVER_ATTRS = [
   'data-lazy-src',
   'data-lazysrc',
   'data-echo',
-  'data-bg',
-  'data-background',
   'data-thumb',
   'data-poster',
   'data-image',
@@ -161,45 +221,69 @@ const COVER_ATTRS = [
 ];
 
 function coverOf(chunk) {
-  for (const attr of COVER_ATTRS) {
-    const pattern = new RegExp(attr + '\\s*=\\s*["\']([^"\']+)["\']', 'i');
-    const matched = pattern.exec(chunk);
-    if (matched && usableCover(matched[1])) return matched[1];
+  const images = chunk.match(/<img\b[^>]*>/gi) || [];
+  for (const tag of images) {
+    for (const attr of COVER_ATTRS) {
+      const value = attrOf(tag, attr);
+      if (usableCover(value)) return value;
+    }
+    // 响应式图片：srcset 里取第一张。
+    const srcset = attrOf(tag, 'srcset') || attrOf(tag, 'data-srcset');
+    if (srcset) {
+      const first = srcset.split(',')[0].trim().split(/\s+/)[0];
+      if (usableCover(first)) return first;
+    }
   }
   // 有些模板把封面写成背景图。
   const styled = /background(?:-image)?\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/i.exec(chunk);
   if (styled && usableCover(styled[1])) return styled[1];
-  // 响应式图片：srcset 里取第一张。
-  const srcset = /srcset\s*=\s*["']([^"']+)["']/i.exec(chunk);
-  if (srcset) {
-    const first = srcset[1].split(',')[0].trim().split(/\s+/)[0];
-    if (usableCover(first)) return first;
-  }
-  // 最后的兜底：块里出现的第一个站内图片地址。
-  const anywhere = /(https?:\/\/[^"'\s)]+\.(?:jpe?g|png|webp))[^"'\s)]*/i.exec(chunk);
-  if (anywhere && usableCover(anywhere[0])) return anywhere[0];
+  const anywhere = /(https?:\/\/[^"'\s>)+]+\.(?:jpe?g|png|webp))/i.exec(chunk);
+  if (anywhere && usableCover(anywhere[1])) return anywhere[1];
   return '';
 }
 
 function titleOf(chunk, chunkId) {
-  const heading = /<h6[^>]*>([\s\S]*?)<\/h6>/.exec(chunk);
+  const heading = /<h6\b[^>]*>([\s\S]*?)<\/h6>/i.exec(chunk);
   if (heading) {
     const text = clean(heading[1]);
     if (text !== '') return text;
   }
-  const anchorTitle = /<a[^>]*title="([^"]+)"/.exec(chunk);
-  if (anchorTitle && clean(anchorTitle[1]) !== '') return clean(anchorTitle[1]);
-  const alt = /<img[^>]*alt="([^"]*)"/.exec(chunk);
-  if (alt && clean(alt[1]) !== '') return clean(alt[1]);
+  const anchorTitle = /<a\b[^>]*\btitle\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(chunk);
+  if (anchorTitle) {
+    const text = clean(anchorTitle[1] || anchorTitle[2] || anchorTitle[3] || '');
+    if (text !== '') return text;
+  }
+  const alt = /<img\b[^>]*\balt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(chunk);
+  if (alt) {
+    const text = clean(alt[1] || alt[2] || alt[3] || '');
+    if (text !== '') return text;
+  }
   return String(chunkId || '').toUpperCase();
+}
+
+function durationOf(chunk) {
+  const spans = chunk.match(/<span\b[^>]*>[\s\S]*?<\/span>/gi) || [];
+  for (const tag of spans) {
+    if (/\blabel\b/i.test(classOf(tag))) {
+      const value = clock(clean(tag));
+      if (value > 0) return value;
+    }
+  }
+  const loose = /<span\b[^>]*\blabel\b[^>]*>\s*([0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)\s*<\/span>/i.exec(chunk);
+  return loose ? clock(loose[1]) : 0;
+}
+
+function viewsOf(chunk) {
+  // 观看数紧跟在眼睛图标后面（`</svg>2 436`），后面还有心形图标的点赞数，
+  // 所以只吃到下一个标签为止，别把点赞数也算进来。
+  const matched = /icon-eye[\s\S]{0,200}?<\/svg>\s*([0-9][0-9.,\s]*[KMB]?)/i.exec(chunk);
+  return matched ? count(clean(matched[1])) : 0;
 }
 
 function dramaOf(chunk, chunkId, base) {
   const sourceId = chunkId;
   const title = titleOf(chunk, chunkId);
   const cover = coverOf(chunk);
-  const label = /<span class="label">([^<]+)<\/span>/.exec(chunk);
-  const views = /icon-eye[\s\S]{0,60}?<\/svg>\s*([0-9.,KMBkmb]+)/.exec(chunk);
   return {
     id: host.dramaId(sourceId),
     source: host.source,
@@ -212,30 +296,35 @@ function dramaOf(chunk, chunkId, base) {
     tags: [],
     totalEpisode: 1,
     episodeCount: 1,
-    duration: label ? clock(clean(label[1])) : 0,
-    views: views ? count(clean(views[1])) : 0,
+    duration: durationOf(chunk),
+    views: viewsOf(chunk),
   };
 }
 
 function parseList(html, page, base) {
-  const items = [];
+  const text = stripDataURIs(html);
+  const chunks = [];
   const seen = {};
-  let chunks = anchorChunks(html);
-  if (chunks.length === 0) chunks = classChunks(html);
-  for (const chunk of chunks) {
-    if (seen[chunk.id]) continue;
-    seen[chunk.id] = true;
-    const drama = dramaOf(chunk.html, chunk.id, base);
+  // 先按卡片容器切；容器认不出来时退回按详情链接切。
+  let blocks = boxChunks(text);
+  if (blocks.length === 0) blocks = anchorChunks(text);
+  for (const block of blocks) {
+    const anchor = /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(block);
+    if (!anchor) continue;
+    const id = videoIdOf(anchor[1] || anchor[2] || anchor[3] || '');
+    if (id === '' || seen[id]) continue;
+    seen[id] = true;
+    const drama = dramaOf(block, id, base);
     if (drama.title === '' && drama.cover === '') continue;
-    items.push(drama);
+    chunks.push(drama);
   }
   let maxFrom = 0;
-  const matched = html.match(/from(?:_videos)?[:=]0*(\d+)/g) || [];
+  const matched = text.match(/from(?:_videos)?[:=]0*(\d+)/g) || [];
   for (const entry of matched) {
     const value = parseInt(entry.replace(/[^0-9]/g, ''), 10);
     if (!isNaN(value) && value > maxFrom) maxFrom = value;
   }
-  return { items: items, hasMore: items.length > 0 && maxFrom > page };
+  return { items: chunks, hasMore: chunks.length > 0 && maxFrom > page };
 }
 
 function catalogPage(page, category) {

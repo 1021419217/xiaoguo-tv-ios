@@ -117,66 +117,94 @@ import WebKit
   }
 }
 
-/// 应用内的站点验证窗口。
+/// 应用内的站点验证页面。
 ///
 /// Cloudflare 的托管挑战要执行 JS，纯 HTTP 客户端拿不到 cf_clearance。
 /// 这里用 WKWebView 真的把站点打开，等标题不再是「Just a moment / 请稍候」、
 /// 且 cookie 里出现 cf_clearance 之后，把 cookie 串和 navigator.userAgent
 /// 一起交回去——cf_clearance 绑 UA，后续请求必须用同一串 UA。
+///
+/// 早先的实现用自建 UIWindow 悬浮在 Flutter 之上，会在一秒左右被系统收回
+/// （key window 被 Flutter 抢回去），看起来就是「弹一下自动缩回」。改成
+/// 从 Flutter 根控制器模态弹出，并由用户点「完成」兜底，不再自动消失。
 final class ChallengeWebView: NSObject, WKNavigationDelegate {
   static let shared = ChallengeWebView()
 
-  private var window: UIWindow?
+  private var controller: UIViewController?
   private var webView: WKWebView?
+  private var statusLabel: UILabel?
   private var host = ""
+  private var target: URL?
   private var completion: ((String?, String?) -> Void)?
   private var poll: Timer?
   private var deadline: Date?
+  private var finished = false
 
   func solve(url: URL, host: String, completion: @escaping (String?, String?) -> Void) {
     DispatchQueue.main.async {
-      guard self.completion == nil else {
-        completion(nil, nil)
+      // 已经在验证中：把窗口提到前面，复用同一次会话，不重复弹。
+      if self.controller != nil {
+        self.completion = completion
+        self.target = url
+        self.host = host
+        self.finished = false
+        self.deadline = Date().addingTimeInterval(180)
+        self.startPolling()
+        self.webView?.load(URLRequest(url: url))
         return
       }
-      guard let scene = UIApplication.shared.connectedScenes
-        .compactMap({ $0 as? UIWindowScene })
-        .first(where: { $0.activationState == .foregroundActive }) else {
+      guard let presenter = self.topController() else {
         completion(nil, nil)
         return
       }
       self.host = host
+      self.target = url
       self.completion = completion
-      self.deadline = Date().addingTimeInterval(90)
+      self.finished = false
+      self.deadline = Date().addingTimeInterval(180)
 
-      let window = UIWindow(windowScene: scene)
-      window.windowLevel = .alert + 1
       let root = UIViewController()
       root.view.backgroundColor = .systemBackground
-      window.rootViewController = root
-      window.makeKeyAndVisible()
-      self.window = window
+      root.modalPresentationStyle = .fullScreen
 
       let bar = UIView()
       bar.translatesAutoresizingMaskIntoConstraints = false
       bar.backgroundColor = .secondarySystemBackground
-      let label = UILabel()
-      label.translatesAutoresizingMaskIntoConstraints = false
-      label.text = "正在验证站点…"
-      label.font = .systemFont(ofSize: 15, weight: .semibold)
+      let title = UILabel()
+      title.translatesAutoresizingMaskIntoConstraints = false
+      title.text = "站点验证"
+      title.font = .systemFont(ofSize: 16, weight: .semibold)
       let close = UIButton(type: .system)
       close.translatesAutoresizingMaskIntoConstraints = false
-      close.setTitle("取消", for: .normal)
+      close.setTitle("关闭", for: .normal)
       close.addTarget(self, action: #selector(self.cancelTapped), for: .touchUpInside)
-      bar.addSubview(label)
+      let done = UIButton(type: .system)
+      done.translatesAutoresizingMaskIntoConstraints = false
+      done.setTitle("完成", for: .normal)
+      done.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+      done.addTarget(self, action: #selector(self.doneTapped), for: .touchUpInside)
+      bar.addSubview(title)
       bar.addSubview(close)
+      bar.addSubview(done)
+
+      let status = UILabel()
+      status.translatesAutoresizingMaskIntoConstraints = false
+      status.text = "正在打开站点，若出现勾选框请点一下…"
+      status.font = .systemFont(ofSize: 13)
+      status.textColor = .secondaryLabel
+      status.numberOfLines = 2
+      status.textAlignment = .center
+      status.backgroundColor = .secondarySystemBackground
 
       let config = WKWebViewConfiguration()
+      // 用默认（持久化）存储：验证拿到的 cookie 与后续 WebKit 请求共用同一份。
       config.websiteDataStore = .default()
       let web = WKWebView(frame: .zero, configuration: config)
       web.translatesAutoresizingMaskIntoConstraints = false
       web.navigationDelegate = self
+      web.allowsBackForwardNavigationGestures = false
       root.view.addSubview(bar)
+      root.view.addSubview(status)
       root.view.addSubview(web)
       let safe = root.view.safeAreaLayoutGuide
       NSLayoutConstraint.activate([
@@ -184,66 +212,142 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         bar.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
         bar.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
         bar.heightAnchor.constraint(equalToConstant: 48),
-        label.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-        label.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
+        title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+        title.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
+        done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+        done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
         close.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-        close.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
-        web.topAnchor.constraint(equalTo: bar.bottomAnchor),
-        web.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
-        web.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+        close.trailingAnchor.constraint(equalTo: done.leadingAnchor, constant: -20),
+        status.topAnchor.constraint(equalTo: bar.bottomAnchor),
+        status.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+        status.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+        status.heightAnchor.constraint(equalToConstant: 34),
+        web.topAnchor.constraint(equalTo: status.bottomAnchor),
+        web.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+        web.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
         web.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
       ])
       self.webView = web
+      self.statusLabel = status
+      self.controller = root
+      presenter.present(root, animated: true)
       web.load(URLRequest(url: url))
-      self.poll = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-        self?.check()
-      }
+      self.startPolling()
     }
+  }
+
+  private func topController() -> UIViewController? {
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    var current = scene?.windows.first { $0.isKeyWindow }?.rootViewController
+      ?? scene?.windows.first?.rootViewController
+    while let next = current?.presentedViewController, !next.isBeingDismissed {
+      current = next
+    }
+    return current
+  }
+
+  private func startPolling() {
+    poll?.invalidate()
+    poll = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
+      self?.check(auto: true)
+    }
+  }
+
+  private func note(_ text: String) {
+    DispatchQueue.main.async { self.statusLabel?.text = text }
   }
 
   @objc private func cancelTapped() { finish(nil, nil) }
 
-  private func check() {
+  @objc private func doneTapped() { check(auto: false) }
+
+  /// 检查页面状态。auto=true 时只在确实拿到通行 cookie 后才自动收尾，
+  /// 不会因为标题短暂为空就把页面关掉。
+  private func check(auto: Bool) {
     guard let web = webView else { return }
-    if let limit = deadline, Date() > limit {
+    if auto, let limit = deadline, Date() > limit {
       finish(nil, nil)
       return
     }
     web.evaluateJavaScript("document.title") { [weak self] value, _ in
       guard let self else { return }
-      let title = (value as? String ?? "").lowercased()
+      let title = ((value as? String) ?? "").lowercased()
       let waiting = title.isEmpty || title.contains("just a moment") || title.contains("请稍候")
         || title.contains("請稍候") || title.contains("attention required")
-      if waiting { return }
-      // 标题已经变成真实页面，再等 cookie 落地。
-      WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
-        let mine = cookies.filter { c in
-          let domain = c.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
-          return !domain.isEmpty && (self.host == domain || self.host.hasSuffix("." + domain))
+        || title.contains("checking") || title.contains("verifying")
+      if auto, waiting {
+        self.note("正在验证，请稍候…")
+        return
+      }
+      self.harvest(manual: !auto)
+    }
+  }
+
+  /// 把本站 cookie 全量取出来。cf_clearance 必须有；手动点「完成」时
+  /// 就算没有也照样回传（可能该站用的是别的校验 cookie）。
+  private func harvest(manual: Bool) {
+    guard let web = webView else { return }
+    let host = self.host
+    WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
+      guard let self else { return }
+      let mine = cookies.filter { cookie in
+        let domain = cookie.domain.lowercased().trimmingCharacters(
+          in: CharacterSet(charactersIn: ".")
+        )
+        guard !domain.isEmpty else { return false }
+        return host == domain || host.hasSuffix("." + domain) || domain.hasSuffix("." + host)
+      }
+      let hasClearance = mine.contains { $0.name == "cf_clearance" }
+      if !hasClearance {
+        if manual {
+          self.note("还没拿到通行 cookie，若页面已能正常浏览，请再点一次「完成」")
+        } else {
+          self.note("已过验证页，正在等待通行 cookie…")
         }
-        guard mine.contains(where: { $0.name == "cf_clearance" }) else { return }
-        let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
-        web.evaluateJavaScript("navigator.userAgent") { agent, _ in
-          self.finish(header, agent as? String)
-        }
+        return
+      }
+      guard !mine.isEmpty else { return }
+      let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+      web.evaluateJavaScript("navigator.userAgent") { agent, _ in
+        self.finish(header, agent as? String)
       }
     }
   }
 
   private func finish(_ cookie: String?, _ agent: String?) {
+    guard !finished else { return }
+    finished = true
     poll?.invalidate()
     poll = nil
     let callback = completion
     completion = nil
+    let page = controller
     webView?.stopLoading()
+    webView?.navigationDelegate = nil
     webView = nil
-    window?.isHidden = true
-    window = nil
-    callback?(cookie, agent)
+    statusLabel = nil
+    controller = nil
+    page?.dismiss(animated: true) {
+      callback?(cookie, agent)
+    }
+    if page == nil { callback?(cookie, agent) }
   }
 
-  func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    // 有的站点验证通过后标题不变，这里也主动探一次 cookie。
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+      self?.check(auto: true)
+    }
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
     // 挑战页本身会触发一次中断式导航，不能当成失败直接退出。
     if (error as NSError).code == NSURLErrorCancelled { return }
+    note("页面加载中断：\((error as NSError).localizedDescription)")
   }
 }

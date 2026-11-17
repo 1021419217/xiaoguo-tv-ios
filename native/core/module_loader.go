@@ -83,6 +83,41 @@ type jsModule struct {
 	program      *goja.Program
 	capabilities map[reflect.Type]bool
 	active       atomic.Pointer[jsProvider]
+
+	// categories() 成功返回过的分类 ID。分类校验以前每次都回到 JS 里问一遍，
+	// 而 JS 实例池只有几个槽：并行预取目录时槽位被占满，5 秒超时后校验
+	// 返回 false，界面就报「内容分类无效」——其实分类是对的。
+	// 这里缓存一份，校验直接命中缓存，不再受实例池排队影响。
+	categoryMu  sync.RWMutex
+	categoryIDs map[string]bool
+}
+
+// rememberCategoryIDs 记录分类 ID（供 ValidCategory 使用）。
+func (module *jsModule) rememberCategoryIDs(categories []Category) {
+	if len(categories) == 0 {
+		return
+	}
+	ids := make(map[string]bool, len(categories))
+	for _, category := range categories {
+		if id := strings.TrimSpace(category.ID); id != "" {
+			ids[id] = true
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	module.categoryMu.Lock()
+	module.categoryIDs = ids
+	module.categoryMu.Unlock()
+}
+
+func (module *jsModule) knownCategory(id string) (bool, bool) {
+	module.categoryMu.RLock()
+	defer module.categoryMu.RUnlock()
+	if len(module.categoryIDs) == 0 {
+		return false, false
+	}
+	return module.categoryIDs[id], true
 }
 
 var loadedModules = struct {
