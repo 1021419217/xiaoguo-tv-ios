@@ -367,11 +367,15 @@ class ExplorePageState extends State<ExplorePage> {
   }
 
   /// 站点要人机验证时，直接在应用内起一个 WebView 过验证，拿到 cookie 后重试。
-  Future<void> _verify(SourceSite site, DramaFeed feed) async {
-    final host = Uri.tryParse(site.baseUrl)?.host ?? '';
-    if (host.isEmpty) return;
+  Future<void> _verify(SourceSite? site, DramaFeed feed) async {
+    final baseUrl = verifyBaseUrl(site, feed.error);
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (host.isEmpty) {
+      _tell('拿不到站点地址，无法验证');
+      return;
+    }
     final repository = AppScope.of(context).repository;
-    final solved = await AppDevice.solveChallenge(site.baseUrl, host);
+    final solved = await AppDevice.solveChallenge(baseUrl, host);
     if (!mounted) return;
     if (solved == null) {
       _tell('没有拿到通行 cookie，可以再点一次「去验证」');
@@ -421,9 +425,8 @@ class ExplorePageState extends State<ExplorePage> {
       // Cloudflare 这类「站点要求浏览器验证」的错误，纯 HTTP 客户端过不去，
       // 给一个「去验证」入口，比反复点重试有用。
       final needsVerify =
-          site != null &&
-          site.baseUrl.isNotEmpty &&
-          feed.error.contains('浏览器验证');
+          verifyBaseUrl(site, feed.error).isNotEmpty &&
+          needsBrowserVerify(feed.error);
       return StatusView(
         key: const ValueKey('error'),
         title: '暂时无法加载',
@@ -539,7 +542,14 @@ class ExplorePageState extends State<ExplorePage> {
                 // 底部留出悬浮胶囊导航的空间。
                 television ? 27 : (phone ? 100 : 16),
               ),
-              sliver: SliverToBoxAdapter(child: FeedFooter(feed: feed)),
+              sliver: SliverToBoxAdapter(
+                child: FeedFooter(
+                  feed: feed,
+                  onVerify: verifyBaseUrl(explore.source, feed.error).isEmpty
+                      ? null
+                      : () => unawaited(_verify(explore.source, feed)),
+                ),
+              ),
             ),
           ],
         );

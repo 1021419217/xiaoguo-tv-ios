@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_device.dart';
 import '../../cover_shape.dart';
 import '../../drama_details.dart';
 import '../../local_store.dart';
@@ -1881,14 +1882,69 @@ class _DetailPageState extends State<DetailPage> {
             : _episodeError(details, autofocus),
       );
 
+  Future<void> _verifyDetails(DramaDetails details) async {
+    final error = details.error ?? '';
+    final source = SourceSite.byId(details.drama.source);
+    final baseUrl = verifyBaseUrl(source, error);
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (host.isEmpty) {
+      _say('拿不到站点地址，无法验证');
+      return;
+    }
+    final repository = AppScope.of(context).repository;
+    final solved = await AppDevice.solveChallenge(baseUrl, host);
+    if (!mounted) return;
+    if (solved == null) {
+      _say('没有拿到通行 cookie，可以再点一次「去验证」');
+      return;
+    }
+    final pending = await repository.pendingWebPages();
+    final saved = await repository.saveChallenge(
+      host,
+      solved.cookie,
+      userAgent: solved.userAgent,
+    );
+    if (!mounted) return;
+    if (!saved) _say('验证结果没能写入，请再试一次');
+    var primed = 0;
+    for (final url in pending) {
+      final pageHost = Uri.tryParse(url)?.host ?? host;
+      final html = await AppDevice.webFetch(url, pageHost);
+      if (html == null || html.isEmpty) continue;
+      if (await repository.setWebPage(url, html)) primed++;
+    }
+    if (!mounted) return;
+    _say(primed > 0 ? '已载入 $primed 页，正在重试…' : '验证完成，正在重试…');
+    await details.load();
+  }
+
+  void _say(String text) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1600),
+        content: Text(text),
+      ),
+    );
+  }
+
   Widget _episodeError(DramaDetails details, bool autofocus) {
+    final error = details.error ?? '';
+    final needsVerify =
+        verifyBaseUrl(SourceSite.byId(details.drama.source), error).isNotEmpty &&
+        needsBrowserVerify(error);
     return StatusView(
       key: const ValueKey('error'),
       title: details.error != null ? '剧集信息暂时不可用' : '暂时没有可播放的集数',
-      message: details.error ?? '可以更新剧集信息后重试。',
+      message: needsVerify
+          ? '$error\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+          : error.isEmpty
+          ? '可以更新剧集信息后重试。'
+          : error,
       icon: Icons.error_outline_rounded,
-      action: '重试',
-      onAction: details.load,
+      action: needsVerify ? '去验证' : '重试',
+      onAction: needsVerify
+          ? () => unawaited(_verifyDetails(details))
+          : details.load,
       autofocus: autofocus,
     );
   }

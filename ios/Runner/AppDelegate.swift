@@ -139,6 +139,10 @@ import WebKit
 /// 早先的实现用自建 UIWindow 悬浮在 Flutter 之上，会在一秒左右被系统收回
 /// （key window 被 Flutter 抢回去），看起来就是「弹一下自动缩回」。改成
 /// 从 Flutter 根控制器模态弹出，并由用户点「完成」兜底，不再自动消失。
+private final class ChallengeHostController: UIViewController {
+  override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+}
+
 final class ChallengeWebView: NSObject, WKNavigationDelegate {
   static let shared = ChallengeWebView()
 
@@ -269,38 +273,57 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       self.finished = false
       self.deadline = Date().addingTimeInterval(180)
 
-      let root = UIViewController()
-      root.view.backgroundColor = .systemBackground
+      let background = UIColor(red: 0.043, green: 0.043, blue: 0.055, alpha: 1)
+      let elevated = UIColor(red: 0.078, green: 0.078, blue: 0.086, alpha: 1)
+      let root = ChallengeHostController()
+      root.view.backgroundColor = background
+      root.overrideUserInterfaceStyle = .dark
       root.modalPresentationStyle = .fullScreen
 
       let bar = UIView()
       bar.translatesAutoresizingMaskIntoConstraints = false
-      bar.backgroundColor = .secondarySystemBackground
+      bar.backgroundColor = elevated
+      let hairline = UIView()
+      hairline.translatesAutoresizingMaskIntoConstraints = false
+      hairline.backgroundColor = UIColor.white.withAlphaComponent(0.08)
       let title = UILabel()
       title.translatesAutoresizingMaskIntoConstraints = false
       title.text = "站点验证"
-      title.font = .systemFont(ofSize: 16, weight: .semibold)
+      title.font = .systemFont(ofSize: 18, weight: .semibold)
+      title.textColor = .white
       let close = UIButton(type: .system)
       close.translatesAutoresizingMaskIntoConstraints = false
-      close.setTitle("关闭", for: .normal)
+      var closeConfig = UIButton.Configuration.plain()
+      closeConfig.image = UIImage(systemName: "xmark")
+      closeConfig.baseForegroundColor = UIColor.white.withAlphaComponent(0.92)
+      close.configuration = closeConfig
       close.addTarget(self, action: #selector(self.cancelTapped), for: .touchUpInside)
       let done = UIButton(type: .system)
       done.translatesAutoresizingMaskIntoConstraints = false
-      done.setTitle("完成", for: .normal)
-      done.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+      var doneConfig = UIButton.Configuration.filled()
+      var doneTitle = AttributedString("完成")
+      doneTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+      doneConfig.attributedTitle = doneTitle
+      doneConfig.baseBackgroundColor = UIColor.white.withAlphaComponent(0.92)
+      doneConfig.baseForegroundColor = UIColor.black
+      doneConfig.cornerStyle = .capsule
+      doneConfig.contentInsets = NSDirectionalEdgeInsets(
+        top: 8, leading: 18, bottom: 8, trailing: 18)
+      done.configuration = doneConfig
       done.addTarget(self, action: #selector(self.doneTapped), for: .touchUpInside)
       bar.addSubview(title)
       bar.addSubview(close)
       bar.addSubview(done)
+      bar.addSubview(hairline)
 
       let status = UILabel()
       status.translatesAutoresizingMaskIntoConstraints = false
       status.text = "正在打开站点，若出现勾选框请点一下…"
       status.font = .systemFont(ofSize: 13)
-      status.textColor = .secondaryLabel
+      status.textColor = UIColor(red: 0.56, green: 0.56, blue: 0.58, alpha: 1)
       status.numberOfLines = 2
       status.textAlignment = .center
-      status.backgroundColor = .secondarySystemBackground
+      status.backgroundColor = background
 
       let config = WKWebViewConfiguration()
       // 用默认（持久化）存储：验证拿到的 cookie 与后续 WebKit 请求共用同一份。
@@ -309,6 +332,9 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       web.translatesAutoresizingMaskIntoConstraints = false
       web.navigationDelegate = self
       web.allowsBackForwardNavigationGestures = false
+      web.isOpaque = false
+      web.backgroundColor = background
+      web.scrollView.backgroundColor = background
       root.view.addSubview(bar)
       root.view.addSubview(status)
       root.view.addSubview(web)
@@ -317,17 +343,24 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         bar.topAnchor.constraint(equalTo: safe.topAnchor),
         bar.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
         bar.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-        bar.heightAnchor.constraint(equalToConstant: 48),
-        title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-        title.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
-        done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-        done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
+        bar.heightAnchor.constraint(equalToConstant: 56),
+        close.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 14),
         close.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
-        close.trailingAnchor.constraint(equalTo: done.leadingAnchor, constant: -20),
+        close.widthAnchor.constraint(equalToConstant: 38),
+        close.heightAnchor.constraint(equalToConstant: 38),
+        title.leadingAnchor.constraint(equalTo: close.trailingAnchor, constant: 6),
+        title.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+        done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
+        done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+        done.heightAnchor.constraint(equalToConstant: 38),
+        hairline.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+        hairline.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+        hairline.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+        hairline.heightAnchor.constraint(equalToConstant: 1),
         status.topAnchor.constraint(equalTo: bar.bottomAnchor),
         status.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
         status.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-        status.heightAnchor.constraint(equalToConstant: 34),
+        status.heightAnchor.constraint(equalToConstant: 40),
         web.topAnchor.constraint(equalTo: status.bottomAnchor),
         web.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
         web.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),

@@ -4,6 +4,26 @@ const hongguoSourceId = 'hongguo';
 
 bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 
+/// 「去验证」的目标地址：优先站源主页；后装模块没配 BaseURL 时，从错误
+/// 文案里提取域名兜底，否则按钮会静默失效。
+String verifyBaseUrl(SourceSite? site, String error) {
+  final base = site?.baseUrl ?? '';
+  if (base.isNotEmpty) return base;
+  final match = RegExp(
+    r'([a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,})',
+  ).firstMatch(error);
+  return match == null ? '' : 'https://${match.group(1)}';
+}
+
+/// 不同模块/网关对「要人机验证」的文案不完全一致，统一判断一次。
+bool needsBrowserVerify(String error) {
+  final lower = error.toLowerCase();
+  return error.contains('浏览器验证') ||
+      error.contains('人机验证') ||
+      lower.contains('cloudflare') ||
+      lower.contains('challenge');
+}
+
 class SourceSite {
   const SourceSite(
     this.id,
