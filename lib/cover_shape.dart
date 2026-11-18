@@ -42,7 +42,8 @@ class CoverShapes {
   }
 
   /// 单张封面的宽高比（宽 / 高），未知时返回 0。
-  static double ratioOf(String dramaId) => _ratios[dramaId] ?? 0;
+  static double ratioOf(String source, String dramaId) =>
+      _ratios['$source\u0000$dramaId'] ?? 0;
 
   static CoverShape of(String source) {
     final declared = SourceSite.byId(source).coverAspect;
@@ -106,8 +107,9 @@ class CoverShapes {
     if (width <= 0 || height <= 0) return;
 
     final ratio = width / height;
-    if (dramaId.isNotEmpty && !_ratios.containsKey(dramaId)) {
-      _ratios[dramaId] = ratio;
+    final key = '$source\u0000$dramaId';
+    if (dramaId.isNotEmpty && !_ratios.containsKey(key)) {
+      _ratios[key] = ratio;
       _notify();
     }
 

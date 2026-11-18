@@ -808,7 +808,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       return ProgressPoster.extentFor(
                         context,
                         cellWidth,
-                        aspect: posterAspect(item.drama.id),
+                        aspect: posterAspect(item.drama.source, item.drama.id),
                         date: dateOf(item) != null,
                       );
                     },
@@ -821,7 +821,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                         index,
                         2,
                         cellWidth,
-                        posterAspect(item.drama.id),
+                        posterAspect(item.drama.source, item.drama.id),
                         dateLabelOf(item),
                       );
                     },

@@ -623,7 +623,7 @@ class _FollowPageState extends State<FollowPage> {
                           return ProgressPoster.extentFor(
                             context,
                             cellWidth,
-                            aspect: posterAspect(drama.id),
+                            aspect: posterAspect(drama.source, drama.id),
                             date: widget.store.watched(drama.id) != null,
                           );
                         },
@@ -652,7 +652,7 @@ class _FollowPageState extends State<FollowPage> {
                                     ? widget.entryFocus
                                     : null,
                                 hero: identical(heroOwner[drama.id], drama),
-                                aspect: posterAspect(drama.id),
+                                aspect: posterAspect(drama.source, drama.id),
                                 date: widget.store.watched(drama.id)?.updatedAt,
                               ),
                             ),

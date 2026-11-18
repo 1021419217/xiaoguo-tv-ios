@@ -591,7 +591,10 @@ class _HistoryPageState extends State<HistoryPage> {
                         heightAt: (index, cellWidth) => ProgressPoster.extentFor(
                           context,
                           cellWidth,
-                          aspect: posterAspect(entries[index].drama.id),
+                          aspect: posterAspect(
+                            entries[index].drama.source,
+                            entries[index].drama.id,
+                          ),
                           date: true,
                         ),
                         itemBuilder: (context, index, cellWidth) {
@@ -617,7 +620,10 @@ class _HistoryPageState extends State<HistoryPage> {
                                 view.selection,
                                 focusNode: entry == first ? _firstPoster : null,
                                 hero: identical(heroOwner[entry.drama.id], entry),
-                                aspect: posterAspect(entry.drama.id),
+                                aspect: posterAspect(
+                                  entry.drama.source,
+                                  entry.drama.id,
+                                ),
                                 date: entry.updatedAt,
                               ),
                             ),

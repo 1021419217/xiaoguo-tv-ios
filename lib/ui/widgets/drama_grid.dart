@@ -89,8 +89,8 @@ Map<String, int> firstIndexById<T>(List<T> items, String Function(T) idOf) {
   return first;
 }
 
-double posterAspect(String dramaId) {
-  final ratio = CoverShapes.ratioOf(dramaId);
+double posterAspect(String source, String dramaId) {
+  final ratio = CoverShapes.ratioOf(source, dramaId);
   if (ratio <= 0) return 2 / 3;
   if (ratio < 0.45) return 0.45;
   if (ratio > 2) return 2;
@@ -192,9 +192,7 @@ class DramaSliverGrid extends StatelessWidget {
   );
 
   Widget _layout(BuildContext context) {
-    final source = items.isEmpty ? '' : items.first.source;
-    if (AppScope.formFactorOf(context) == FormFactor.phone &&
-        CoverShapes.isMixed(source)) {
+    if (AppScope.formFactorOf(context) == FormFactor.phone) {
       return _masonry(context);
     }
     return _grid(context);
@@ -231,7 +229,7 @@ class DramaSliverGrid extends StatelessWidget {
     var rightHeight = 0.0;
     for (var index = 0; index < items.length; index++) {
       final drama = items[index];
-      final ratio = CoverShapes.ratioOf(drama.id);
+      final ratio = CoverShapes.ratioOf(drama.source, drama.id);
       final aspect = ratio > 0 ? ratio : 2 / 3;
       final cell = Padding(
         padding: const EdgeInsets.only(bottom: spacing),
