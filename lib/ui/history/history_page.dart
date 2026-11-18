@@ -197,7 +197,6 @@ class _HistoryPageState extends State<HistoryPage> {
     ActionPill(
       icon: Icons.check_box_outlined,
       label: '编辑',
-      height: 38,
       fontSize: 14,
       focusNode: _editButton,
       onPressed: view.shown.isEmpty ? null : _startEditing,
@@ -205,7 +204,6 @@ class _HistoryPageState extends State<HistoryPage> {
     ActionPill(
       icon: Icons.delete_sweep_outlined,
       label: '清空',
-      height: 38,
       fontSize: 14,
       onPressed: view.shown.isEmpty
           ? null
@@ -338,6 +336,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: glassAppBar(
+        titleSpacing: 4,
         leading: !root
             ? null
             : selection == null

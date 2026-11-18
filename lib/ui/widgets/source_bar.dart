@@ -237,30 +237,39 @@ class _SearchPill extends StatelessWidget {
         label: tooltip,
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(21),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onPressed,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(21),
             splashColor: glass.withValues(alpha: 0.10),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(21),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: Container(
-                  height: 38,
+                  height: 42,
                   padding: const EdgeInsets.fromLTRB(13, 0, 11, 0),
                   decoration: BoxDecoration(
-                    color: glass.withValues(alpha: dark ? 0.09 : 0.06),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: glass.withValues(alpha: 0.10)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        glass.withValues(alpha: dark ? 0.12 : 0.07),
+                        glass.withValues(alpha: dark ? 0.05 : 0.03),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(21),
+                    border: Border.all(
+                      color: glass.withValues(alpha: dark ? 0.16 : 0.12),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.search_rounded,
-                        size: 17,
+                        size: 18,
                         color: ink.withValues(alpha: 0.92),
                       ),
                       const SizedBox(width: 7),
@@ -276,7 +285,7 @@ class _SearchPill extends StatelessWidget {
                       const SizedBox(width: 2),
                       Icon(
                         Icons.keyboard_arrow_down_rounded,
-                        size: 16,
+                        size: 17,
                         color: ink.withValues(alpha: 0.5),
                       ),
                     ],

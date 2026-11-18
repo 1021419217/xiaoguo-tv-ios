@@ -39,8 +39,8 @@ class BarButton extends StatelessWidget {
           onPressed: onPressed,
           icon: Icon(icon, size: 20),
           style: IconButton.styleFrom(
-            fixedSize: const Size.square(40),
-            minimumSize: const Size.square(40),
+            fixedSize: const Size.square(42),
+            minimumSize: const Size.square(42),
             padding: EdgeInsets.zero,
             backgroundColor: colors.surfaceContainerHigh,
             foregroundColor: Colors.white,
@@ -60,15 +60,15 @@ class BarButton extends StatelessWidget {
       alpha: inactive
           ? 0.04
           : accent
-          ? 0.15
-          : 0.08,
+          ? 0.16
+          : 0.10,
     );
     final hairline = tint.withValues(
       alpha: inactive
-          ? 0.07
+          ? 0.08
           : accent
-          ? 0.22
-          : 0.14,
+          ? 0.24
+          : 0.16,
     );
 
     return FocusRing(
@@ -90,8 +90,8 @@ class BarButton extends StatelessWidget {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 42,
+                    height: 42,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -100,7 +100,7 @@ class BarButton extends StatelessWidget {
                     ),
                     child: Icon(
                       icon,
-                      size: 19,
+                      size: 20,
                       color: ink.withValues(alpha: inactive ? 0.38 : 0.92),
                     ),
                   ),

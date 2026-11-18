@@ -192,7 +192,6 @@ class _FollowPageState extends State<FollowPage> {
   Widget _editButtonFor(_View view) => ActionPill(
     icon: Icons.check_box_outlined,
     label: '编辑',
-    height: 38,
     fontSize: 14,
     focusNode: _editButton,
     onPressed: view.shown.isEmpty ? null : _startEditing,

@@ -43,22 +43,17 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   var _index = 0;
 
-  /// 三段胶囊要挤进顶栏标题位，字号放大到极限时按比例缩放，绝不溢出。
-  Widget get _switcher => FittedBox(
-    fit: BoxFit.scaleDown,
-    alignment: AlignmentDirectional.centerStart,
-    child: CapsuleTabs(
-      labels: const ['追剧', '最近观看', '下载'],
-      index: _index,
-      // 三段要挤进顶栏标题位，字号与内边距比独立页面的标签条略紧一档。
-      fontSize: 13,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      onChanged: (index) {
-        if (index == _index) return;
-        unawaited(HapticFeedback.selectionClick());
-        setState(() => _index = index);
-      },
-    ),
+  /// 三段胶囊和首页选站源同一高度，不再按可用宽度缩放。
+  Widget get _switcher => CapsuleTabs(
+    labels: const ['追剧', '最近观看', '下载'],
+    index: _index,
+    fontSize: 14,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    onChanged: (index) {
+      if (index == _index) return;
+      unawaited(HapticFeedback.selectionClick());
+      setState(() => _index = index);
+    },
   );
 
   @override

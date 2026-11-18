@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../ui/app_scope.dart';
-import '../ui/widgets/capsule_tabs.dart';
 import '../local_store.dart';
 
 import '../ui/widgets/bar_button.dart';
@@ -260,26 +259,30 @@ class _LivePageState extends State<LivePage> {
     final favourites = widget.store.favourites.length;
     final merging = _progressTotal > 0 && _loading && _platform == _allId;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
-          CapsuleTabs(
-            labels: [
-              favourites == 0 ? '收藏' : '收藏 $favourites',
-              merging ? '全部频道 $_progressDone/$_progressTotal' : '全部频道',
-            ],
-            index: _platform == _favouritesId ? 0 : 1,
-            onChanged: (index) =>
-                _selectPlatform(index == 0 ? _favouritesId : _allId),
+          GlassChip(
+            label: merging
+                ? '全部频道 $_progressDone/$_progressTotal'
+                : '全部频道',
+            selected: _platform == _allId,
+            onTap: () => _selectPlatform(_allId),
           ),
           const Spacer(),
-          if (_sources.length > 1)
+          if (_sources.length > 1) ...[
             GlassChip(
               label: _source?.name ?? '直播源',
               selected: false,
-              height: 32,
               onTap: () => unawaited(_pickSource(_sources)),
             ),
+            const SizedBox(width: 8),
+          ],
+          GlassChip(
+            label: favourites == 0 ? '收藏' : '收藏 $favourites',
+            selected: _platform == _favouritesId,
+            onTap: () => _selectPlatform(_favouritesId),
+          ),
         ],
       ),
     );

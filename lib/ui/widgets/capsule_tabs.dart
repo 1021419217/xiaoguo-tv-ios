@@ -96,7 +96,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: widget.padding.add(
-            const EdgeInsets.symmetric(vertical: 6.5),
+            const EdgeInsets.symmetric(vertical: 10),
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(

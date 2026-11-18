@@ -137,7 +137,7 @@ class GlassChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.badge,
-    this.height = 36,
+    this.height = 42,
   });
 
   final String label;
@@ -172,11 +172,11 @@ class GlassChip extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                   color: selected
                       ? primary.withValues(alpha: dark ? 0.24 : 0.18)
-                      : ink.withValues(alpha: dark ? 0.07 : 0.045),
+                      : ink.withValues(alpha: 0.10),
                   border: Border.all(
                     color: selected
                         ? primary.withValues(alpha: 0.42)
-                        : ink.withValues(alpha: 0.10),
+                        : ink.withValues(alpha: 0.16),
                   ),
                 ),
                 child: Row(
@@ -186,7 +186,7 @@ class GlassChip extends StatelessWidget {
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: selected
                             ? FontWeight.w700
                             : FontWeight.w500,

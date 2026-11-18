@@ -417,6 +417,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       extendBodyBehindAppBar: true,
       appBar: selection == null
           ? glassAppBar(
+              titleSpacing: 4,
               title: widget.headerChild == null ? '下载' : null,
               titleWidget: widget.headerChild,
               actions: [
@@ -436,7 +437,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                 if (_downloadedTab && view.downloaded.isNotEmpty)
                   _editButton(view),
                 if (_mergeTab) _clearMerges(),
-                const SizedBox(width: 8),
+                const SizedBox(width: 20),
               ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(50),

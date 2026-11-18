@@ -26,8 +26,8 @@ class ActionPill extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.tone = ActionTone.neutral,
-    this.height = 34,
-    this.fontSize = 13,
+    this.height = 42,
+    this.fontSize = 14,
     this.focusNode,
     this.autofocus = false,
     this.expanded = false,
@@ -64,9 +64,9 @@ class ActionPill extends StatelessWidget {
         colors.error.withValues(alpha: active ? 0.92 : 0.36),
       ),
       ActionTone.neutral => (
-        ink.withValues(alpha: active ? 0.07 : 0.03),
-        ink.withValues(alpha: active ? 0.14 : 0.06),
-        ink.withValues(alpha: active ? 0.88 : 0.30),
+        ink.withValues(alpha: active ? 0.10 : 0.04),
+        ink.withValues(alpha: active ? 0.16 : 0.08),
+        ink.withValues(alpha: active ? 0.92 : 0.30),
       ),
     };
     final pill = FocusRing(
@@ -83,13 +83,13 @@ class ActionPill extends StatelessWidget {
           child: SizedBox(
             height: height,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
                 mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 spacing: 6,
                 children: [
-                  Icon(icon, size: 15, color: foreground),
+                  Icon(icon, size: 16, color: foreground),
                   Text(
                     label,
                     maxLines: 1,
