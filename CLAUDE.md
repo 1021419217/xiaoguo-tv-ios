@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 仓库注意事项
 
 - 更新版本前，检查项目 Github 该版本是否已经发布 Release，若未发布则继续在当前版本写。
-- 更新版本要同时递增 `pubspec.yaml` 的版本号与构建号。
+- 版本号按「到 10 进位」递增：构建号从 1 开始，每版 +1；到 10 后次版本 +1、构建号回 1（如 `2.3.0+9` 的下一版是 `2.4.0+1`），不再无上限累加。
 - 更新内容写在 `CHANGELOG.md` 。标题为完整版本号（如 `## 0.2.72+79`），每个版本的更新日志不得超过3500字。
 - 每条更新日志只需简单描述，不需要具体的说明。
 - 未验证的改动标为开发快照，提醒用户在对应平台进行实机测试，验证通过后，移除标记。
@@ -15,4 +15,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 站源
 
-本体不内置站源，站源是运行时加载的 JS 模块（`native/core/module_*.go`，示例 `native/module_example`）。官方站源正从私有仓库 `guoapp-sources`（本机 `../guoapp-sources`）里的 Go 代码改写成 JS 模块，改写后的模块放在同级文件夹 `../guoapp-modules/<标识>/`（那里有自己的 `CLAUDE.md`）；`guoapp-sources` 只读、只作对照，不要改动，也不再编译。探测脚本 skill `masked-probe` 在 `guoapp-sources` 的 `.claude/skills/` 里。其中的硬性规定在此重申：允许直接访问的站源只有 `红果` `韩小圈` `鬼片` `青空`，其他站点（包括新增）不得以任何形式直接访问，也不得编写或运行会输出站点内容的测试，需要真实数据时写脚本交给用户在会话外运行。
+本体随包内置 `modules/` 下的 30 个站源，构建时由 `scripts/app_build.py` 拷进 `native/core/bundled`；站源仍是运行时加载的 JS 模块（`native/core/module_*.go`，示例 `native/module_example`）。官方站源正从私有仓库 `guoapp-sources`（本机 `../guoapp-sources`）里的 Go 代码改写成 JS 模块，改写后的模块放在同级文件夹 `../guoapp-modules/<标识>/`（那里有自己的 `CLAUDE.md`）；`guoapp-sources` 只读、只作对照，不要改动，也不再编译。探测脚本 skill `masked-probe` 在 `guoapp-sources` 的 `.claude/skills/` 里。其中的硬性规定在此重申：允许直接访问的站源只有 `红果` `韩小圈` `鬼片` `青空`，其他站点（包括新增）不得以任何形式直接访问，也不得编写或运行会输出站点内容的测试，需要真实数据时写脚本交给用户在会话外运行。

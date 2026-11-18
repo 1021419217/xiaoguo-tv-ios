@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../cover_shape.dart';
 import '../../download_collections.dart';
 import '../../download_converter.dart';
 import '../../download_overview.dart';
@@ -217,11 +216,11 @@ class _DownloadsPageState extends State<DownloadsPage>
     },
   );
 
-  /// 顶栏只留 38 圆钮：编辑 / 清除已结束不再占一排文字胶囊。
-  Widget _editButton(_View view) => BarButton(
-    icon: Icons.edit_outlined,
-    tooltip: '编辑',
-    size: 38,
+  /// 顶栏操作统一走 [ActionPill]：和模块页、追剧页同一套胶囊语言，
+  /// 不再混用 Material 默认字按钮（主色文字、无底、高度不一致）。
+  Widget _editButton(_View view) => ActionPill(
+    icon: Icons.check_box_outlined,
+    label: '编辑',
     onPressed: _editable(view) ? () => setState(() => _selection = {}) : null,
   );
 
@@ -260,14 +259,12 @@ class _DownloadsPageState extends State<DownloadsPage>
   String _selectedTitle(Set<String> selection) =>
       '已选择 ${selection.length} ${_downloadedTab ? '部' : '集'}';
 
-  bool get _hasFinishedMerges =>
-      widget.merges.tasks.any((task) => task.finished);
-
-  Widget _clearMerges() => BarButton(
+  Widget _clearMerges() => ActionPill(
     icon: Icons.clear_all_rounded,
-    tooltip: '清除已结束',
-    size: 38,
-    onPressed: _hasFinishedMerges ? widget.merges.clearFinished : null,
+    label: '清除已结束',
+    onPressed: widget.merges.tasks.any((task) => task.finished)
+        ? widget.merges.clearFinished
+        : null,
   );
 
   Future<void> _mergeSelected(_View view) async {
@@ -422,7 +419,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                 ],
                 if (_downloadedTab && view.downloaded.isNotEmpty)
                   _editButton(view),
-                if (_mergeTab && _hasFinishedMerges) _clearMerges(),
+                if (_mergeTab) _clearMerges(),
                 const SizedBox(width: 8),
               ],
               bottom: PreferredSize(
@@ -457,22 +454,19 @@ class _DownloadsPageState extends State<DownloadsPage>
       ),
       bottomNavigationBar: selection == null
           ? null
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 62 + 12,
-              ),
-              child: SizedBox(
-                height: 48,
-                child: Row(
-                  spacing: 12,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final action in _selectionActions(view))
-                      Expanded(child: action),
-                  ],
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: SizedBox(
+                  height: 48,
+                  child: Row(
+                    spacing: 12,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final action in _selectionActions(view))
+                        Expanded(child: action),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -528,9 +522,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       ),
                     ),
                   ),
-                  if (view.selection != null ||
-                      _editable(view) ||
-                      (_mergeTab && _hasFinishedMerges))
+                  if (view.selection != null || _editable(view) || _mergeTab)
                     FadeSwitcher(
                       duration: Motion.short,
                       alignment: AlignmentDirectional.centerEnd,
@@ -566,7 +558,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                               key: const ValueKey('downloaded'),
                               child: _editButton(view),
                             )
-                          : _mergeTab && _hasFinishedMerges
+                          : _mergeTab
                           ? KeyedSubtree(
                               key: const ValueKey('merges'),
                               child: _clearMerges(),
@@ -659,7 +651,7 @@ class _DownloadsPageState extends State<DownloadsPage>
         if (counts[state] case final count?) '$label $count',
     ].join(' · ');
     return ListView.separated(
-      padding: EdgeInsets.fromLTRB(inset, 8, inset, pageBottomInset(context)),
+      padding: EdgeInsets.fromLTRB(inset, 8, inset, 32),
       itemCount: view.pending.length + 1,
       separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 4 : 8),
       itemBuilder: (context, index) => index == 0
@@ -713,7 +705,7 @@ class _DownloadsPageState extends State<DownloadsPage>
         ? 16.0
         : 24.0;
     return ListView.separated(
-      padding: EdgeInsets.fromLTRB(inset, 12, inset, pageBottomInset(context)),
+      padding: EdgeInsets.fromLTRB(inset, 12, inset, 32),
       itemCount: tasks.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) => _MergeRow(
@@ -757,100 +749,47 @@ class _DownloadsPageState extends State<DownloadsPage>
         final width = constraints.maxWidth - inset * 2;
         final (columns, gap, runGap) = _grid(context, width);
         final tile = (width - gap * (columns - 1)) / columns;
-        Widget poster(
-          DownloadedDrama item,
-          int index,
-          double tileWidth,
-          double aspect, {
-          bool adaptive = false,
-        }) => Focus(
-          key: ValueKey(item.drama.id),
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: (_, event) =>
-              wrapGridRow(index, columns, view.downloaded.length, event),
-          child: ProgressPoster(
-            drama: item.drama,
-            width: tileWidth,
-            aspect: aspect,
-            adaptiveAspect: adaptive,
-            progress: null,
-            caption: '${item.episodes.length} 集 · ${formatBytes(item.bytes)}',
-            tag: SourceSite.byId(item.drama.source).name,
-            badge: item.pending > 0 ? '${item.pending} 集下载中' : null,
-            selected: view.selection?.contains(item.drama.id),
-            onTap: view.selection != null
-                ? () => _toggle(item.drama.id)
-                : () => openPage<void>(
-                    context,
-                    (_) => DownloadedDramaPage(
-                      store: widget.store,
-                      downloads: widget.downloads,
-                      merges: widget.merges,
-                      drama: item.drama,
-                    ),
-                  ),
-            onMore: view.selection == null
-                ? () => setState(() => _selection = {item.drama.id})
-                : null,
+        return GridView.builder(
+          padding: EdgeInsets.fromLTRB(inset, 12, inset, 32),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: gap,
+            mainAxisSpacing: runGap,
+            mainAxisExtent: ProgressPoster.extentFor(context, tile),
           ),
-        );
-        return ValueListenableBuilder<int>(
-          valueListenable: CoverShapes.revision,
-          builder: (context, _, _) {
-            // 横竖混排源在手机竖屏走两列瀑布流，和发现、追剧、历史同一套判定。
-            final mixed = usePosterMasonry(
-              context,
-              view.downloaded.first.drama.source,
-            );
-            if (mixed) {
-              return CustomScrollView(
-                slivers: [
-                  PosterMasonry(
-                    width: constraints.maxWidth,
-                    count: view.downloaded.length,
-                    padding: EdgeInsets.fromLTRB(inset, 12, inset, 0),
-                    heightAt: (index, tileWidth) => ProgressPoster.extentFor(
-                      context,
-                      tileWidth,
-                      aspect: posterAspect(
-                        view.downloaded[index].drama.source,
-                        view.downloaded[index].drama.id,
+          itemCount: view.downloaded.length,
+          itemBuilder: (context, index) {
+            final item = view.downloaded[index];
+            return Focus(
+              key: ValueKey(item.drama.id),
+              canRequestFocus: false,
+              skipTraversal: true,
+              onKeyEvent: (_, event) =>
+                  wrapGridRow(index, columns, view.downloaded.length, event),
+              child: ProgressPoster(
+                drama: item.drama,
+                width: tile,
+                progress: null,
+                caption:
+                    '${item.episodes.length} 集 · ${formatBytes(item.bytes)}',
+                tag: SourceSite.byId(item.drama.source).name,
+                badge: item.pending > 0 ? '${item.pending} 集下载中' : null,
+                selected: view.selection?.contains(item.drama.id),
+                onTap: view.selection != null
+                    ? () => _toggle(item.drama.id)
+                    : () => openPage<void>(
+                        context,
+                        (_) => DownloadedDramaPage(
+                          store: widget.store,
+                          downloads: widget.downloads,
+                          merges: widget.merges,
+                          drama: item.drama,
+                        ),
                       ),
-                    ),
-                    itemBuilder: (context, index, tileWidth) {
-                      final item = view.downloaded[index];
-                      return poster(
-                        item,
-                        index,
-                        tileWidth,
-                        posterAspect(item.drama.source, item.drama.id),
-                        adaptive: true,
-                      );
-                    },
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(height: pageBottomInset(context)),
-                  ),
-                ],
-              );
-            }
-            return GridView.builder(
-              padding: EdgeInsets.fromLTRB(
-                inset,
-                12,
-                inset,
-                pageBottomInset(context),
+                onMore: view.selection == null
+                    ? () => setState(() => _selection = {item.drama.id})
+                    : null,
               ),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                crossAxisSpacing: gap,
-                mainAxisSpacing: runGap,
-                mainAxisExtent: ProgressPoster.extentFor(context, tile),
-              ),
-              itemCount: view.downloaded.length,
-              itemBuilder: (context, index) =>
-                  poster(view.downloaded[index], index, tile, 2 / 3),
             );
           },
         );

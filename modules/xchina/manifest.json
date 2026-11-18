@@ -1,0 +1,19 @@
+{
+  "id": "xchina",
+  "name": "小黄书 xChina",
+  "version": "1.3.0",
+  "description": "xChina（小黄书）：最新 + 5 个分类 + 搜索，单集长视频，HLS（AES-128）。1.3.0 起解析详情页演员/模特（JSON-LD actor + 作者胶囊），支持点作者看其全部作品，并带时长/系列/发行信息。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "xchina.co",
+    "*.xchina.co"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://xchina.co",
+  "browserFingerprint": true
+}

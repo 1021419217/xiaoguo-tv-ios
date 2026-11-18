@@ -1,0 +1,12 @@
+{
+  "id": "yesheai",
+  "name": "夜社",
+  "version": "1.0.0",
+  "description": "短剧 · 在线搜索",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": ["yesheai.com", "*.ejhx7q0rrrnhamudki.com"],
+  "capabilities": ["search"],
+  "baseUrl": "https://yesheai.com"
+}

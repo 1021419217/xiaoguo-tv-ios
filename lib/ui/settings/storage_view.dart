@@ -221,6 +221,7 @@ class _StorageViewState extends State<StorageView> {
                 ],
               ),
             ),
+            const Divider(indent: 16, endIndent: 16),
             SettingsTile(
               title: '当前下载目录',
               subtitle: directory,
@@ -234,12 +235,14 @@ class _StorageViewState extends State<StorageView> {
                 ),
               ),
             ),
+            const Divider(indent: 16, endIndent: 16),
             SettingsTile(
               title: '更改并迁移目录',
               subtitle: admin ? '下载会先暂停，复制成功后清理旧目录' : '需要管理员',
               enabled: admin,
               onTap: _move,
             ),
+            const Divider(indent: 16, endIndent: 16),
             SettingsTile(
               title: '恢复默认下载目录',
               subtitle: !admin
@@ -250,6 +253,7 @@ class _StorageViewState extends State<StorageView> {
               enabled: admin && !isDefault,
               onTap: _restore,
             ),
+            const Divider(indent: 16, endIndent: 16),
             SettingsTile(title: '刷新用量', onTap: _refresh),
           ],
         ),

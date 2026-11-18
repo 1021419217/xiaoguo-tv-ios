@@ -1,0 +1,27 @@
+{
+  "id": "hscangku",
+  "name": "黄色仓库",
+  "version": "1.2.1",
+  "description": "黄色仓库（hsck）：日韩AV / 国产系列 / 欧美 / 成人动漫 + 搜索，HLS。详情缓存播放凭证，点播放一次请求出画面。1.2.0：修主域名 301 丢路径导致「搜什么都返回首页」，改为域名池自动切换；含主演/作者识别与作者页。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "111.ajjck.cc",
+    "*.ajjck.cc",
+    "hscangku.com",
+    "*.hscangku.com",
+    "23.225.11.173",
+    "*.cdn2020.com",
+    "*.cdntoo.com",
+    "*.vliboz.cn",
+    "222.ajjck.cc",
+    "*.ajlck.cc",
+    "*.9981hsck.cc"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://111.ajlck.cc"
+}

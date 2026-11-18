@@ -4,12 +4,11 @@ import 'package:flutter/services.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../theme/motion.dart';
-import '../theme/tokens.dart';
 import 'cover_image.dart';
 import 'focus_ring.dart';
 import 'motion/motion_widgets.dart';
 
-const _coverRadius = AppRadius.content;
+const _coverRadius = 12.0;
 
 class _PosterButton extends StatefulWidget {
   const _PosterButton({
@@ -22,9 +21,8 @@ class _PosterButton extends StatefulWidget {
     this.autofocus = false,
     this.checked,
     this.aspect = 2 / 3,
-    this.adaptiveAspect = false,
   });
-  final Widget Function(ValueChanged<double> onAspect) cover;
+  final Widget cover;
   final List<Widget> caption;
   final String label;
   final VoidCallback onTap;
@@ -32,9 +30,6 @@ class _PosterButton extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   final bool? checked;
-  /// 只在瀑布流里为 true：格子跟着图片真实比例走；普通网格必须保持
-  /// 统一比例，否则 app 的 mainAxisExtent 会算错。
-  final bool adaptiveAspect;
   final double aspect;
 
   @override
@@ -45,29 +40,11 @@ class _PosterButtonState extends State<_PosterButton> {
   bool _focused = false;
   bool _hovered = false;
   bool _pressed = false;
-  double? _ratio;
-
-  /// 封面读出来的真实比例优先，保证格子跟着图片走、不裁切。
-  void _setAspect(double ratio) {
-    if (!widget.adaptiveAspect || !mounted || ratio <= 0) return;
-    if ((ratio - (_ratio ?? widget.aspect)).abs() < 0.005) return;
-    setState(() => _ratio = ratio);
-  }
-
-  @override
-  void didUpdateWidget(covariant _PosterButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 同一位置换成另一部剧时，别沿用上一张封面的比例。
-    if (oldWidget.label != widget.label) _ratio = null;
-  }
 
   @override
   Widget build(BuildContext context) {
     final visible = focusVisible(_focused);
     final layer = _pressed ? 0.12 : (_hovered ? 0.08 : 0.0);
-    final aspect = widget.adaptiveAspect
-        ? (_ratio ?? widget.aspect)
-        : widget.aspect;
     final button = InkWell(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -83,14 +60,14 @@ class _PosterButtonState extends State<_PosterButton> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: aspect,
+            aspectRatio: widget.aspect,
             child: FocusOutline(
               visible: visible,
               radius: _coverRadius,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.cover(_setAspect),
+                  widget.cover,
                   IgnorePointer(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 120),
@@ -159,7 +136,6 @@ class DramaTile extends StatelessWidget {
     this.exploreBlur = false,
     this.wide = false,
     this.aspect,
-    this.adaptiveAspect = false,
   });
   final Drama drama;
   final VoidCallback onTap;
@@ -168,7 +144,6 @@ class DramaTile extends StatelessWidget {
   final bool exploreBlur;
   final bool wide;
   final double? aspect;
-  final bool adaptiveAspect;
   final String? subtitle;
   final int? rank;
   final VoidCallback? onMore;
@@ -191,30 +166,27 @@ class DramaTile extends StatelessWidget {
     BuildContext context,
     double width, {
     bool wide = false,
-    double? aspect,
   }) {
     final scaler = MediaQuery.textScalerOf(context);
     final title = scaler.scale(titleStyle(context).fontSize!) * 1.3 * 2;
     final subtitle = scaler.scale(subtitleStyle(context).fontSize!) * 1.3;
-    final cover = width / (aspect ?? (wide ? 16 / 9 : 2 / 3));
+    final cover = wide ? width * 9 / 16 : width * 1.5;
     return (cover + 9 + title + 4 + subtitle).ceilToDouble();
   }
 
   @override
   Widget build(BuildContext context) => _PosterButton(
-    cover: (onAspect) => DramaCover(
+    cover: DramaCover(
       drama: drama,
       radius: _coverRadius,
       rank: rank,
       showScore: showScore,
       exploreBlur: exploreBlur,
-      onAspect: onAspect,
       heroScope: AppScope.of(context).television || !Visibility.of(context)
           ? null
           : heroScope,
     ),
     aspect: aspect ?? (wide ? 16 / 9 : 2 / 3),
-    adaptiveAspect: adaptiveAspect,
     label:
         '${rank == null ? '' : '第$rank名，'}'
         '${drama.title}，${drama.episodes}集${drama.vip ? '，VIP' : ''}'
@@ -245,10 +217,7 @@ class ProgressPoster extends StatelessWidget {
     this.width = 100,
     this.selected,
     this.badge,
-    this.dotColor,
     this.heroScope,
-    this.aspect = 2 / 3,
-    this.adaptiveAspect = false,
   });
   final Drama drama;
   final String? heroScope;
@@ -256,31 +225,18 @@ class ProgressPoster extends StatelessWidget {
   final String caption;
   final String? tag;
   final String? badge;
-  final Color? dotColor;
   final VoidCallback onTap;
   final VoidCallback? onMore;
   final FocusNode? focusNode;
   final double width;
   final bool? selected;
 
-  /// 封面宽高比；混排源的瀑布流按每张封面的实际比例排版。
-  final double aspect;
-
-  /// 瀑布流里为 true，允许格子跟着封面真实比例变化。
-  final bool adaptiveAspect;
-
-  static const _titleLines = 2;
-
-  static double extentFor(
-    BuildContext context,
-    double width, {
-    double aspect = 2 / 3,
-  }) {
+  static double extentFor(BuildContext context, double width) {
     final scaler = MediaQuery.textScalerOf(context);
     final television = AppScope.of(context).television;
-    final title = scaler.scale(television ? 15 : 14) * 1.3 * _titleLines;
+    final title = scaler.scale(television ? 15 : 14) * 1.3;
     final caption = scaler.scale(television ? 13 : 12) * 1.3;
-    return (width / aspect + 8 + title + 2 + caption).ceilToDouble();
+    return (width * 1.5 + 8 + title + 2 + caption).ceilToDouble();
   }
 
   @override
@@ -290,16 +246,13 @@ class ProgressPoster extends StatelessWidget {
     return SizedBox(
       width: width,
       child: _PosterButton(
-        aspect: aspect,
-        adaptiveAspect: adaptiveAspect,
-        cover: (onAspect) => Stack(
+        cover: Stack(
           fit: StackFit.expand,
           children: [
             DramaCover(
               drama: drama,
               radius: _coverRadius,
               details: false,
-              onAspect: onAspect,
               heroScope:
                   television || selected != null || !Visibility.of(context)
                   ? null
@@ -307,45 +260,25 @@ class ProgressPoster extends StatelessWidget {
             ),
             if (tag case final tag?)
               Positioned(
-                left: AppSpace.sm,
-                top: AppSpace.sm,
+                left: 8,
+                top: 8,
                 child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    dotColor == null ? AppSpace.sm : 6,
-                    3,
-                    AppSpace.sm,
-                    3,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.62),
-                    borderRadius: AppRadius.badgeAll,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.14),
-                    ),
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (dotColor case final dotColor?) ...[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: dotColor,
-                          ),
-                          child: const SizedBox.square(dimension: 4),
-                        ),
-                        const SizedBox(width: 5),
-                      ],
-                      Text(
-                        tag,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: AppType.caption,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    tag,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
                   ),
                 ),
               ),
@@ -468,7 +401,7 @@ class ProgressPoster extends StatelessWidget {
               fontWeight: FontWeight.w600,
               height: 1.3,
             ),
-            _titleLines,
+            1,
           ),
           const SizedBox(height: 2),
           _line(

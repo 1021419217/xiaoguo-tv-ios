@@ -1,0 +1,20 @@
+{
+  "id": "xvideos2",
+  "name": "XVIDEOS",
+  "version": "1.2.1",
+  "description": "XVIDEOS：最新 / 本月最佳 / 标签 / 分类 + 搜索，自带中文界面，HLS（最高 1080p）。1.2.0 起解析详情页上传者/模特（model、profiles），支持点作者看其全部作品。。1.2.1：作者解析改为「信息区 + 多次出现投票」，修复每个视频都取到同一个作者的问题。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "xvideos.com",
+    "*.xvideos.com",
+    "*.xvideos-cdn.com",
+    "*.gcore.xvideos-cdn.com"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://www.xvideos.com"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "p91a",
+  "name": "91porna",
+  "version": "1.10.0",
+  "description": "91porna：10 个分类 + 搜索，单集长视频，HLS（AES-128）。详情页阶段预取播放列表，点播放零请求。。1.10.0：新增作者/上传者识别与作者二级页。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "91porna.com",
+    "*.91porna.com",
+    "*.hzjvlo.cn",
+    "*.drleao.cn"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://91porna.com",
+  "browserFingerprint": true
+}

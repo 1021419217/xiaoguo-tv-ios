@@ -1,0 +1,19 @@
+{
+  "id": "javrate",
+  "name": "Javrate",
+  "version": "1.0.4",
+  "description": "Javrate - 正妹AV / 日本A片 / 國產AV（最新、今日優選、無碼、有碼、中文字幕）",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "javrate.com",
+    "*.javrate.com",
+    "*.avking.xyz"
+  ],
+  "capabilities": [],
+  "baseUrl": "https://www.javrate.com",
+  "aliases": [
+    "javrate.com"
+  ]
+}

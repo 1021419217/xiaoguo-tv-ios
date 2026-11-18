@@ -19,7 +19,7 @@ class CoverShapes {
 
   static const maxSamples = 12;
   static const _margin = 2;
-  static const _mixedHits = 4;
+  static const _mixedHits = 2;
   static const _prefix = 'coverShape.';
 
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
@@ -42,9 +42,7 @@ class CoverShapes {
   }
 
   /// 单张封面的宽高比（宽 / 高），未知时返回 0。
-  /// 键里带站源：不同站源的剧集 id 可能重名，不能互相污染比例。
-  static double ratioOf(String source, String dramaId) =>
-      _ratios['$source\u0000$dramaId'] ?? 0;
+  static double ratioOf(String dramaId) => _ratios[dramaId] ?? 0;
 
   static CoverShape of(String source) {
     final declared = SourceSite.byId(source).coverAspect;
@@ -84,38 +82,32 @@ class CoverShapes {
     _notify();
   }
 
-  /// [ratio] 已知时直接传入，避免为了量尺寸再读一遍文件。
   static Future<void> learn(
     String source,
     String dramaId,
-    String path, {
-    double? ratio,
-  }) async {
+    String path,
+  ) async {
     if (source.isEmpty || path.isEmpty) return;
     if (!_seen.add('$source\u0000$dramaId\u0000$path')) return;
 
-    var value = ratio ?? 0;
-    if (value <= 0) {
-      int width;
-      int height;
-      try {
-        final bytes = await File(path).readAsBytes();
-        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-        final descriptor = await ui.ImageDescriptor.encoded(buffer);
-        width = descriptor.width;
-        height = descriptor.height;
-        descriptor.dispose();
-        buffer.dispose();
-      } catch (_) {
-        return;
-      }
-      if (width <= 0 || height <= 0) return;
-      value = width / height;
+    int width;
+    int height;
+    try {
+      final bytes = await File(path).readAsBytes();
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      width = descriptor.width;
+      height = descriptor.height;
+      descriptor.dispose();
+      buffer.dispose();
+    } catch (_) {
+      return;
     }
+    if (width <= 0 || height <= 0) return;
 
-    final key = '$source\u0000$dramaId';
-    if (dramaId.isNotEmpty && !_ratios.containsKey(key)) {
-      _ratios[key] = value;
+    final ratio = width / height;
+    if (dramaId.isNotEmpty && !_ratios.containsKey(dramaId)) {
+      _ratios[dramaId] = ratio;
       _notify();
     }
 
@@ -125,14 +117,14 @@ class CoverShapes {
     if (used + tall >= maxSamples) return;
 
     final before = of(source);
-    if (value >= 1.25) {
+    if (ratio >= 1.25) {
       _wide[source] = used + 1;
-    } else if (value <= 0.85) {
+    } else if (ratio <= 0.85) {
       _tall[source] = tall + 1;
     } else {
       return;
     }
-    final next = ((_score[source] ?? 0) + (value >= 1.25 ? 1 : -1)).clamp(-24, 24);
+    final next = ((_score[source] ?? 0) + (ratio >= 1.25 ? 1 : -1)).clamp(-24, 24);
     _score[source] = next;
     try {
       final prefs = _prefs ??= await SharedPreferences.getInstance();

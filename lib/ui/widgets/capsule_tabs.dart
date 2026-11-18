@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
-
 /// 统一的胶囊分段控件：模块页、下载页、追剧页共用同一套外观与手感。
 ///
 /// 关键点（上一版几个页面的痛点都在这里）：
@@ -98,20 +96,13 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: widget.padding.add(
-            const EdgeInsets.symmetric(vertical: 8),
+            const EdgeInsets.symmetric(vertical: 6.5),
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Color.lerp(
-                  Colors.transparent,
-                  theme.colorScheme.primary,
-                  weight,
-                )!,
-                width: 2,
-              ),
-            ),
+            color: ink.withValues(alpha: 0.12 * weight),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: ink.withValues(alpha: 0.14 * weight)),
           ),
           child: Text(
             widget.labels[i],
@@ -165,7 +156,18 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
             ),
           )
         : Padding(padding: const EdgeInsets.all(3), child: row);
-    return Padding(padding: widget.margin, child: content);
+    if (!widget.track) return Padding(padding: widget.margin, child: content);
+    return Padding(
+      padding: widget.margin,
+      child: Container(
+        decoration: BoxDecoration(
+          color: ink.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: ink.withValues(alpha: 0.08)),
+        ),
+        child: content,
+      ),
+    );
   }
 
   @override

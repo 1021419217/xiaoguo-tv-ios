@@ -17,7 +17,8 @@ import 'motion/motion_widgets.dart';
   double width, {
   bool wide = false,
 }) => switch (AppScope.formFactorOf(context)) {
-  FormFactor.phone => wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
+  FormFactor.phone =>
+    wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
   FormFactor.television => (
     ((width + 20) / (wide ? 200 : 120)).floor().clamp(3, 8),
     20.0,
@@ -35,90 +36,13 @@ import 'motion/motion_widgets.dart';
   ),
 };
 
-double dramaTileWidth(BuildContext context, double width, {bool wide = false}) {
+double dramaTileWidth(
+  BuildContext context,
+  double width, {
+  bool wide = false,
+}) {
   final (columns, spacing, _) = _gridLayout(context, width, wide: wide);
   return (width - (columns - 1) * spacing) / columns;
-}
-
-/// 横竖混排源在手机竖屏固定两列瀑布流；其它形态仍按屏宽算列数。
-bool usePosterMasonry(BuildContext context, String source) =>
-    AppScope.formFactorOf(context) == FormFactor.phone &&
-    CoverShapes.isMixed(source);
-
-/// 单张封面的排版比例：已知实际宽高比就用它（格子跟着图片走，不裁切），
-/// 未知时按竖版兜底；下载完成前封面组件读到真实比例会再纠正。
-double posterAspect(String source, String dramaId) {
-  final ratio = CoverShapes.ratioOf(source, dramaId);
-  if (ratio <= 0) return 2 / 3;
-  return ratio;
-}
-
-/// 两列瀑布流：每格按自身高度落进较短的一栏，和「发现」页同一套排法。
-///
-/// 两栏各是一条 [SliverList]，只构建进入视口的格子；原来把全部格子塞进
-/// 一个 Column 再交给 [SliverToBoxAdapter]，长列表会一次性建完、滚动就卡。
-class PosterMasonry extends StatelessWidget {
-  const PosterMasonry({
-    super.key,
-    required this.width,
-    required this.count,
-    required this.heightAt,
-    required this.itemBuilder,
-    this.spacing = 10,
-    this.padding = EdgeInsets.zero,
-  });
-
-  final double width;
-  final int count;
-
-  /// 预估格子高度，只用于决定落进哪一栏。
-  final double Function(int index, double tileWidth) heightAt;
-  final Widget Function(BuildContext context, int index, double tileWidth)
-  itemBuilder;
-  final double spacing;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final tileWidth = (width - padding.horizontal - spacing) / 2;
-    final left = <int>[];
-    final right = <int>[];
-    var leftHeight = 0.0;
-    var rightHeight = 0.0;
-    for (var index = 0; index < count; index++) {
-      final height = heightAt(index, tileWidth) + spacing;
-      if (leftHeight <= rightHeight) {
-        left.add(index);
-        leftHeight += height;
-      } else {
-        right.add(index);
-        rightHeight += height;
-      }
-    }
-    Widget column(List<int> indices) => SliverList.builder(
-      itemCount: indices.length,
-      itemBuilder: (context, position) {
-        final index = indices[position];
-        return Padding(
-          padding: EdgeInsets.only(bottom: spacing),
-          child: itemBuilder(context, index, tileWidth),
-        );
-      },
-    );
-    return SliverPadding(
-      padding: padding,
-      sliver: SliverCrossAxisGroup(
-        slivers: [
-          SliverCrossAxisExpanded(flex: 1, sliver: column(left)),
-          SliverConstrainedCrossAxis(
-            maxExtent: spacing,
-            sliver: SliverToBoxAdapter(child: SizedBox(width: spacing)),
-          ),
-          SliverCrossAxisExpanded(flex: 1, sliver: column(right)),
-        ],
-      ),
-    );
-  }
 }
 
 SliverGridDelegate dramaGridDelegate(
@@ -206,8 +130,7 @@ class DramaSliverGrid extends StatelessWidget {
   }
 
   Widget _grid(BuildContext context) {
-    final wide =
-        items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
+    final wide = items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
     final (columns, _, _) = _gridLayout(context, width, wide: wide);
     final heroIndex = heroScope == null
         ? const <String, int>{}
@@ -226,25 +149,53 @@ class DramaSliverGrid extends StatelessWidget {
   }
 
   Widget _masonry(BuildContext context) {
+    const spacing = 10.0;
+    final tileWidth = (width - 20 - spacing) / 2;
     final heroIndex = heroScope == null
         ? const <String, int>{}
         : firstIndexById(items, (drama) => drama.id);
-    return PosterMasonry(
-      width: width,
-      count: items.length,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      heightAt: (index, tile) => DramaTile.extentFor(
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftHeight = 0.0;
+    var rightHeight = 0.0;
+    for (var index = 0; index < items.length; index++) {
+      final drama = items[index];
+      final ratio = CoverShapes.ratioOf(drama.id);
+      final aspect = ratio > 0 ? ratio : 2 / 3;
+      final cell = Padding(
+        padding: const EdgeInsets.only(bottom: spacing),
+        child: _cell(
+          context,
+          index,
+          aspect: aspect,
+          columns: 2,
+          heroIndex: heroIndex,
+        ),
+      );
+      final estimate = DramaTile.extentFor(
         context,
-        tile,
-        aspect: posterAspect(items[index].source, items[index].id),
-      ),
-      itemBuilder: (context, index, tileWidth) => _cell(
-        context,
-        index,
-        aspect: posterAspect(items[index].source, items[index].id),
-        columns: 2,
-        heroIndex: heroIndex,
-        adaptive: true,
+        tileWidth,
+        wide: aspect > 1.25,
+      );
+      if (leftHeight <= rightHeight) {
+        left.add(cell);
+        leftHeight += estimate + spacing;
+      } else {
+        right.add(cell);
+        rightHeight += estimate + spacing;
+      }
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: tileWidth, child: Column(children: left)),
+            const SizedBox(width: spacing),
+            SizedBox(width: tileWidth, child: Column(children: right)),
+          ],
+        ),
       ),
     );
   }
@@ -255,7 +206,6 @@ class DramaSliverGrid extends StatelessWidget {
     required double aspect,
     required int columns,
     required Map<String, int> heroIndex,
-    bool adaptive = false,
   }) {
     final drama = items[index];
     final tile = Focus(
@@ -267,7 +217,6 @@ class DramaSliverGrid extends StatelessWidget {
       child: DramaTile(
         drama: drama,
         aspect: aspect,
-        adaptiveAspect: adaptive,
         wide: aspect > 1.25,
         rank: rankOf?.call(drama),
         autofocus: autofocus && index == 0,
@@ -365,11 +314,8 @@ class _AutoLoadMoreState extends State<AutoLoadMore> {
 }
 
 class FeedFooter extends StatelessWidget {
-  const FeedFooter({super.key, required this.feed, this.onVerify});
+  const FeedFooter({super.key, required this.feed});
   final DramaFeed feed;
-
-  /// 分页失败且属于「站点要求浏览器验证」时，用这个入口替代「重试」。
-  final VoidCallback? onVerify;
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +323,6 @@ class FeedFooter extends StatelessWidget {
     final caption = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    final needsVerify = onVerify != null && feed.error.contains('浏览器验证');
     return SizedBox(
       height: 72,
       child: FadeSwitcher(
@@ -414,12 +359,10 @@ class FeedFooter extends StatelessWidget {
                       FocusRing(
                         radius: 999,
                         child: TextButton(
-                          onPressed: needsVerify
-                              ? onVerify
-                              : feed.hasMore
+                          onPressed: feed.hasMore
                               ? feed.loadMore
                               : () => feed.reload(force: true),
-                          child: Text(needsVerify ? '去验证' : '重试'),
+                          child: const Text('重试'),
                         ),
                       ),
                     ],

@@ -1,0 +1,22 @@
+{
+  "id": "p91y",
+  "name": "九色 91porny",
+  "version": "1.2.0",
+  "description": "91porny（九色）：精品/蝌蚪/SWAG/麻豆 4 个分类 + 搜索。HLS 与 MP4 都支持（MP4 自动包成 HLS），详情页预取，点播放零请求。。1.2.0：新增作者/上传者识别与作者二级页。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "91porny.com",
+    "*.91porny.com",
+    "*.jiuse3.cloud",
+    "*.vcloud14.xyz",
+    "*.ucloud165.xyz",
+    "*.qiniuyun56.xyz"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://91porny.com"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "crdj",
+  "name": "91短剧",
+  "version": "1.0.0",
+  "description": "短剧 · 在线搜索",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": ["91crdjai.com"],
+  "capabilities": ["search"],
+  "baseUrl": "https://91crdjai.com"
+}

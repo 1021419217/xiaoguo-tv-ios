@@ -60,6 +60,7 @@ class AppearanceSettings extends StatelessWidget {
                 }
               },
             ),
+            const Divider(indent: 16, endIndent: 16),
             SwitchTile(
               title: '纯黑深色模式',
               subtitle: '深色时背景改为纯黑，适合 OLED 屏幕',
@@ -67,6 +68,7 @@ class AppearanceSettings extends StatelessWidget {
               onChanged: (value) =>
                   saveSetting(context, () => store.setPureBlack(value)),
             ),
+            const Divider(indent: 16, endIndent: 16),
             TileFocus(
               builder: (focusNode) => SwitchListTile(
                 focusNode: focusNode,
@@ -86,6 +88,7 @@ class AppearanceSettings extends StatelessWidget {
                     : null,
               ),
             ),
+            const Divider(indent: 16, endIndent: 16),
             Opacity(
               opacity: following ? 0.45 : 1,
               child: Padding(
@@ -142,6 +145,7 @@ class AppearanceSettings extends StatelessWidget {
                   () => store.setBlurCoversButton(value),
                 ),
               ),
+              const Divider(indent: 16, endIndent: 16),
               SwitchTile(
                 title: '模糊所有界面的封面',
                 subtitle: store.blurCoversButton
@@ -155,6 +159,7 @@ class AppearanceSettings extends StatelessWidget {
                       )
                     : null,
               ),
+              const Divider(indent: 16, endIndent: 16),
               SettingsTile(
                 title: '开屏自动模糊封面',
                 subtitle: store.blurCoversButton

@@ -1,0 +1,17 @@
+{
+  "id": "madou",
+  "name": "麻豆社",
+  "version": "1.0.0",
+  "description": "麻豆社（madou.club）：最新 / 点赞排行 / 12 个频道 + 搜索，HLS（AES-128）。中文内容。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "madou.club",
+    "*.madou.club",
+    "dash.madou.club"
+  ],
+  "capabilities": ["search"],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://madou.club"
+}

@@ -18,7 +18,6 @@
     "search"
   ],
   "baseUrl": "https://jable.tv",
-  "coverAspect": "landscape",
   "browserFingerprint": true,
   "aliases": [
     "jable.tv"

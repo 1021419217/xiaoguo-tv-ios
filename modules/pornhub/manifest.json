@@ -1,0 +1,19 @@
+{
+  "id": "pornhub",
+  "name": "Pornhub",
+  "version": "1.2.0",
+  "description": "Pornhub：热门 / 最新 / 本周最多 / 本月好评 + 搜索，1080p HLS。自带中文界面，详情页预取播放列表，点播放零请求。。1.2.0：新增上传者/模特识别与作者二级页。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "pornhub.com",
+    "*.pornhub.com",
+    "*.phncdn.com"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://www.pornhub.com"
+}

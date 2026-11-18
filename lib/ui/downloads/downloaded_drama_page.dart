@@ -291,7 +291,7 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
 
   Widget _mergeButton(DownloadedDrama item, Set<String> selection) => FocusRing(
     radius: 20,
-    child: OutlinedButton.icon(
+    child: FilledButton.tonalIcon(
       onPressed: selection.length < 2 || _busy
           ? null
           : () => _merge(item, selection),
@@ -303,7 +303,7 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
   Widget _exportButton(DownloadedDrama item, Set<String> selection) =>
       FocusRing(
         radius: 20,
-        child: OutlinedButton.icon(
+        child: FilledButton.tonalIcon(
           onPressed: selection.isEmpty || _busy
               ? null
               : () => _export(item, selection),

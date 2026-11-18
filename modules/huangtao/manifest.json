@@ -1,0 +1,12 @@
+{
+  "id": "huangtao",
+  "name": "黄桃",
+  "version": "1.0.0",
+  "description": "AI 短剧 · 在线搜索",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": ["aihuangdou.com"],
+  "capabilities": ["search"],
+  "baseUrl": "https://aihuangdou.com"
+}

@@ -21,6 +21,18 @@ import 'sources_view.dart';
 
 typedef _Subpage = ({String title, WidgetBuilder body});
 
+// 设置项圆形图标的低饱和彩色，仅作视觉区分，不参与主题强调色。（全剧TV 同款）
+const _tileColors = <Color>[
+  Color(0xFFB06AF7),
+  Color(0xFFFF9F0A),
+  Color(0xFF63636B),
+  Color(0xFF32ADE6),
+  Color(0xFFB06AF7),
+  Color(0xFFFF9F0A),
+  Color(0xFF63636B),
+  Color(0xFF32ADE6),
+];
+
 void openUsers(BuildContext context, LocalStore store) => openPage<void>(
   context,
   (context) => settingsSplit(context)
@@ -289,7 +301,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         titleMedium: text.titleMedium?.copyWith(
           fontSize: 17,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w800,
           letterSpacing: -0.3,
         ),
         titleSmall: text.titleSmall?.copyWith(
@@ -336,18 +348,19 @@ class _SettingsPageState extends State<SettingsPage> {
           // 每 3 个分组一段，段名按内容归组（新增分组时只需补段名）。
           const sections = ['界面与播放', '设备与数据', '账号与关于'];
           return ListView(
-            // 底部留白与其它 tab 页同一个来源，最后一张卡不会被底栏压住，
-            // 也不会在底部空出一截。
-            padding: EdgeInsets.fromLTRB(16, 0, 16, pageBottomInset(context)),
+            // 底部留出悬浮胶囊导航的空间，避免最后一项被遮住。
+            // 顶部不再额外加留白：SafeArea 已经把状态栏与磨砂顶栏让出来了。
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
             children: [
               const SectionHeader(
                 title: '常用',
-                padding: EdgeInsets.fromLTRB(4, 4, 4, 8),
+                padding: EdgeInsets.fromLTRB(4, 2, 8, 6),
               ),
               GroupCard(
                 children: [
                   SettingsTile(
                     icon: Icons.extension_outlined,
+                    iconColor: _tileColors[0],
                     title: '模块',
                     subtitle: '安装、更新、导出模块，以及站源开关',
                     onTap: () => openPage<void>(
@@ -357,6 +370,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   SettingsTile(
                     icon: SettingsGroup.modules.icon,
+                    iconColor: _tileColors[1],
                     title: SettingsGroup.modules.label,
                     subtitle: _summary(SettingsGroup.modules),
                     // 站源这一项直接进站源管理，不再先落一个只有一行入口的空页。
@@ -364,6 +378,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   SettingsTile(
                     icon: SettingsGroup.diagnostics.icon,
+                    iconColor: _tileColors[2],
                     title: SettingsGroup.diagnostics.label,
                     subtitle: _summary(SettingsGroup.diagnostics),
                     onTap: () => _openGroup(SettingsGroup.diagnostics),
@@ -377,7 +392,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ) ...[
                 SectionHeader(
                   title: sections[section],
-                  padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+                  padding: const EdgeInsets.fromLTRB(4, 18, 8, 8),
                 ),
                 GroupCard(
                   children: [
@@ -388,6 +403,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     )
                       SettingsTile(
                         icon: groups[i].icon,
+                        iconColor: _tileColors[i % _tileColors.length],
                         title: groups[i].label,
                         subtitle: _summary(groups[i]),
                         onTap: () => _openGroup(groups[i]),
@@ -533,7 +549,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     '设置',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -720,7 +736,7 @@ class _DetailHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontSize: 22,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: -0.4,
                 ),
               ),
@@ -758,7 +774,7 @@ class _GroupItem extends StatelessWidget {
       selected: selected,
       textStyle: theme.textTheme.titleSmall?.copyWith(
         fontSize: 16,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
+        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
         letterSpacing: -0.2,
         color: theme.colorScheme.onSurface,
       ),

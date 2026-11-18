@@ -1,0 +1,13 @@
+{
+  "id": "ppp",
+  "name": "PPP.Porn",
+  "version": "1.1.0",
+  "description": "PPP.Porn（精選亞洲素人）：最新 + 12 個分類 + 搜尋，HLS（AES-128，4 秒分片，可隨意拖動）。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": ["ppp.porn", "*.ppp.porn", "cdnlab.live", "*.cdnlab.live"],
+  "capabilities": ["search"],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://ppp.porn"
+}

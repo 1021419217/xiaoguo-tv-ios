@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'focus_ring.dart';
 
-/// 深灰分组圆角卡：只靠间距分组，不再画行间分隔线。
+/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带半透明磨砂底色与细描边。
 class GroupCard extends StatelessWidget {
   const GroupCard({super.key, required this.children});
   final List<Widget> children;
@@ -22,7 +22,16 @@ class GroupCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Divider(height: 1, color: colors.outlineVariant),
+              ),
+            children[i],
+          ],
+        ],
       ),
     );
   }
@@ -38,6 +47,7 @@ class SettingsTile extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.enabled = true,
+    this.iconColor,
   });
   final String title;
   final String? subtitle;
@@ -47,35 +57,34 @@ class SettingsTile extends StatelessWidget {
   final VoidCallback? onTap;
   final bool enabled;
 
+  /// 圆形图标底色；不传时用主题色的低饱和版本。
+  final Color? iconColor;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return TileFocus(
       builder: (focusNode) => ListTile(
         focusNode: focusNode,
-        minTileHeight: 56,
-        contentPadding: const EdgeInsets.fromLTRB(16, 6, 14, 6),
+        minTileHeight: subtitle == null ? 60 : 72,
+        contentPadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
         horizontalTitleGap: 14,
-        // 图标统一成中性底色的圆角方块：不再用彩色圆点，一屏不会散出四种色。
         leading: icon == null
             ? null
             : Container(
-                width: 34,
-                height: 34,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: colors.onSurface.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: colors.onSurface.withValues(alpha: 0.08),
-                  ),
+                  color: iconColor ?? colors.primary.withValues(alpha: 0.85),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 18, color: colors.onSurfaceVariant),
+                child: Icon(icon, size: 19, color: Colors.white),
               ),
         title: Text(
           title,
           style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
             color: colors.onSurface,
           ),
@@ -86,7 +95,7 @@ class SettingsTile extends StatelessWidget {
                 subtitle!,
                 style: TextStyle(
                   fontSize: 12.5,
-                  height: 1.3,
+                  height: 1.4,
                   fontWeight: FontWeight.w500,
                   letterSpacing: -0.1,
                   color: colors.onSurfaceVariant.withValues(alpha: 0.95),
@@ -124,88 +133,45 @@ class SettingsTile extends StatelessWidget {
   }
 }
 
-/// 区块标题：12 号灰字 + 字距，起目录作用；右侧可挂「全部 ›」。
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
-    this.trailing,
     this.action,
     this.onAction,
-    this.padding = const EdgeInsets.fromLTRB(4, 12, 4, 6),
+    this.padding = const EdgeInsets.fromLTRB(20, 12, 8, 0),
   });
   final String title;
-
-  /// 标题右侧的灰色计数，例如 `12`。
-  final String? trailing;
   final String? action;
   final VoidCallback? onAction;
   final EdgeInsets padding;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final style = TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 1.3,
-      height: 1.4,
-      color: colors.onSurfaceVariant,
-    );
-    return Padding(
-      padding: padding,
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: SizedBox(
+      height: 40,
       child: Row(
         children: [
           Expanded(
             child: Semantics(
               header: true,
-              child: Text.rich(
-                TextSpan(
-                  text: title,
-                  children: [
-                    if (trailing case final trailing?)
-                      TextSpan(
-                        text: '  $trailing',
-                        style: style.copyWith(
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                  ],
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style,
               ),
             ),
           ),
-          if (action case final action?)
+          if (action != null)
             FocusRing(
               radius: 999,
-              child: TextButton(
-                onPressed: onAction,
-                style: TextButton.styleFrom(
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.fromLTRB(8, 4, 2, 4),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: colors.onSurfaceVariant,
-                  textStyle: style.copyWith(
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 2,
-                  children: [
-                    Text(action),
-                    const Icon(Icons.chevron_right_rounded, size: 14),
-                  ],
-                ),
-              ),
+              child: TextButton(onPressed: onAction, child: Text(action!)),
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }

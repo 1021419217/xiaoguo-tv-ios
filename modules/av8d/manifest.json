@@ -1,0 +1,20 @@
+{
+  "id": "av8d",
+  "name": "AV8D",
+  "version": "1.0.3",
+  "description": "AV8D - 免費高畫質AV線上看（有碼/無碼/素人/FC2）",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "av8d.vip",
+    "*.av8d.vip",
+    "*.tiktokcdn.com"
+  ],
+  "capabilities": [],
+  "baseUrl": "https://av8d.vip",
+  "coverAspect": "landscape",
+  "aliases": [
+    "av8d.vip"
+  ]
+}

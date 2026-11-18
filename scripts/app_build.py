@@ -45,6 +45,19 @@ class AppBuild:
 app = AppBuild()
 
 
+def _module_sources(source):
+    if all((source / name).is_file() for name in MODULE_FILES):
+        return [source]
+    if source.is_dir():
+        return [
+            child
+            for child in sorted(source.iterdir())
+            if child.is_dir()
+            and all((child / name).is_file() for name in MODULE_FILES)
+        ]
+    return []
+
+
 def prepare_bundled_modules(extra=()):
     BUNDLED_DIRECTORY.mkdir(parents=True, exist_ok=True)
     for child in BUNDLED_DIRECTORY.iterdir():
@@ -59,12 +72,20 @@ def prepare_bundled_modules(extra=()):
         source = Path(item.strip())
         if not source.is_absolute():
             source = ROOT / source
-        missing = [name for name in MODULE_FILES if not (source / name).is_file()]
-        if missing:
-            raise SystemExit(f'内置模块 {source} 缺少 {"、".join(missing)}')
-        manifest = json.loads((source / 'manifest.json').read_text(encoding='utf-8'))
-        target = BUNDLED_DIRECTORY / manifest['id']
-        target.mkdir()
-        for name in MODULE_FILES:
-            shutil.copy2(source / name, target / name)
-        print(f'内置模块：{manifest["id"]} {manifest.get("version", "")}', flush=True)
+        sources = _module_sources(source)
+        if not sources:
+            raise SystemExit(f'内置模块 {source} 缺少 {"、".join(MODULE_FILES)}')
+        for module_source in sources:
+            manifest = json.loads(
+                (module_source / 'manifest.json').read_text(encoding='utf-8')
+            )
+            target = BUNDLED_DIRECTORY / manifest['id']
+            if target.exists():
+                raise SystemExit(f'内置模块 id 重复：{manifest["id"]}')
+            target.mkdir()
+            for name in MODULE_FILES:
+                shutil.copy2(module_source / name, target / name)
+            print(
+                f'内置模块：{manifest["id"]} {manifest.get("version", "")}',
+                flush=True,
+            )
