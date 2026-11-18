@@ -48,6 +48,7 @@ class DramaCover extends StatelessWidget {
     this.exploreBlur = false,
     this.crop = false,
     this.alignment = Alignment.center,
+    this.decodeWidth = 440,
   });
   final Drama drama;
   final double radius;
@@ -58,6 +59,9 @@ class DramaCover extends StatelessWidget {
   final Alignment alignment;
   final int? rank;
   final String? heroScope;
+
+  /// 解码宽度（物理像素）；详情页大封面传更大的值，避免放大发糊。
+  final int decodeWidth;
   static const imagesDisabled = bool.fromEnvironment('DISABLE_REMOTE_IMAGES');
 
   @override
@@ -95,6 +99,7 @@ class DramaCover extends StatelessWidget {
                       drama: drama,
                       repository: AppScope.of(context).repository,
                       placeholder: const SizedBox.shrink(),
+                      decodeWidth: 240,
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -119,6 +124,7 @@ class DramaCover extends StatelessWidget {
             repository: AppScope.of(context).repository,
             placeholder: const SizedBox.shrink(),
             alignment: alignment,
+            decodeWidth: decodeWidth,
             fit: crop ? BoxFit.cover : BoxFit.contain,
           ),
         ],
@@ -245,6 +251,7 @@ class CoverImage extends StatefulWidget {
     this.retryable = true,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
+    this.decodeWidth = 440,
   });
   final Drama drama;
   final AppRepository repository;
@@ -252,15 +259,16 @@ class CoverImage extends StatefulWidget {
   final bool retryable;
   final BoxFit fit;
   final Alignment alignment;
+  final int decodeWidth;
 
   @override
   State<CoverImage> createState() => _CoverImageState();
 }
 
 class _CoverImageState extends State<CoverImage> {
-  static const _decodeWidth = 440;
   CoverRequest? _request;
   Future<String>? _file;
+  String? _path;
   int _revision = 0;
   bool _failed = false;
   bool _retryOnFailure = false;
@@ -303,6 +311,13 @@ class _CoverImageState extends State<CoverImage> {
   void _load() {
     _request?.cancel();
     _request = null;
+    _path = null;
+    final cached = CoverLoader.cachedPath(widget.repository, widget.drama);
+    if (cached != null && File(cached).existsSync()) {
+      _path = cached;
+      _file = Future.value(cached);
+      return;
+    }
     _file = CoverLoader.cached(widget.repository, widget.drama);
     if (_file != null) return;
     final request = _request = CoverLoader.request(
@@ -337,7 +352,7 @@ class _CoverImageState extends State<CoverImage> {
   Future<void> _retry(String? path) async {
     if (path != null) {
       await ResizeImage.resizeIfNeeded(
-        _decodeWidth,
+        widget.decodeWidth,
         null,
         FileImage(File(path)),
       ).evict();
@@ -346,6 +361,7 @@ class _CoverImageState extends State<CoverImage> {
     _request?.cancel();
     setState(() {
       _request = null;
+      _path = null;
       _failed = _retryOnFailure = false;
       _failedPath = null;
       _file = widget.repository.cover(
@@ -372,27 +388,39 @@ class _CoverImageState extends State<CoverImage> {
     );
   }
 
+  Widget _image(String path) => Image.file(
+    File(path),
+    fit: widget.fit,
+    alignment: widget.alignment,
+    cacheWidth: widget.decodeWidth,
+    excludeFromSemantics: true,
+    frameBuilder: fadeInFrameBuilder,
+    errorBuilder: (_, _, _) => _failure(path),
+  );
+
   @override
-  Widget build(BuildContext context) => FutureBuilder<String>(
-    future: _file,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
-        return widget.placeholder;
-      }
-      if (snapshot.hasError || !snapshot.hasData) return _failure(null);
-      final path = snapshot.data!;
+  Widget build(BuildContext context) {
+    final path = _path;
+    if (path != null) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
       );
-      return Image.file(
-        File(path),
-        fit: widget.fit,
-        alignment: widget.alignment,
-        cacheWidth: _decodeWidth,
-        excludeFromSemantics: true,
-        frameBuilder: fadeInFrameBuilder,
-        errorBuilder: (_, _, _) => _failure(path),
-      );
-    },
-  );
+      return _image(path);
+    }
+    return FutureBuilder<String>(
+      future: _file,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return widget.placeholder;
+        }
+        if (snapshot.hasError || !snapshot.hasData) return _failure(null);
+        final path = snapshot.data!;
+        _path = path;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
+        );
+        return _image(path);
+      },
+    );
+  }
 }

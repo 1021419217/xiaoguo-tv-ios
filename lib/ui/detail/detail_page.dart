@@ -603,6 +603,10 @@ class _DetailPageState extends State<DetailPage> {
     final heroHeight = landscape
         ? heroWidth * 9 / 16
         : math.min(heroWidth * 1.25, 460.0);
+    final heroDecode = (heroWidth * MediaQuery.devicePixelRatioOf(context))
+        .round()
+        .clamp(440, 1440)
+        .toInt();
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: _appBar(details, kToolbarHeight),
@@ -632,6 +636,8 @@ class _DetailPageState extends State<DetailPage> {
                               radius: 16,
                               details: false,
                               crop: true,
+                              heroScope: 'drama',
+                              decodeWidth: heroDecode,
                               alignment: landscape
                                   ? Alignment.center
                                   : Alignment.topCenter,
@@ -1367,6 +1373,10 @@ class _DetailPageState extends State<DetailPage> {
         drama: drama,
         radius: m.coverRadius,
         heroScope: 'drama',
+        decodeWidth: (m.cover.width * MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(440, 1440)
+            .toInt(),
       ),
     ),
   );

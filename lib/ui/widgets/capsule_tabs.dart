@@ -21,6 +21,7 @@ class CapsuleTabs extends StatefulWidget {
     this.fontSize = 13.5,
     this.padding = const EdgeInsets.symmetric(horizontal: 14),
     this.margin = EdgeInsets.zero,
+    this.height = 42,
   });
 
   final List<String> labels;
@@ -42,6 +43,7 @@ class CapsuleTabs extends StatefulWidget {
   final double fontSize;
   final EdgeInsets padding;
   final EdgeInsets margin;
+  final double height;
 
   @override
   State<CapsuleTabs> createState() => _CapsuleTabsState();
@@ -95,8 +97,10 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          padding: widget.padding.add(
-            const EdgeInsets.symmetric(vertical: 10),
+          height: widget.height - 6,
+          padding: EdgeInsets.only(
+            left: widget.padding.left,
+            right: widget.padding.right,
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
