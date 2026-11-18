@@ -18,7 +18,7 @@ import 'motion/motion_widgets.dart';
   bool wide = false,
 }) => switch (AppScope.formFactorOf(context)) {
   FormFactor.phone =>
-    wide ? (2, 12.0, 20.0) : (2, 12.0, 24.0),
+    wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
   FormFactor.television => (
     ((width + 20) / (wide ? 200 : 120)).floor().clamp(3, 8),
     20.0,

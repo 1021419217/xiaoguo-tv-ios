@@ -509,10 +509,10 @@ class _HistoryPageState extends State<HistoryPage> {
       final (columns, gap, runGap) = _grid(context, width);
       final tile = (width - gap * (columns - 1)) / columns;
       final now = DateTime.now();
-      final periods = <WatchPeriod, List<WatchEntry>>{};
+      final periods = <String, List<WatchEntry>>{};
       for (final entry in view.shown) {
         periods
-            .putIfAbsent(WatchPeriod.of(entry.updatedAt, now), () => [])
+            .putIfAbsent(watchPeriodLabel(entry.updatedAt, now), () => [])
             .add(entry);
       }
       final heroOwner = {
@@ -554,7 +554,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   child: Semantics(
                     header: true,
                     child: Text(
-                      period.label,
+                      period.key,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
