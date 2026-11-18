@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../cover_shape.dart';
 import '../../download_collections.dart';
 import '../../download_converter.dart';
 import '../../download_overview.dart';
@@ -7,6 +8,7 @@ import '../../local_store.dart';
 import '../../merge_queue.dart';
 import '../../models.dart';
 import '../../source_modules.dart';
+import '../../watch_history.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
@@ -747,48 +749,83 @@ class _DownloadsPageState extends State<DownloadsPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth - inset * 2;
+        final masonry = AppScope.formFactorOf(context) == FormFactor.phone;
         final (columns, gap, runGap) = _grid(context, width);
         final tile = (width - gap * (columns - 1)) / columns;
-        return GridView.builder(
-          padding: EdgeInsets.fromLTRB(inset, 12, inset, 32),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: gap,
-            mainAxisSpacing: runGap,
-            mainAxisExtent: ProgressPoster.extentFor(context, tile),
-          ),
-          itemCount: view.downloaded.length,
-          itemBuilder: (context, index) {
-            final item = view.downloaded[index];
-            return Focus(
-              key: ValueKey(item.drama.id),
-              canRequestFocus: false,
-              skipTraversal: true,
-              onKeyEvent: (_, event) =>
-                  wrapGridRow(index, columns, view.downloaded.length, event),
-              child: ProgressPoster(
-                drama: item.drama,
-                width: tile,
-                progress: null,
-                caption:
-                    '${item.episodes.length} 集 · ${formatBytes(item.bytes)}',
-                tag: SourceSite.byId(item.drama.source).name,
-                badge: item.pending > 0 ? '${item.pending} 集下载中' : null,
-                selected: view.selection?.contains(item.drama.id),
-                onTap: view.selection != null
-                    ? () => _toggle(item.drama.id)
-                    : () => openPage<void>(
+        DateTime? dateOf(DownloadedDrama item) {
+          final watch = widget.store.watched(item.drama.id);
+          if (watch != null) return watch.updatedAt;
+          if (item.episodes.isEmpty) return null;
+          final stamp = item.episodes
+              .map((job) => job.created)
+              .reduce((a, b) => a > b ? a : b);
+          return stamp > 0
+              ? DateTime.fromMillisecondsSinceEpoch(stamp)
+              : null;
+        }
+
+        String? dateLabelOf(DownloadedDrama item) {
+          final date = dateOf(item);
+          if (date == null) return null;
+          final watched = widget.store.watched(item.drama.id) != null;
+          return '${watched ? '观看' : '下载'} ${watchDateLabel(date)}';
+        }
+
+        return ValueListenableBuilder<int>(
+          valueListenable: CoverShapes.revision,
+          builder: (context, _, _) {
+            if (masonry) {
+              return CustomScrollView(
+                slivers: [
+                  PosterMasonry(
+                    width: constraints.maxWidth,
+                    count: view.downloaded.length,
+                    padding: EdgeInsets.fromLTRB(inset, 12, inset, 0),
+                    heightAt: (index, cellWidth) {
+                      final item = view.downloaded[index];
+                      return ProgressPoster.extentFor(
                         context,
-                        (_) => DownloadedDramaPage(
-                          store: widget.store,
-                          downloads: widget.downloads,
-                          merges: widget.merges,
-                          drama: item.drama,
-                        ),
-                      ),
-                onMore: view.selection == null
-                    ? () => setState(() => _selection = {item.drama.id})
-                    : null,
+                        cellWidth,
+                        aspect: posterAspect(item.drama.id),
+                        date: dateOf(item) != null,
+                      );
+                    },
+                    itemBuilder: (context, index, cellWidth) {
+                      final item = view.downloaded[index];
+                      return _downloadedPoster(
+                        context,
+                        item,
+                        view,
+                        index,
+                        2,
+                        cellWidth,
+                        posterAspect(item.drama.id),
+                        dateLabelOf(item),
+                      );
+                    },
+                  ),
+                  SliverPadding(padding: const EdgeInsets.only(bottom: 32)),
+                ],
+              );
+            }
+            return GridView.builder(
+              padding: EdgeInsets.fromLTRB(inset, 12, inset, 32),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: gap,
+                mainAxisSpacing: runGap,
+                mainAxisExtent: ProgressPoster.extentFor(context, tile),
+              ),
+              itemCount: view.downloaded.length,
+              itemBuilder: (context, index) => _downloadedPoster(
+                context,
+                view.downloaded[index],
+                view,
+                index,
+                columns,
+                tile,
+                2 / 3,
+                null,
               ),
             );
           },
@@ -796,6 +833,48 @@ class _DownloadsPageState extends State<DownloadsPage>
       },
     );
   }
+
+  Widget _downloadedPoster(
+    BuildContext context,
+    DownloadedDrama item,
+    _View view,
+    int index,
+    int columns,
+    double width,
+    double aspect,
+    String? date,
+  ) => Focus(
+    key: ValueKey(item.drama.id),
+    canRequestFocus: false,
+    skipTraversal: true,
+    onKeyEvent: (_, event) =>
+        wrapGridRow(index, columns, view.downloaded.length, event),
+    child: ProgressPoster(
+      drama: item.drama,
+      width: width,
+      aspect: aspect,
+      date: date,
+      progress: null,
+      caption: '${item.episodes.length} 集 · ${formatBytes(item.bytes)}',
+      tag: SourceSite.byId(item.drama.source).name,
+      badge: item.pending > 0 ? '${item.pending} 集下载中' : null,
+      selected: view.selection?.contains(item.drama.id),
+      onTap: view.selection != null
+          ? () => _toggle(item.drama.id)
+          : () => openPage<void>(
+              context,
+              (_) => DownloadedDramaPage(
+                store: widget.store,
+                downloads: widget.downloads,
+                merges: widget.merges,
+                drama: item.drama,
+              ),
+            ),
+      onMore: view.selection == null
+          ? () => setState(() => _selection = {item.drama.id})
+          : null,
+    ),
+  );
 }
 
 class _JobRow extends StatelessWidget {

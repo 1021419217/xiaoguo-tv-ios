@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../cover_shape.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../source_modules.dart';
@@ -506,6 +507,7 @@ class _HistoryPageState extends State<HistoryPage> {
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
+      final masonry = AppScope.formFactorOf(context) == FormFactor.phone;
       final (columns, gap, runGap) = _grid(context, width);
       final tile = (width - gap * (columns - 1)) / columns;
       final now = DateTime.now();
@@ -523,8 +525,10 @@ class _HistoryPageState extends State<HistoryPage> {
           id: view.shown[index],
       };
       final first = view.shown.firstOrNull;
-      final scroll = CustomScrollView(
-        slivers: [
+      final scroll = ValueListenableBuilder<int>(
+        valueListenable: CoverShapes.revision,
+        builder: (context, _, _) => CustomScrollView(
+          slivers: [
           if (view.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -565,38 +569,86 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
               SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: inset),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: gap,
-                    mainAxisSpacing: runGap,
-                    mainAxisExtent: ProgressPoster.extentFor(context, tile),
-                  ),
-                  itemCount: entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = entries[index];
-                    return Focus(
-                      key: ValueKey(entry.drama.id),
-                      canRequestFocus: false,
-                      skipTraversal: true,
-                      onKeyEvent: (_, event) =>
-                          wrapGridRow(index, columns, entries.length, event),
-                      child: EnterOnce(
-                        id: entry.drama.id,
-                        played: _entered,
-                        index: index,
-                        child: _poster(
+                sliver: masonry
+                    ? PosterMasonry(
+                        width: width,
+                        count: entries.length,
+                        heightAt: (index, cellWidth) => ProgressPoster.extentFor(
                           context,
-                          entry,
-                          tile,
-                          view.selection,
-                          focusNode: entry == first ? _firstPoster : null,
-                          hero: identical(heroOwner[entry.drama.id], entry),
+                          cellWidth,
+                          aspect: posterAspect(entries[index].drama.id),
+                          date: true,
                         ),
+                        itemBuilder: (context, index, cellWidth) {
+                          final entry = entries[index];
+                          return Focus(
+                            key: ValueKey(entry.drama.id),
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onKeyEvent: (_, event) => wrapGridRow(
+                              index,
+                              2,
+                              entries.length,
+                              event,
+                            ),
+                            child: EnterOnce(
+                              id: entry.drama.id,
+                              played: _entered,
+                              index: index,
+                              child: _poster(
+                                context,
+                                entry,
+                                cellWidth,
+                                view.selection,
+                                focusNode: entry == first ? _firstPoster : null,
+                                hero: identical(heroOwner[entry.drama.id], entry),
+                                aspect: posterAspect(entry.drama.id),
+                                date: entry.updatedAt,
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : SliverGrid.builder(
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: columns,
+                              crossAxisSpacing: gap,
+                              mainAxisSpacing: runGap,
+                              mainAxisExtent: ProgressPoster.extentFor(
+                                context,
+                                tile,
+                              ),
+                            ),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          return Focus(
+                            key: ValueKey(entry.drama.id),
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onKeyEvent: (_, event) => wrapGridRow(
+                              index,
+                              columns,
+                              entries.length,
+                              event,
+                            ),
+                            child: EnterOnce(
+                              id: entry.drama.id,
+                              played: _entered,
+                              index: index,
+                              child: _poster(
+                                context,
+                                entry,
+                                tile,
+                                view.selection,
+                                focusNode: entry == first ? _firstPoster : null,
+                                hero: identical(heroOwner[entry.drama.id], entry),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           SliverPadding(
@@ -604,7 +656,8 @@ class _HistoryPageState extends State<HistoryPage> {
               bottom: AppScope.of(context).television ? 27 : 32,
             ),
           ),
-        ],
+          ],
+        ),
       );
       // 顶栏留在滑动层外面，横滑切站源时标题、搜索框不跟着动。
       return Column(
@@ -627,6 +680,8 @@ class _HistoryPageState extends State<HistoryPage> {
     Set<String>? selection, {
     FocusNode? focusNode,
     bool hero = false,
+    double aspect = 2 / 3,
+    DateTime? date,
   }) {
     final drama = entry.drama;
     final total = drama.episodes;
@@ -634,6 +689,8 @@ class _HistoryPageState extends State<HistoryPage> {
     return ProgressPoster(
       drama: drama,
       width: width,
+      aspect: aspect,
+      date: date == null ? null : '观看 ${watchDateLabel(date)}',
       focusNode: focusNode,
       progress: total > 0 ? entry.episode / total : 0,
       caption: total > 0 && entry.episode >= total && entry.finished

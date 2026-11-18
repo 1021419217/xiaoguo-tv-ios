@@ -218,6 +218,8 @@ class ProgressPoster extends StatelessWidget {
     this.selected,
     this.badge,
     this.heroScope,
+    this.aspect = 2 / 3,
+    this.date,
   });
   final Drama drama;
   final String? heroScope;
@@ -230,13 +232,22 @@ class ProgressPoster extends StatelessWidget {
   final FocusNode? focusNode;
   final double width;
   final bool? selected;
+  final double aspect;
+  final String? date;
 
-  static double extentFor(BuildContext context, double width) {
+  static double extentFor(
+    BuildContext context,
+    double width, {
+    double aspect = 2 / 3,
+    bool date = false,
+  }) {
     final scaler = MediaQuery.textScalerOf(context);
     final television = AppScope.of(context).television;
     final title = scaler.scale(television ? 15 : 14) * 1.3;
     final caption = scaler.scale(television ? 13 : 12) * 1.3;
-    return (width * 1.5 + 8 + title + 2 + caption).ceilToDouble();
+    final dateLine = date ? scaler.scale(11) * 1.3 + 2 : 0.0;
+    return (width / aspect + 8 + title + 2 + caption + dateLine)
+        .ceilToDouble();
   }
 
   @override
@@ -246,6 +257,7 @@ class ProgressPoster extends StatelessWidget {
     return SizedBox(
       width: width,
       child: _PosterButton(
+        aspect: aspect,
         cover: Stack(
           fit: StackFit.expand,
           children: [
@@ -414,6 +426,19 @@ class ProgressPoster extends StatelessWidget {
             ),
             1,
           ),
+          if (date case final value?) ...[
+            const SizedBox(height: 2),
+            _line(
+              context,
+              value,
+              TextStyle(
+                fontSize: 11,
+                height: 1.3,
+                color: colors.onSurfaceVariant,
+              ),
+              1,
+            ),
+          ],
         ],
       ),
     );

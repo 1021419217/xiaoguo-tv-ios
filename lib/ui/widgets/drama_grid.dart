@@ -89,6 +89,77 @@ Map<String, int> firstIndexById<T>(List<T> items, String Function(T) idOf) {
   return first;
 }
 
+double posterAspect(String dramaId) {
+  final ratio = CoverShapes.ratioOf(dramaId);
+  if (ratio <= 0) return 2 / 3;
+  if (ratio < 0.45) return 0.45;
+  if (ratio > 2) return 2;
+  return ratio;
+}
+
+/// 两列瀑布流：两栏各一条 SliverList，只构建进入视口的格子。
+class PosterMasonry extends StatelessWidget {
+  const PosterMasonry({
+    super.key,
+    required this.width,
+    required this.count,
+    required this.heightAt,
+    required this.itemBuilder,
+    this.spacing = 10,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final double width;
+  final int count;
+  final double Function(int index, double tileWidth) heightAt;
+  final Widget Function(BuildContext context, int index, double tileWidth)
+  itemBuilder;
+  final double spacing;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tileWidth = (width - padding.horizontal - spacing) / 2;
+    final left = <int>[];
+    final right = <int>[];
+    var leftHeight = 0.0;
+    var rightHeight = 0.0;
+    for (var index = 0; index < count; index++) {
+      final height = heightAt(index, tileWidth) + spacing;
+      if (leftHeight <= rightHeight) {
+        left.add(index);
+        leftHeight += height;
+      } else {
+        right.add(index);
+        rightHeight += height;
+      }
+    }
+    Widget column(List<int> indices) => SliverList.builder(
+      itemCount: indices.length,
+      itemBuilder: (context, position) {
+        final index = indices[position];
+        return Padding(
+          padding: EdgeInsets.only(bottom: spacing),
+          child: itemBuilder(context, index, tileWidth),
+        );
+      },
+    );
+    return SliverPadding(
+      padding: padding,
+      sliver: SliverCrossAxisGroup(
+        slivers: [
+          SliverCrossAxisExpanded(flex: 1, sliver: column(left)),
+          SliverConstrainedCrossAxis(
+            maxExtent: spacing,
+            sliver: SliverToBoxAdapter(child: SizedBox(width: spacing)),
+          ),
+          SliverCrossAxisExpanded(flex: 1, sliver: column(right)),
+        ],
+      ),
+    );
+  }
+}
+
 class DramaSliverGrid extends StatelessWidget {
   const DramaSliverGrid({
     super.key,

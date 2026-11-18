@@ -19,6 +19,13 @@ enum WatchPeriod {
   }
 }
 
+String watchDateLabel(DateTime value) {
+  final local = value.toLocal();
+  final now = DateTime.now();
+  final year = local.year == now.year ? '' : '${local.year}年';
+  return '$year${local.month}月${local.day}日';
+}
+
 List<SourceSite> watchedSources(List<WatchEntry> history) => [
   for (final site in SourceSite.values)
     if (history.any((entry) => entry.drama.source == site.id)) site,

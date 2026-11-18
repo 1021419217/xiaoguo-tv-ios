@@ -150,7 +150,7 @@ class AppDevice {
           DeviceOrientation.landscapeRight,
         ],
         PlayerOrientation.lockedLandscape => const [
-          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
         ],
         PlayerOrientation.portrait || PlayerOrientation.lockedPortrait =>
           const [DeviceOrientation.portraitUp],
