@@ -105,23 +105,6 @@ class _PosterButtonState extends State<_PosterButton> {
   }
 }
 
-Widget _line(BuildContext context, String text, TextStyle style, int lines) =>
-    Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: SizedBox(
-        height:
-            MediaQuery.textScalerOf(context).scale(style.fontSize!) *
-            style.height! *
-            lines,
-        child: Text(
-          text,
-          maxLines: lines,
-          overflow: TextOverflow.ellipsis,
-          style: style,
-        ),
-      ),
-    );
-
 class DramaTile extends StatelessWidget {
   const DramaTile({
     super.key,
@@ -167,25 +150,72 @@ class DramaTile extends StatelessWidget {
     BuildContext context,
     double width, {
     bool wide = false,
-  }) {
-    final scaler = MediaQuery.textScalerOf(context);
-    final title = scaler.scale(titleStyle(context).fontSize!) * 1.3 * 2;
-    final subtitle = scaler.scale(subtitleStyle(context).fontSize!) * 1.3;
-    final cover = wide ? width * 9 / 16 : width * 1.5;
-    return (cover + 9 + title + 4 + subtitle).ceilToDouble();
-  }
+  }) => (wide ? width * 9 / 16 : width * 1.5).ceilToDouble();
 
   @override
   Widget build(BuildContext context) => _PosterButton(
-    cover: DramaCover(
-      drama: drama,
-      radius: _coverRadius,
-      rank: rank,
-      showScore: showScore,
-      exploreBlur: exploreBlur,
-      heroScope: AppScope.of(context).television || !Visibility.of(context)
-          ? null
-          : heroScope,
+    cover: Stack(
+      fit: StackFit.expand,
+      children: [
+        DramaCover(
+          drama: drama,
+          radius: _coverRadius,
+          rank: rank,
+          showScore: showScore,
+          exploreBlur: exploreBlur,
+          heroScope: AppScope.of(context).television || !Visibility.of(context)
+              ? null
+              : heroScope,
+        ),
+        IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_coverRadius),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.42, 1],
+                colors: [Colors.transparent, Color(0xF2000000)],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 9,
+          right: 9,
+          bottom: 9,
+          child: IgnorePointer(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  drama.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle ?? drama.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.2,
+                    color: Colors.white.withValues(alpha: 0.72),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     ),
     aspect: aspect ?? (wide ? 16 / 9 : 2 / 3),
     label:
@@ -196,12 +226,7 @@ class DramaTile extends StatelessWidget {
     onMore: onMore,
     focusNode: focusNode,
     autofocus: autofocus,
-    caption: [
-      const SizedBox(height: 9),
-      _line(context, drama.title, titleStyle(context), 2),
-      const SizedBox(height: 4),
-      _line(context, subtitle ?? drama.category, subtitleStyle(context), 1),
-    ],
+    caption: const [],
   );
 }
 
@@ -236,13 +261,8 @@ class ProgressPoster extends StatelessWidget {
 
   static const _titleLines = 2;
 
-  static double extentFor(BuildContext context, double width) {
-    final scaler = MediaQuery.textScalerOf(context);
-    final television = AppScope.of(context).television;
-    final title = scaler.scale(television ? 15 : 14) * 1.3 * _titleLines;
-    final caption = scaler.scale(television ? 13 : 12) * 1.3;
-    return (width * 1.5 + 8 + title + 2 + caption).ceilToDouble();
-  }
+  static double extentFor(BuildContext context, double width) =>
+      (width * 1.5).ceilToDouble();
 
   @override
   Widget build(BuildContext context) {
@@ -364,6 +384,54 @@ class ProgressPoster extends StatelessWidget {
                   ),
                 ),
               ),
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(_coverRadius),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.42, 1],
+                    colors: [Colors.transparent, Color(0xF2000000)],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 9,
+              right: 9,
+              bottom: 9,
+              child: IgnorePointer(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      drama.title,
+                      maxLines: _titleLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.25,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.2,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             if (selected case final selected?) ...[
               IgnorePointer(
                 child: AnimatedOpacity(
@@ -416,30 +484,7 @@ class ProgressPoster extends StatelessWidget {
         onTap: onTap,
         onMore: onMore,
         focusNode: focusNode,
-        caption: [
-          const SizedBox(height: 8),
-          _line(
-            context,
-            drama.title,
-            TextStyle(
-              fontSize: television ? 15 : 14,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
-            ),
-            _titleLines,
-          ),
-          const SizedBox(height: 2),
-          _line(
-            context,
-            caption,
-            TextStyle(
-              fontSize: television ? 13 : 12,
-              height: 1.3,
-              color: colors.onSurfaceVariant,
-            ),
-            1,
-          ),
-        ],
+        caption: const [],
       ),
     );
   }
