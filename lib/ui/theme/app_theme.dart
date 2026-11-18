@@ -253,15 +253,15 @@ abstract final class AppTheme {
     final titled = theme.copyWith(
       textTheme: theme.textTheme.copyWith(
         headlineMedium: theme.textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: -0.5,
         ),
         headlineSmall: theme.textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: -0.4,
         ),
         titleLarge: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
         titleMedium: theme.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w700,
@@ -270,7 +270,7 @@ abstract final class AppTheme {
       appBarTheme: theme.appBarTheme.copyWith(
         titleTextStyle: theme.textTheme.titleLarge?.copyWith(
           fontSize: 21,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: -0.4,
           color: scheme.onSurface,
         ),
