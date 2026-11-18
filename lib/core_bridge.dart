@@ -249,6 +249,11 @@ abstract class AppRepository {
 class NativeRepository extends AppRepository {
   static final _coverDecoder = CoverDecoder();
   static final _coverPaths = <String, String>{};
+
+  /// 同一部剧按 id 记住最近一次下载好的封面：站源修正过封面地址后，
+  /// 详情页拿到的 cover 可能和列表里的不一样，按 id 兜底才不会重复下载、
+  /// 也不会先空一帧。
+  static final _coverById = <String, String>{};
   NativeRepository({this.background = false});
   final bool background;
   LocalStore? access;
@@ -582,6 +587,7 @@ class NativeRepository extends AppRepository {
   Future<void> clearCache() async {
     await _call({'action': 'clearCache'});
     _coverPaths.clear();
+    _coverById.clear();
   }
 
   @override
@@ -1042,20 +1048,22 @@ class NativeRepository extends AppRepository {
 
   @override
   bool coverCached(Drama drama) =>
-      _coverPaths.containsKey('${drama.id}\u0000${drama.cover}');
+      _coverPaths.containsKey('${drama.id}\u0000${drama.cover}') ||
+      _coverById.containsKey(drama.id);
 
   @override
   String? cachedCoverPath(Drama drama) =>
-      _coverPaths['${drama.id}\u0000${drama.cover}'];
+      _coverPaths['${drama.id}\u0000${drama.cover}'] ?? _coverById[drama.id];
 
   @override
   Future<String> cover(Drama drama, {bool force = false}) async {
     final key = '${drama.id}\u0000${drama.cover}';
-    final known = force ? null : _coverPaths[key];
+    final known = force ? null : _coverPaths[key] ?? _coverById[drama.id];
     if (known != null) {
       _authorize(drama.source);
-      if (await File(known).exists()) return known;
+      if (await File(known).exists()) return _rememberCover(key, known);
       _coverPaths.remove(key);
+      _coverById.remove(drama.id);
     }
     final epoch = access?.profileEpoch;
     final result = await _call({
@@ -1080,6 +1088,12 @@ class NativeRepository extends AppRepository {
     _coverPaths.remove(key);
     _coverPaths[key] = path;
     if (_coverPaths.length > 2000) _coverPaths.remove(_coverPaths.keys.first);
+    final id = key.split('\u0000').first;
+    if (id.isNotEmpty) {
+      _coverById.remove(id);
+      _coverById[id] = path;
+      if (_coverById.length > 2000) _coverById.remove(_coverById.keys.first);
+    }
     return path;
   }
 

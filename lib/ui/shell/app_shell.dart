@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -343,42 +342,7 @@ class _AppShellState extends State<AppShell>
           body: Stack(
             children: [
               pages,
-              if (!covered)
-                Positioned(
-                  left: 18,
-                  right: 18,
-                  bottom: MediaQuery.paddingOf(context).bottom + 6,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                      child: NavigationBar(
-                        height: 62,
-                        backgroundColor: const Color(0xB3151518),
-                        selectedIndex: tabs.indexOf(_tab),
-                        onDestinationSelected: (index) {
-                          unawaited(HapticFeedback.selectionClick());
-                          _tap(tabs[index]);
-                        },
-                        destinations: [
-                          for (final tab in tabs)
-                            NavigationDestination(
-                              key: ValueKey('nav-${tab.name}'),
-                              icon: _badged(tab, Icon(tab.icon)),
-                              selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                              label: tab.label,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+              if (!covered) _bottomBar(context, tabs),
             ],
           ),
         ),
@@ -424,6 +388,53 @@ class _AppShellState extends State<AppShell>
           ),
         ),
       },
+    );
+  }
+
+  /// 手机底栏：贴底，只有上边两角圆，底色跟随主题；底部安全区一起铺满，
+  /// 内容不会再从栏下面穿出来，也不会留一截死黑。
+  Widget _bottomBar(BuildContext context, List<AppTab> tabs) {
+    final colors = Theme.of(context).colorScheme;
+    const radius = BorderRadius.vertical(top: Radius.circular(22));
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerLow,
+          borderRadius: radius,
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
+        ),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: SafeArea(
+            top: false,
+            child: NavigationBar(
+              height: 62,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              indicatorColor: Colors.transparent,
+              selectedIndex: tabs.indexOf(_tab),
+              onDestinationSelected: (index) {
+                unawaited(HapticFeedback.selectionClick());
+                _tap(tabs[index]);
+              },
+              destinations: [
+                for (final tab in tabs)
+                  NavigationDestination(
+                    key: ValueKey('nav-${tab.name}'),
+                    icon: _badged(tab, Icon(tab.icon)),
+                    selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
+                    label: tab.label,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

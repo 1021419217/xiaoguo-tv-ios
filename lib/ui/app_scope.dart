@@ -7,11 +7,11 @@ enum FormFactor { phone, pad, window, television }
 
 const televisionInset = 58.0;
 
-/// 悬浮底栏在手机端占的高度（62 + 6）加上系统手势区，再留 16 收尾。
+/// 贴底底栏在手机端占的高度（62）加上系统手势区，再留 16 收尾。
 /// 所有 tab 根页面都按这个值收底：最后一行不会被底栏压住，也不会空一截。
 double pageBottomInset(BuildContext context) =>
     switch (AppScope.formFactorOf(context)) {
-      FormFactor.phone => MediaQuery.paddingOf(context).bottom + 62 + 6 + 16,
+      FormFactor.phone => MediaQuery.paddingOf(context).bottom + 62 + 16,
       FormFactor.television => 27,
       FormFactor.pad || FormFactor.window => 24,
     };

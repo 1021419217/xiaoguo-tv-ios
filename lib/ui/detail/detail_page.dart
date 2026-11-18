@@ -637,6 +637,7 @@ class _DetailPageState extends State<DetailPage> {
                               drama: drama,
                               radius: 16,
                               details: false,
+                              heroScope: 'drama',
                               decodeWidth: _heroDecodeWidth(heroWidth),
                               alignment: landscape
                                   ? Alignment.center
