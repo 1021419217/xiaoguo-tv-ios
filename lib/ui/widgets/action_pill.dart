@@ -55,9 +55,9 @@ class ActionPill extends StatelessWidget {
     final active = onPressed != null;
     final (background, border, foreground) = switch (tone) {
       ActionTone.accent => (
-        AppColors.accent.withValues(alpha: active ? 0.94 : 0.20),
+        colors.primary.withValues(alpha: active ? 0.94 : 0.20),
         Colors.transparent,
-        AppColors.onAccent,
+        colors.onPrimary,
       ),
       ActionTone.danger => (
         colors.error.withValues(alpha: active ? 0.10 : 0.04),

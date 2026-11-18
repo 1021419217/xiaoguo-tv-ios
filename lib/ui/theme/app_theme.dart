@@ -82,13 +82,6 @@ abstract final class AppTheme {
           )
         : glassScheme;
 
-    // 强调色统一钉死成品牌橙：图标、主按钮、选中态、进度、焦点描边同一套色，
-    // 不再跟着「外观」里选的色走，避免图标橙、界面紫这种撞色。
-    scheme = scheme.copyWith(
-      primary: AppColors.accent,
-      onPrimary: AppColors.onAccent,
-    );
-
     // 深色层的灰往主题色偏一点：纯中性灰会让整屏发"脏"，带 5~8% 的色相后
     // 卡片、弹层、导航才有统一的冷暖倾向。
     if (dark) {
@@ -150,9 +143,9 @@ abstract final class AppTheme {
       ),
       // 分段标签栏（下载页等）也走黑白反色，不用主题蓝。
       tabBarTheme: TabBarThemeData(
-        labelColor: AppColors.accent,
+        labelColor: scheme.primary,
         unselectedLabelColor: scheme.onSurfaceVariant,
-        indicatorColor: AppColors.accent,
+        indicatorColor: scheme.primary,
         indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -181,8 +174,8 @@ abstract final class AppTheme {
       // 主按钮走主题色：界面需要一处稳定的强调色，否则整屏只有黑白灰。
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: AppColors.onAccent,
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
           disabledBackgroundColor: scheme.onSurface.withValues(alpha: 0.14),
           disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.42),
           shape: const StadiumBorder(),
@@ -203,7 +196,7 @@ abstract final class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          if (selected) return AppColors.accent;
+          if (selected) return scheme.primary;
           return dark
               ? Colors.white.withValues(alpha: 0.10)
               : scheme.surfaceContainerHighest;
@@ -215,7 +208,7 @@ abstract final class AppTheme {
         }),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: AppColors.accent,
+        color: scheme.primary,
         linearTrackColor: scheme.onSurface.withValues(alpha: 0.16),
       ),
       listTileTheme: ListTileThemeData(
@@ -236,7 +229,7 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w600,
           height: 1.3,
         ),
-        actionTextColor: AppColors.accent,
+        actionTextColor: scheme.primary,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.surfaceAll,
           side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
@@ -276,18 +269,18 @@ abstract final class AppTheme {
             : Colors.white.withValues(alpha: 0.80),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.accent.withValues(alpha: dark ? 0.22 : 0.16),
+        indicatorColor: scheme.primary.withValues(alpha: dark ? 0.22 : 0.16),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return theme.textTheme.labelMedium?.copyWith(
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? AppColors.accent : scheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? AppColors.accent : scheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
         }),
       ),

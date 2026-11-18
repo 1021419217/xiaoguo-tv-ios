@@ -106,7 +106,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               bottom: BorderSide(
                 color: Color.lerp(
                   Colors.transparent,
-                  AppColors.accent,
+                  theme.colorScheme.primary,
                   weight,
                 )!,
                 width: 2,

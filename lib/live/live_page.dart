@@ -528,14 +528,14 @@ class _ChannelTile extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.accent.withValues(alpha: 0.16),
+                    color: colors.primary.withValues(alpha: 0.16),
                   ),
                   child: Text(
                     initial,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.accent,
+                      color: colors.primary,
                     ),
                   ),
                 ),
