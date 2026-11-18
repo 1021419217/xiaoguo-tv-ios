@@ -219,26 +219,52 @@ class DramaSliverGrid extends StatelessWidget {
   }
 
   Widget _masonry(BuildContext context) {
+    const spacing = 10.0;
+    final tileWidth = (width - 20 - spacing) / 2;
     final heroIndex = heroScope == null
         ? const <String, int>{}
         : firstIndexById(items, (drama) => drama.id);
-    return SliverToBoxAdapter(
-      child: PosterMasonry(
-        width: width,
-        count: items.length,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        heightAt: (index, tile) => DramaTile.extentFor(
-          context,
-          tile,
-          aspect: posterAspect(items[index].source, items[index].id),
-        ),
-        itemBuilder: (context, index, tileWidth) => _cell(
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftHeight = 0.0;
+    var rightHeight = 0.0;
+    for (var index = 0; index < items.length; index++) {
+      final drama = items[index];
+      final ratio = CoverShapes.ratioOf(drama.id);
+      final aspect = ratio > 0 ? ratio : 2 / 3;
+      final cell = Padding(
+        padding: const EdgeInsets.only(bottom: spacing),
+        child: _cell(
           context,
           index,
-          aspect: posterAspect(items[index].source, items[index].id),
+          aspect: aspect,
           columns: 2,
           heroIndex: heroIndex,
-          adaptive: true,
+        ),
+      );
+      final estimate = DramaTile.extentFor(
+        context,
+        tileWidth,
+        wide: aspect > 1.25,
+      );
+      if (leftHeight <= rightHeight) {
+        left.add(cell);
+        leftHeight += estimate + spacing;
+      } else {
+        right.add(cell);
+        rightHeight += estimate + spacing;
+      }
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: tileWidth, child: Column(children: left)),
+            const SizedBox(width: spacing),
+            SizedBox(width: tileWidth, child: Column(children: right)),
+          ],
         ),
       ),
     );
