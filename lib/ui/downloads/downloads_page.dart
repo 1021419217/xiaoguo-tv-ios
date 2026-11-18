@@ -456,19 +456,22 @@ class _DownloadsPageState extends State<DownloadsPage>
       ),
       bottomNavigationBar: selection == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  height: 48,
-                  child: Row(
-                    spacing: 12,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final action in _selectionActions(view))
-                        Expanded(child: action),
-                    ],
-                  ),
+          : Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 80 + 12,
+              ),
+              child: SizedBox(
+                height: 48,
+                child: Row(
+                  spacing: 12,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final action in _selectionActions(view))
+                      Expanded(child: action),
+                  ],
                 ),
               ),
             ),
@@ -778,6 +781,11 @@ class _DownloadsPageState extends State<DownloadsPage>
               return CustomScrollView(
                 slivers: [
                   PosterMasonry(
+                    key: ValueKey(
+                      Object.hashAll([
+                        for (final item in view.downloaded) item.drama.id,
+                      ]),
+                    ),
                     width: constraints.maxWidth,
                     count: view.downloaded.length,
                     padding: EdgeInsets.fromLTRB(inset, 12, inset, 0),

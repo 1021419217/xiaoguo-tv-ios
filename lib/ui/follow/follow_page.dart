@@ -192,6 +192,8 @@ class _FollowPageState extends State<FollowPage> {
   Widget _editButtonFor(_View view) => ActionPill(
     icon: Icons.check_box_outlined,
     label: '编辑',
+    height: 38,
+    fontSize: 14,
     focusNode: _editButton,
     onPressed: view.shown.isEmpty ? null : _startEditing,
   );
@@ -334,7 +336,12 @@ class _FollowPageState extends State<FollowPage> {
       bottomNavigationBar: selection == null
           ? null
           : Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 80 + 12,
+              ),
               child: SizedBox(height: 48, child: _unfollowButton(view)),
             ),
     );
@@ -601,6 +608,11 @@ class _FollowPageState extends State<FollowPage> {
                 ),
                 sliver: masonry
                     ? PosterMasonry(
+                        key: ValueKey(
+                          Object.hashAll([
+                            for (final drama in dramas) drama.id,
+                          ]),
+                        ),
                         width: width,
                         count: dramas.length,
                         heightAt: (index, cellWidth) {

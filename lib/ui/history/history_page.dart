@@ -197,13 +197,16 @@ class _HistoryPageState extends State<HistoryPage> {
     ActionPill(
       icon: Icons.check_box_outlined,
       label: '编辑',
+      height: 38,
+      fontSize: 14,
       focusNode: _editButton,
       onPressed: view.shown.isEmpty ? null : _startEditing,
     ),
     ActionPill(
       icon: Icons.delete_sweep_outlined,
       label: '清空',
-      tone: ActionTone.danger,
+      height: 38,
+      fontSize: 14,
       onPressed: view.shown.isEmpty
           ? null
           : () => _remove(_ids(view), clear: true),
@@ -359,12 +362,13 @@ class _HistoryPageState extends State<HistoryPage> {
             child: Row(
               key: ValueKey(selection == null),
               mainAxisSize: MainAxisSize.min,
+              spacing: 12,
               children: selection == null
                   ? _browseActions(view)
                   : [_selectAll(view)],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 20),
         ],
       ),
       // SafeArea 已让出「状态栏 + 磨砂顶栏」，不再叠 kToolbarHeight。
@@ -387,11 +391,14 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
       bottomNavigationBar: selection == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(height: 48, child: _deleteButton(view)),
+          : Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 80 + 12,
               ),
+              child: SizedBox(height: 48, child: _deleteButton(view)),
             ),
     );
   }
@@ -571,6 +578,11 @@ class _HistoryPageState extends State<HistoryPage> {
                 padding: EdgeInsets.symmetric(horizontal: inset),
                 sliver: masonry
                     ? PosterMasonry(
+                        key: ValueKey(
+                          Object.hashAll([
+                            for (final entry in entries) entry.drama.id,
+                          ]),
+                        ),
                         width: width,
                         count: entries.length,
                         heightAt: (index, cellWidth) => ProgressPoster.extentFor(
