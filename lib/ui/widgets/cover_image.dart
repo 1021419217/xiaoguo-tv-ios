@@ -333,8 +333,8 @@ class _CoverImageState extends State<CoverImage> {
     double ratio = 0;
     try {
       final bytes = await File(path).readAsBytes();
-      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final buffer = await ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ImageDescriptor.encoded(buffer);
       ratio = descriptor.width / descriptor.height;
       descriptor.dispose();
       buffer.dispose();
