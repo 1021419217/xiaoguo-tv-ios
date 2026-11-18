@@ -128,8 +128,31 @@ def main():
             shutil.copy2(package, destination)
             artifacts.append(destination)
     else:
-        run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
+        # 新版 Xcode 镜像会拦下 flutter build 的未签名设备构建，
+        # 这里只让 flutter 生成工程配置，编译交给 xcodebuild 并显式关签名。
+        run([flutter, 'build', 'ios', '--release', '--no-pub', '--config-only', *app.flutter_arguments])
+        derived = root / 'build' / 'ios_dd'
+        run([
+            'xcodebuild',
+            '-workspace', str(root / 'ios' / 'Runner.xcworkspace'),
+            '-scheme', 'Runner',
+            '-configuration', 'Release',
+            '-sdk', 'iphoneos',
+            '-destination', 'generic/platform=iOS',
+            '-derivedDataPath', str(derived),
+            'CODE_SIGNING_ALLOWED=NO',
+            'CODE_SIGNING_REQUIRED=NO',
+            'CODE_SIGN_IDENTITY=',
+            'build',
+        ])
+        built = derived / 'Build' / 'Products' / 'Release-iphoneos' / 'Runner.app'
+        if not built.exists():
+            raise SystemExit('xcodebuild 未产出 Runner.app')
         application = root / 'build' / 'ios' / 'iphoneos' / 'Runner.app'
+        if application.exists():
+            shutil.rmtree(application)
+        application.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(built, application, symlinks=True)
         validate_unsigned_application(application)
         symbols = subprocess.check_output(['xcrun', 'nm', '-gU', str(application / 'Runner')], text=True)
         for symbol in ['_DuanjuRequest', '_DuanjuFree']:
