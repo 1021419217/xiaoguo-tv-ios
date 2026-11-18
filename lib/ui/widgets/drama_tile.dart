@@ -22,6 +22,7 @@ class _PosterButton extends StatefulWidget {
     this.autofocus = false,
     this.checked,
     this.aspect = 2 / 3,
+    this.adaptiveAspect = false,
   });
   final Widget Function(ValueChanged<double> onAspect) cover;
   final List<Widget> caption;
@@ -31,6 +32,9 @@ class _PosterButton extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   final bool? checked;
+  /// 只在瀑布流里为 true：格子跟着图片真实比例走；普通网格必须保持
+  /// 统一比例，否则 app 的 mainAxisExtent 会算错。
+  final bool adaptiveAspect;
   final double aspect;
 
   @override
@@ -45,7 +49,7 @@ class _PosterButtonState extends State<_PosterButton> {
 
   /// 封面读出来的真实比例优先，保证格子跟着图片走、不裁切。
   void _setAspect(double ratio) {
-    if (!mounted || ratio <= 0) return;
+    if (!widget.adaptiveAspect || !mounted || ratio <= 0) return;
     if ((ratio - (_ratio ?? widget.aspect)).abs() < 0.005) return;
     setState(() => _ratio = ratio);
   }
@@ -61,7 +65,9 @@ class _PosterButtonState extends State<_PosterButton> {
   Widget build(BuildContext context) {
     final visible = focusVisible(_focused);
     final layer = _pressed ? 0.12 : (_hovered ? 0.08 : 0.0);
-    final aspect = _ratio ?? widget.aspect;
+    final aspect = widget.adaptiveAspect
+        ? (_ratio ?? widget.aspect)
+        : widget.aspect;
     final button = InkWell(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -153,6 +159,7 @@ class DramaTile extends StatelessWidget {
     this.exploreBlur = false,
     this.wide = false,
     this.aspect,
+    this.adaptiveAspect = false,
   });
   final Drama drama;
   final VoidCallback onTap;
@@ -161,6 +168,7 @@ class DramaTile extends StatelessWidget {
   final bool exploreBlur;
   final bool wide;
   final double? aspect;
+  final bool adaptiveAspect;
   final String? subtitle;
   final int? rank;
   final VoidCallback? onMore;
@@ -206,6 +214,7 @@ class DramaTile extends StatelessWidget {
           : heroScope,
     ),
     aspect: aspect ?? (wide ? 16 / 9 : 2 / 3),
+    adaptiveAspect: adaptiveAspect,
     label:
         '${rank == null ? '' : '第$rank名，'}'
         '${drama.title}，${drama.episodes}集${drama.vip ? '，VIP' : ''}'
@@ -239,6 +248,7 @@ class ProgressPoster extends StatelessWidget {
     this.dotColor,
     this.heroScope,
     this.aspect = 2 / 3,
+    this.adaptiveAspect = false,
   });
   final Drama drama;
   final String? heroScope;
@@ -255,6 +265,9 @@ class ProgressPoster extends StatelessWidget {
 
   /// 封面宽高比；混排源的瀑布流按每张封面的实际比例排版。
   final double aspect;
+
+  /// 瀑布流里为 true，允许格子跟着封面真实比例变化。
+  final bool adaptiveAspect;
 
   static const _titleLines = 2;
 
@@ -278,6 +291,7 @@ class ProgressPoster extends StatelessWidget {
       width: width,
       child: _PosterButton(
         aspect: aspect,
+        adaptiveAspect: adaptiveAspect,
         cover: (onAspect) => Stack(
           fit: StackFit.expand,
           children: [

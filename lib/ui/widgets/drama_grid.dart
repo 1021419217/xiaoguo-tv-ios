@@ -238,6 +238,7 @@ class DramaSliverGrid extends StatelessWidget {
           aspect: posterAspect(items[index].source, items[index].id),
           columns: 2,
           heroIndex: heroIndex,
+          adaptive: true,
         ),
       ),
     );
@@ -249,6 +250,7 @@ class DramaSliverGrid extends StatelessWidget {
     required double aspect,
     required int columns,
     required Map<String, int> heroIndex,
+    bool adaptive = false,
   }) {
     final drama = items[index];
     final tile = Focus(
@@ -260,6 +262,7 @@ class DramaSliverGrid extends StatelessWidget {
       child: DramaTile(
         drama: drama,
         aspect: aspect,
+        adaptiveAspect: adaptive,
         wide: aspect > 1.25,
         rank: rankOf?.call(drama),
         autofocus: autofocus && index == 0,

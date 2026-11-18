@@ -536,6 +536,7 @@ class _HistoryPageState extends State<HistoryPage> {
         required int across,
         required double cellWidth,
         required double aspect,
+        bool adaptive = false,
       }) => Focus(
         key: ValueKey(entry.drama.id),
         canRequestFocus: false,
@@ -553,6 +554,7 @@ class _HistoryPageState extends State<HistoryPage> {
             focusNode: entry == first ? _firstPoster : null,
             hero: identical(heroOwner[entry.drama.id], entry),
             aspect: aspect,
+            adaptive: adaptive,
           ),
         ),
       );
@@ -626,6 +628,7 @@ class _HistoryPageState extends State<HistoryPage> {
                             entries[index].drama.source,
                             entries[index].drama.id,
                           ),
+                          adaptive: true,
                         ),
                       ),
                     ),
@@ -686,6 +689,7 @@ class _HistoryPageState extends State<HistoryPage> {
     FocusNode? focusNode,
     bool hero = false,
     double aspect = 2 / 3,
+    bool adaptive = false,
   }) {
     final drama = entry.drama;
     final total = drama.episodes;
@@ -694,6 +698,7 @@ class _HistoryPageState extends State<HistoryPage> {
       drama: drama,
       width: width,
       aspect: aspect,
+      adaptiveAspect: adaptive,
       focusNode: focusNode,
       progress: total > 0 ? entry.episode / total : 0,
       caption: total > 0 && entry.episode >= total && entry.finished

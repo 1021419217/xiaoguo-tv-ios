@@ -545,6 +545,7 @@ class _FollowPageState extends State<FollowPage> {
         required int across,
         required double cellWidth,
         required double aspect,
+        bool adaptive = false,
       }) => Focus(
         key: ValueKey(drama.id),
         canRequestFocus: false,
@@ -562,6 +563,7 @@ class _FollowPageState extends State<FollowPage> {
             focusNode: drama == first ? widget.entryFocus : null,
             hero: identical(heroOwner[drama.id], drama),
             aspect: aspect,
+            adaptive: adaptive,
           ),
         ),
       );
@@ -641,6 +643,7 @@ class _FollowPageState extends State<FollowPage> {
                             dramas[index].source,
                             dramas[index].id,
                           ),
+                          adaptive: true,
                         ),
                       ),
                     ),
@@ -703,6 +706,7 @@ class _FollowPageState extends State<FollowPage> {
     FocusNode? focusNode,
     bool hero = false,
     double aspect = 2 / 3,
+    bool adaptive = false,
   }) {
     final watch = widget.store.watched(drama.id);
     final state = widget.store.following(drama.id);
@@ -722,6 +726,7 @@ class _FollowPageState extends State<FollowPage> {
       drama: drama,
       width: width,
       aspect: aspect,
+      adaptiveAspect: adaptive,
       focusNode: focusNode,
       progress: watch != null && total > 0 ? watch.episode / total : 0,
       caption: caption,

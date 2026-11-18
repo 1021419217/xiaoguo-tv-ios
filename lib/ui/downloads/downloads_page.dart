@@ -756,7 +756,13 @@ class _DownloadsPageState extends State<DownloadsPage>
         final width = constraints.maxWidth - inset * 2;
         final (columns, gap, runGap) = _grid(context, width);
         final tile = (width - gap * (columns - 1)) / columns;
-        Widget poster(DownloadedDrama item, int index, double tileWidth, double aspect) => Focus(
+        Widget poster(
+          DownloadedDrama item,
+          int index,
+          double tileWidth,
+          double aspect, {
+          bool adaptive = false,
+        }) => Focus(
           key: ValueKey(item.drama.id),
           canRequestFocus: false,
           skipTraversal: true,
@@ -766,6 +772,7 @@ class _DownloadsPageState extends State<DownloadsPage>
             drama: item.drama,
             width: tileWidth,
             aspect: aspect,
+            adaptiveAspect: adaptive,
             progress: null,
             caption: '${item.episodes.length} 集 · ${formatBytes(item.bytes)}',
             tag: SourceSite.byId(item.drama.source).name,
@@ -817,6 +824,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       index,
                       tileWidth,
                       posterAspect(item.drama.source, item.drama.id),
+                      adaptive: true,
                     );
                   },
                 ),
