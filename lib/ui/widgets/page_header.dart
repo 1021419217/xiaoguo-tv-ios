@@ -46,7 +46,8 @@ class PageHeader extends StatelessWidget {
                 },
               ),
             ),
-            ...actions,
+            if (actions.isNotEmpty)
+              Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: actions),
           ],
         ),
       ),
