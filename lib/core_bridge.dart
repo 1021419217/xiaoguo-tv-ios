@@ -232,6 +232,9 @@ abstract class AppRepository {
   }) async => throw AppFailure('该站源暂不支持作者主页');
   Future<String> cover(Drama drama, {bool force = false});
   bool coverCached(Drama drama) => false;
+
+  /// 已下载封面的本地路径，同步返回；没有缓存时返回 null。
+  String? cachedCoverPath(Drama drama) => null;
   Future<DramaDetail> detail(Drama drama);
 
   /// 探测某一集的可用清晰度（只解析播放地址，不建会话、不预取）。
@@ -1040,6 +1043,10 @@ class NativeRepository extends AppRepository {
   @override
   bool coverCached(Drama drama) =>
       _coverPaths.containsKey('${drama.id}\u0000${drama.cover}');
+
+  @override
+  String? cachedCoverPath(Drama drama) =>
+      _coverPaths['${drama.id}\u0000${drama.cover}'];
 
   @override
   Future<String> cover(Drama drama, {bool force = false}) async {

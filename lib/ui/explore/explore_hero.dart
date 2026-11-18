@@ -285,7 +285,6 @@ class ExploreHero extends StatelessWidget {
                           radius: metrics.coverRadius,
                           details: false,
                           exploreBlur: true,
-                          crop: true,
                         ),
                       ),
                     ),

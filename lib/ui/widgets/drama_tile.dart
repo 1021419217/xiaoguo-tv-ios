@@ -167,11 +167,12 @@ class DramaTile extends StatelessWidget {
     BuildContext context,
     double width, {
     bool wide = false,
+    double? aspect,
   }) {
     final scaler = MediaQuery.textScalerOf(context);
     final title = scaler.scale(titleStyle(context).fontSize!) * 1.3 * 2;
     final subtitle = scaler.scale(subtitleStyle(context).fontSize!) * 1.3;
-    final cover = wide ? width * 9 / 16 : width * 1.5;
+    final cover = width / (aspect ?? (wide ? 16 / 9 : 2 / 3));
     return (cover + 9 + title + 4 + subtitle).ceilToDouble();
   }
 
@@ -220,6 +221,7 @@ class ProgressPoster extends StatelessWidget {
     this.badge,
     this.dotColor,
     this.heroScope,
+    this.aspect = 2 / 3,
   });
   final Drama drama;
   final String? heroScope;
@@ -234,14 +236,21 @@ class ProgressPoster extends StatelessWidget {
   final double width;
   final bool? selected;
 
+  /// 封面宽高比；混排源的瀑布流按每张封面的实际比例排版。
+  final double aspect;
+
   static const _titleLines = 2;
 
-  static double extentFor(BuildContext context, double width) {
+  static double extentFor(
+    BuildContext context,
+    double width, {
+    double aspect = 2 / 3,
+  }) {
     final scaler = MediaQuery.textScalerOf(context);
     final television = AppScope.of(context).television;
     final title = scaler.scale(television ? 15 : 14) * 1.3 * _titleLines;
     final caption = scaler.scale(television ? 13 : 12) * 1.3;
-    return (width * 1.5 + 8 + title + 2 + caption).ceilToDouble();
+    return (width / aspect + 8 + title + 2 + caption).ceilToDouble();
   }
 
   @override
@@ -251,6 +260,7 @@ class ProgressPoster extends StatelessWidget {
     return SizedBox(
       width: width,
       child: _PosterButton(
+        aspect: aspect,
         cover: Stack(
           fit: StackFit.expand,
           children: [

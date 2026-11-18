@@ -172,6 +172,7 @@ abstract final class AppTheme {
         ),
       ),
       // 主按钮走主题色：界面需要一处稳定的强调色，否则整屏只有黑白灰。
+      // 主/次同一套胶囊与高度：一屏只有一个主按钮，次按钮用描边胶囊并排。
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: scheme.primary,
@@ -180,8 +181,19 @@ abstract final class AppTheme {
           disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.42),
           shape: const StadiumBorder(),
           elevation: 0,
+          minimumSize: const Size(0, 44),
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.onSurface,
+          side: BorderSide(color: scheme.outline),
+          shape: const StadiumBorder(),
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       // 开关同样走黑白反色：开启是白轨 + 深色圆点，关闭是极淡白轨 + 灰点。

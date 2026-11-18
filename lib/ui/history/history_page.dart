@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../cover_shape.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../source_modules.dart';
@@ -8,6 +9,8 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/group_card.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
@@ -191,18 +194,20 @@ class _HistoryPageState extends State<HistoryPage> {
     }.toList(),
   );
 
-  /// 顶栏操作统一成 [ActionPill]：和追剧、下载、模块页同一套胶囊语言。
+  /// 顶栏只留 38 圆钮：编辑 / 清空最多两个动作，其它操作进编辑态再出现。
   List<Widget> _browseActions(_View view) => [
-    ActionPill(
-      icon: Icons.check_box_outlined,
-      label: '编辑',
+    BarButton(
+      icon: Icons.edit_outlined,
+      tooltip: '编辑',
+      size: 38,
       focusNode: _editButton,
       onPressed: view.shown.isEmpty ? null : _startEditing,
     ),
-    ActionPill(
+    BarButton(
       icon: Icons.delete_sweep_outlined,
-      label: '清空',
-      tone: ActionTone.danger,
+      tooltip: '清空',
+      size: 38,
+      tone: BarTone.danger,
       onPressed: view.shown.isEmpty
           ? null
           : () => _remove(_ids(view), clear: true),
@@ -523,99 +528,146 @@ class _HistoryPageState extends State<HistoryPage> {
           id: view.shown[index],
       };
       final first = view.shown.firstOrNull;
-      final scroll = CustomScrollView(
-        slivers: [
-          if (view.shown.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: FadeSwitcher(
-                scale: true,
-                child: StatusView(
-                  key: ValueKey(view.history.isEmpty),
-                  title: view.history.isEmpty ? '还没有观看记录' : '没有匹配的记录',
-                  message: view.history.isEmpty
-                      ? missingSourceHint(
-                          widget.store.missingSourceRecords().history,
-                          '条观看记录',
-                        )
-                      : null,
-                  icon: view.history.isEmpty
-                      ? Icons.history_rounded
-                      : Icons.search_off_rounded,
+
+      Widget cell(
+        WatchEntry entry,
+        int index, {
+        required int count,
+        required int across,
+        required double cellWidth,
+        required double aspect,
+      }) => Focus(
+        key: ValueKey(entry.drama.id),
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (_, event) => wrapGridRow(index, across, count, event),
+        child: EnterOnce(
+          id: entry.drama.id,
+          played: _entered,
+          index: index,
+          child: _poster(
+            context,
+            entry,
+            cellWidth,
+            view.selection,
+            focusNode: entry == first ? _firstPoster : null,
+            hero: identical(heroOwner[entry.drama.id], entry),
+            aspect: aspect,
+          ),
+        ),
+      );
+
+      Widget scroll(BuildContext context) {
+        final mixed = usePosterMasonry(
+          context,
+          view.shown.isEmpty ? '' : view.shown.first.drama.source,
+        );
+        return CustomScrollView(
+          slivers: [
+            if (view.shown.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: FadeSwitcher(
+                  scale: true,
+                  child: StatusView(
+                    key: ValueKey(view.history.isEmpty),
+                    title: view.history.isEmpty ? '还没有观看记录' : '没有匹配的记录',
+                    message: view.history.isEmpty
+                        ? missingSourceHint(
+                            widget.store.missingSourceRecords().history,
+                            '条观看记录',
+                          )
+                        : null,
+                    icon: view.history.isEmpty
+                        ? Icons.history_rounded
+                        : Icons.search_off_rounded,
+                  ),
                 ),
-              ),
-            )
-          else
-            for (final MapEntry(key: period, value: entries)
-                in periods.entries) ...[
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(inset + 4, 12, inset, 10),
-                sliver: SliverToBoxAdapter(
-                  child: Semantics(
-                    header: true,
-                    child: Text(
-                      period,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+              )
+            else
+              for (final MapEntry(key: period, value: entries)
+                  in periods.entries) ...[
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(inset + 4, 12, inset, 6),
+                  sliver: SliverToBoxAdapter(
+                    child: SectionHeader(
+                      title: period,
+                      trailing: '${entries.length}',
+                      action: view.source.isEmpty ? null : '全部',
+                      onAction: view.source.isEmpty
+                          ? null
+                          : () => setState(() => _source = ''),
                     ),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: EdgeInsets.symmetric(horizontal: inset),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: gap,
-                    mainAxisSpacing: runGap,
-                    mainAxisExtent: ProgressPoster.extentFor(context, tile),
-                  ),
-                  itemCount: entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = entries[index];
-                    return Focus(
-                      key: ValueKey(entry.drama.id),
-                      canRequestFocus: false,
-                      skipTraversal: true,
-                      onKeyEvent: (_, event) =>
-                          wrapGridRow(index, columns, entries.length, event),
-                      child: EnterOnce(
-                        id: entry.drama.id,
-                        played: _entered,
-                        index: index,
-                        child: _poster(
-                          context,
-                          entry,
-                          tile,
-                          view.selection,
-                          focusNode: entry == first ? _firstPoster : null,
-                          hero: identical(heroOwner[entry.drama.id], entry),
+                if (mixed)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: inset),
+                    sliver: SliverToBoxAdapter(
+                      child: PosterMasonry(
+                        width: width,
+                        count: entries.length,
+                        heightAt: (index, cellWidth) =>
+                            ProgressPoster.extentFor(
+                              context,
+                              cellWidth,
+                              aspect: posterAspect(entries[index].drama.id),
+                            ),
+                        itemBuilder: (context, index, cellWidth) => cell(
+                          entries[index],
+                          index,
+                          count: entries.length,
+                          across: 2,
+                          cellWidth: cellWidth,
+                          aspect: posterAspect(entries[index].drama.id),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          SliverPadding(
-            padding: EdgeInsets.only(
-              bottom: AppScope.of(context).television ? 27 : 32,
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: inset),
+                    sliver: SliverGrid.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: gap,
+                        mainAxisSpacing: runGap,
+                        mainAxisExtent: ProgressPoster.extentFor(context, tile),
+                      ),
+                      itemCount: entries.length,
+                      itemBuilder: (context, index) => cell(
+                        entries[index],
+                        index,
+                        count: entries.length,
+                        across: columns,
+                        cellWidth: tile,
+                        aspect: 2 / 3,
+                      ),
+                    ),
+                  ),
+              ],
+            SliverPadding(
+              padding: EdgeInsets.only(bottom: pageBottomInset(context)),
             ),
-          ),
-        ],
-      );
+          ],
+        );
+      }
+
       // 顶栏留在滑动层外面，横滑切站源时标题、搜索框不跟着动。
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(top: top),
-            child: Column(children: header),
-          ),
-          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
-        ],
+      return ValueListenableBuilder<int>(
+        valueListenable: CoverShapes.revision,
+        builder: (context, _, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: top),
+              child: Column(children: header),
+            ),
+            Expanded(
+              child: swipe ? _swipe(view, scroll(context)) : scroll(context),
+            ),
+          ],
+        ),
       );
     },
   );
@@ -627,6 +679,7 @@ class _HistoryPageState extends State<HistoryPage> {
     Set<String>? selection, {
     FocusNode? focusNode,
     bool hero = false,
+    double aspect = 2 / 3,
   }) {
     final drama = entry.drama;
     final total = drama.episodes;
@@ -634,6 +687,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return ProgressPoster(
       drama: drama,
       width: width,
+      aspect: aspect,
       focusNode: focusNode,
       progress: total > 0 ? entry.episode / total : 0,
       caption: total > 0 && entry.episode >= total && entry.finished

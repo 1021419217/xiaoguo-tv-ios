@@ -59,14 +59,7 @@ class SettingsCard extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => GroupCard(
-    children: [
-      for (final (index, child) in children.indexed) ...[
-        if (index > 0) const Divider(indent: 16, endIndent: 16),
-        child,
-      ],
-    ],
-  );
+  Widget build(BuildContext context) => GroupCard(children: children);
 }
 
 class SwitchTile extends StatelessWidget {

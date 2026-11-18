@@ -45,6 +45,75 @@ double dramaTileWidth(
   return (width - (columns - 1) * spacing) / columns;
 }
 
+/// 横竖混排源在手机竖屏固定两列瀑布流；其它形态仍按屏宽算列数。
+bool usePosterMasonry(BuildContext context, String source) =>
+    AppScope.formFactorOf(context) == FormFactor.phone &&
+    CoverShapes.isMixed(source);
+
+/// 单张封面的排版比例：已知实际宽高比就用它，否则按竖版兜底。
+double posterAspect(String dramaId) {
+  final ratio = CoverShapes.ratioOf(dramaId);
+  if (ratio <= 0) return 2 / 3;
+  return ratio.clamp(0.5, 1.75);
+}
+
+/// 两列瀑布流：每格按自身高度落进较短的一栏，和「发现」页同一套排法。
+class PosterMasonry extends StatelessWidget {
+  const PosterMasonry({
+    super.key,
+    required this.width,
+    required this.count,
+    required this.heightAt,
+    required this.itemBuilder,
+    this.spacing = 10,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final double width;
+  final int count;
+
+  /// 预估格子高度，只用于决定落进哪一栏。
+  final double Function(int index, double tileWidth) heightAt;
+  final Widget Function(BuildContext context, int index, double tileWidth)
+  itemBuilder;
+  final double spacing;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tileWidth = (width - padding.horizontal - spacing) / 2;
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftHeight = 0.0;
+    var rightHeight = 0.0;
+    for (var index = 0; index < count; index++) {
+      final cell = Padding(
+        padding: EdgeInsets.only(bottom: spacing),
+        child: itemBuilder(context, index, tileWidth),
+      );
+      final height = heightAt(index, tileWidth) + spacing;
+      if (leftHeight <= rightHeight) {
+        left.add(cell);
+        leftHeight += height;
+      } else {
+        right.add(cell);
+        rightHeight += height;
+      }
+    }
+    return Padding(
+      padding: padding,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: tileWidth, child: Column(children: left)),
+          SizedBox(width: spacing),
+          SizedBox(width: tileWidth, child: Column(children: right)),
+        ],
+      ),
+    );
+  }
+}
+
 SliverGridDelegate dramaGridDelegate(
   BuildContext context,
   double width, {
@@ -149,52 +218,25 @@ class DramaSliverGrid extends StatelessWidget {
   }
 
   Widget _masonry(BuildContext context) {
-    const spacing = 10.0;
-    final tileWidth = (width - 20 - spacing) / 2;
     final heroIndex = heroScope == null
         ? const <String, int>{}
         : firstIndexById(items, (drama) => drama.id);
-    final left = <Widget>[];
-    final right = <Widget>[];
-    var leftHeight = 0.0;
-    var rightHeight = 0.0;
-    for (var index = 0; index < items.length; index++) {
-      final drama = items[index];
-      final ratio = CoverShapes.ratioOf(drama.id);
-      final aspect = ratio > 0 ? ratio : 2 / 3;
-      final cell = Padding(
-        padding: const EdgeInsets.only(bottom: spacing),
-        child: _cell(
+    return SliverToBoxAdapter(
+      child: PosterMasonry(
+        width: width,
+        count: items.length,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        heightAt: (index, tile) => DramaTile.extentFor(
+          context,
+          tile,
+          aspect: posterAspect(items[index].id),
+        ),
+        itemBuilder: (context, index, tileWidth) => _cell(
           context,
           index,
-          aspect: aspect,
+          aspect: posterAspect(items[index].id),
           columns: 2,
           heroIndex: heroIndex,
-        ),
-      );
-      final estimate = DramaTile.extentFor(
-        context,
-        tileWidth,
-        wide: aspect > 1.25,
-      );
-      if (leftHeight <= rightHeight) {
-        left.add(cell);
-        leftHeight += estimate + spacing;
-      } else {
-        right.add(cell);
-        rightHeight += estimate + spacing;
-      }
-    }
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: tileWidth, child: Column(children: left)),
-            const SizedBox(width: spacing),
-            SizedBox(width: tileWidth, child: Column(children: right)),
-          ],
         ),
       ),
     );

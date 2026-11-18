@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
+/// 主/次按钮的两种形态：主按钮是主题色实底胶囊（一屏一个），
+/// 次按钮是同高的描边胶囊。尺寸与 [ThemeData] 里的按钮主题保持一致。
 abstract final class AppButtons {
   static const height = 44.0;
   static const compact = 36.0;
@@ -9,37 +11,29 @@ abstract final class AppButtons {
 
   static const _dangerColor = Color(0xFFFF453A);
 
-  static ButtonStyle primary(
-    ColorScheme scheme, {
-    required bool dark,
-  }) => FilledButton.styleFrom(
-    backgroundColor: dark ? const Color(0xFFF2F2F5) : scheme.primary,
-    foregroundColor: dark ? const Color(0xFF111114) : scheme.onPrimary,
-    disabledBackgroundColor: (dark ? Colors.white : scheme.onSurface)
-        .withValues(alpha: 0.16),
-    disabledForegroundColor: (dark ? Colors.white : scheme.onSurface)
-        .withValues(alpha: 0.45),
+  static ButtonStyle primary(ColorScheme scheme) => FilledButton.styleFrom(
+    backgroundColor: scheme.primary,
+    foregroundColor: scheme.onPrimary,
+    disabledBackgroundColor: scheme.onSurface.withValues(alpha: 0.14),
+    disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.42),
     shape: const StadiumBorder(),
     elevation: 0,
     minimumSize: const Size(0, height),
-    padding: const EdgeInsets.symmetric(horizontal: 22),
+    padding: const EdgeInsets.symmetric(horizontal: 24),
     textStyle: const TextStyle(
-      fontSize: AppType.body,
+      fontSize: AppType.title,
       fontWeight: FontWeight.w700,
     ),
   );
 
-  static ButtonStyle secondary(
-    ColorScheme scheme, {
-    required bool dark,
-  }) => OutlinedButton.styleFrom(
+  static ButtonStyle secondary(ColorScheme scheme) => OutlinedButton.styleFrom(
     foregroundColor: scheme.onSurface,
     side: BorderSide(color: scheme.outline),
     shape: const StadiumBorder(),
-    minimumSize: const Size(0, compact),
-    padding: const EdgeInsets.symmetric(horizontal: 16),
+    minimumSize: const Size(0, height),
+    padding: const EdgeInsets.symmetric(horizontal: 20),
     textStyle: const TextStyle(
-      fontSize: 12.5,
+      fontSize: AppType.title,
       fontWeight: FontWeight.w600,
     ),
   );

@@ -87,14 +87,14 @@ class FollowPill extends StatelessWidget {
       final corner = radius ?? height / 2;
       return FocusRing(
         radius: corner,
-        child: FilledButton.tonalIcon(
+        child: OutlinedButton.icon(
           key: const ValueKey('follow-toggle'),
           focusNode: focusNode,
           onPressed: () {
             _toggle(context, store, drama);
             onToggled?.call();
           },
-          style: FilledButton.styleFrom(
+          style: OutlinedButton.styleFrom(
             minimumSize: Size(0, height),
             padding: EdgeInsets.fromLTRB(height / 4, 0, height * 0.35, 0),
             shape: RoundedRectangleBorder(

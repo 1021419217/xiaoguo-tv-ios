@@ -542,8 +542,8 @@ class ExplorePageState extends State<ExplorePage> {
                 inset,
                 8,
                 inset,
-                // 底部留出悬浮胶囊导航的空间。
-                television ? 27 : (phone ? 100 : 16),
+                // 与其它 tab 页同一个底栏留白，最后一行不会被胶囊导航压住。
+                pageBottomInset(context),
               ),
               sliver: SliverToBoxAdapter(
                 child: FeedFooter(

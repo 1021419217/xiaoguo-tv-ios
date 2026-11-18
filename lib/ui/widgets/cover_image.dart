@@ -46,16 +46,19 @@ class DramaCover extends StatelessWidget {
     this.heroScope,
     this.showScore = false,
     this.exploreBlur = false,
-    this.crop = false,
     this.alignment = Alignment.center,
+    this.decodeWidth = 440,
   });
   final Drama drama;
   final double radius;
   final bool details;
   final bool exploreBlur;
   final bool showScore;
-  final bool crop;
   final Alignment alignment;
+
+  /// 解码宽度（物理像素）。列表里的小封面用默认值即可，详情页的大封面
+  /// 传更大的值，否则放大后会糊。
+  final int decodeWidth;
   final int? rank;
   final String? heroScope;
   static const imagesDisabled = bool.fromEnvironment('DISABLE_REMOTE_IMAGES');
@@ -77,51 +80,16 @@ class DramaCover extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         placeholder,
-        if (!imagesDisabled && drama.id.isNotEmpty) ...[
-          if (!crop)
-            ClipRect(
-              child: Transform.scale(
-                scale: 1.15,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: 28,
-                    sigmaY: 28,
-                    tileMode: TileMode.clamp,
-                  ),
-                  child: Opacity(
-                    opacity: 0.5,
-                    child: CoverImage(
-                      key: ValueKey('${drama.id}\u0000${drama.cover}\u0000fill'),
-                      drama: drama,
-                      repository: AppScope.of(context).repository,
-                      placeholder: const SizedBox.shrink(),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (!crop)
-            const IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0x12000000), Color(0x33000000)],
-                  ),
-                ),
-              ),
-            ),
+        if (!imagesDisabled && drama.id.isNotEmpty)
           CoverImage(
             key: ValueKey('${drama.id}\u0000${drama.cover}'),
             drama: drama,
             repository: AppScope.of(context).repository,
             placeholder: const SizedBox.shrink(),
             alignment: alignment,
-            fit: crop ? BoxFit.cover : BoxFit.cover,
+            decodeWidth: decodeWidth,
+            fit: BoxFit.cover,
           ),
-        ],
       ],
     );
     // Always build the same wrapper so the CoverImage state is kept when the
@@ -245,6 +213,7 @@ class CoverImage extends StatefulWidget {
     this.retryable = true,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
+    this.decodeWidth = 440,
   });
   final Drama drama;
   final AppRepository repository;
@@ -253,14 +222,22 @@ class CoverImage extends StatefulWidget {
   final BoxFit fit;
   final Alignment alignment;
 
+  /// 解码宽度（物理像素）。同一张封面用同一宽度才会命中同一份解码缓存。
+  final int decodeWidth;
+
   @override
   State<CoverImage> createState() => _CoverImageState();
 }
 
 class _CoverImageState extends State<CoverImage> {
-  static const _decodeWidth = 440;
+  /// 列表里小封面的解码宽度；同时充当详情大图解码完成前的过渡图。
+  static const _thumbWidth = 440;
+
   CoverRequest? _request;
   Future<String>? _file;
+
+  /// 已经拿到本地文件时直接同步出图：不再先空一帧再淡入，进出详情不闪。
+  String? _path;
   int _revision = 0;
   bool _failed = false;
   bool _retryOnFailure = false;
@@ -283,7 +260,9 @@ class _CoverImageState extends State<CoverImage> {
       widget.repository.catalogUpdates.addListener(_metadataChanged);
     }
     if (oldWidget.repository != widget.repository ||
-        oldWidget.drama.source != widget.drama.source) {
+        oldWidget.drama.id != widget.drama.id ||
+        oldWidget.drama.source != widget.drama.source ||
+        oldWidget.drama.cover != widget.drama.cover) {
       _failed = _retryOnFailure = false;
       _failedPath = null;
       _revision = widget.repository.catalogUpdates.coverRevision(
@@ -303,6 +282,13 @@ class _CoverImageState extends State<CoverImage> {
   void _load() {
     _request?.cancel();
     _request = null;
+    _file = null;
+    _path = null;
+    final cached = CoverLoader.cachedPath(widget.repository, widget.drama);
+    if (cached != null && File(cached).existsSync()) {
+      _path = cached;
+      return;
+    }
     _file = CoverLoader.cached(widget.repository, widget.drama);
     if (_file != null) return;
     final request = _request = CoverLoader.request(
@@ -336,16 +322,19 @@ class _CoverImageState extends State<CoverImage> {
 
   Future<void> _retry(String? path) async {
     if (path != null) {
-      await ResizeImage.resizeIfNeeded(
-        _decodeWidth,
-        null,
-        FileImage(File(path)),
-      ).evict();
+      for (final width in {_thumbWidth, widget.decodeWidth}) {
+        await ResizeImage.resizeIfNeeded(
+          width,
+          null,
+          FileImage(File(path)),
+        ).evict();
+      }
     }
     if (!mounted) return;
     _request?.cancel();
     setState(() {
       _request = null;
+      _path = null;
       _failed = _retryOnFailure = false;
       _failedPath = null;
       _file = widget.repository.cover(
@@ -372,27 +361,50 @@ class _CoverImageState extends State<CoverImage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) => FutureBuilder<String>(
-    future: _file,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState != ConnectionState.done) {
-        return widget.placeholder;
-      }
-      if (snapshot.hasError || !snapshot.hasData) return _failure(null);
-      final path = snapshot.data!;
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
-      );
-      return Image.file(
-        File(path),
-        fit: widget.fit,
-        alignment: widget.alignment,
-        cacheWidth: _decodeWidth,
-        excludeFromSemantics: true,
-        frameBuilder: fadeInFrameBuilder,
-        errorBuilder: (_, _, _) => _failure(path),
-      );
-    },
+  Widget _image(
+    String path,
+    int width, {
+    required Widget Function() onError,
+  }) => Image.file(
+    File(path),
+    fit: widget.fit,
+    alignment: widget.alignment,
+    cacheWidth: width,
+    excludeFromSemantics: true,
+    frameBuilder: fadeInFrameBuilder,
+    errorBuilder: (_, _, _) => onError(),
   );
+
+  Widget _resolved(String path) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
+    );
+    final sharp = _image(path, widget.decodeWidth, onError: () => _failure(path));
+    if (widget.decodeWidth <= _thumbWidth) return sharp;
+    // 大图解码要几帧：先铺已经缓存的小图，大图在它上面淡入，
+    // 进出详情时既不空一帧，也不会一直糊着。
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _image(path, _thumbWidth, onError: () => const SizedBox.shrink()),
+        sharp,
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = _path;
+    if (path != null) return _resolved(path);
+    return FutureBuilder<String>(
+      future: _file,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return widget.placeholder;
+        }
+        if (snapshot.hasError || !snapshot.hasData) return _failure(null);
+        return _resolved(snapshot.data!);
+      },
+    );
+  }
 }

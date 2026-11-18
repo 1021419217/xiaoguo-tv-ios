@@ -70,7 +70,7 @@ class StatusView extends StatelessWidget {
               const SizedBox(height: 24),
               FocusRing(
                 radius: 999,
-                child: FilledButton.tonal(
+                child: FilledButton(
                   autofocus: autofocus,
                   onPressed: onAction,
                   child: Text(action),

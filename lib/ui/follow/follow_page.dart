@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../cover_shape.dart';
 import '../../follow_list.dart';
 import '../../local_store.dart';
 import '../../models.dart';
@@ -9,6 +10,8 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/group_card.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../shell/app_shell.dart';
 import '../widgets/drama_grid.dart';
@@ -186,10 +189,11 @@ class _FollowPageState extends State<FollowPage> {
     }.toList(),
   );
 
-  /// 顶栏操作统一成 [ActionPill]，和下载页、模块页同一套胶囊。
-  Widget _editButtonFor(_View view) => ActionPill(
-    icon: Icons.check_box_outlined,
-    label: '编辑',
+  /// 顶栏只留 38 圆钮：一页最多两个动作，不把标题行塞成胶囊排。
+  Widget _editButtonFor(_View view) => BarButton(
+    icon: Icons.edit_outlined,
+    tooltip: '编辑',
+    size: 38,
     focusNode: _editButton,
     onPressed: view.shown.isEmpty ? null : _startEditing,
   );
@@ -533,118 +537,154 @@ class _FollowPageState extends State<FollowPage> {
       final first = view.shown.isEmpty
           ? null
           : (updated.firstOrNull ?? rest.first);
-      final scroll = CustomScrollView(
-        slivers: [
-          if (view.shown.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: FadeSwitcher(
-                scale: true,
-                child: StatusView(
-                  key: ValueKey(view.follows.isEmpty),
-                  title: view.follows.isEmpty ? '还没有追剧' : '没有匹配的追剧',
-                  message: view.follows.isEmpty
-                      ? missingSourceHint(
-                          widget.store.missingSourceRecords().follows,
-                          '部追剧',
-                        )
-                      : null,
-                  icon: view.follows.isEmpty
-                      ? Icons.bookmark_border_rounded
-                      : Icons.search_off_rounded,
+
+      Widget cell(
+        Drama drama,
+        int index, {
+        required int count,
+        required int across,
+        required double cellWidth,
+        required double aspect,
+      }) => Focus(
+        key: ValueKey(drama.id),
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (_, event) => wrapGridRow(index, across, count, event),
+        child: EnterOnce(
+          id: drama.id,
+          played: _entered,
+          index: index,
+          child: _poster(
+            context,
+            drama,
+            cellWidth,
+            view.selection,
+            focusNode: drama == first ? widget.entryFocus : null,
+            hero: identical(heroOwner[drama.id], drama),
+            aspect: aspect,
+          ),
+        ),
+      );
+
+      Widget scroll(BuildContext context) {
+        // 横竖混排源在手机竖屏走两列瀑布流，其余形态保持按屏宽的网格。
+        final mixed = usePosterMasonry(
+          context,
+          view.shown.isEmpty ? '' : view.shown.first.source,
+        );
+        return CustomScrollView(
+          slivers: [
+            if (view.shown.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: FadeSwitcher(
+                  scale: true,
+                  child: StatusView(
+                    key: ValueKey(view.follows.isEmpty),
+                    title: view.follows.isEmpty ? '还没有追剧' : '没有匹配的追剧',
+                    message: view.follows.isEmpty
+                        ? missingSourceHint(
+                            widget.store.missingSourceRecords().follows,
+                            '部追剧',
+                          )
+                        : null,
+                    icon: view.follows.isEmpty
+                        ? Icons.bookmark_border_rounded
+                        : Icons.search_off_rounded,
+                  ),
                 ),
-              ),
-            )
-          else
-            for (final (label, dramas) in sections) ...[
-              if (label != null)
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(inset + 4, 12, inset, 10),
-                  sliver: SliverToBoxAdapter(
-                    child: Semantics(
-                      header: true,
-                      child: Text.rich(
-                        TextSpan(
-                          text: label,
-                          children: [
-                            TextSpan(
-                              text: '  ${dramas.length}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+              )
+            else
+              for (final (label, dramas) in sections) ...[
+                if (label != null)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(inset + 4, 12, inset, 6),
+                    sliver: SliverToBoxAdapter(
+                      child: SectionHeader(
+                        title: label,
+                        trailing: '${dramas.length}',
+                        action: view.source.isEmpty ? null : '全部',
+                        onAction: view.source.isEmpty
+                            ? null
+                            : () => setState(() => _source = ''),
                       ),
                     ),
                   ),
-                ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  inset,
-                  label == null ? 12 : 0,
-                  inset,
-                  0,
-                ),
-                sliver: SliverGrid.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: gap,
-                    mainAxisSpacing: runGap,
-                    mainAxisExtent: ProgressPoster.extentFor(context, tile),
-                  ),
-                  itemCount: dramas.length,
-                  itemBuilder: (context, index) {
-                    final drama = dramas[index];
-                    return Focus(
-                      key: ValueKey(drama.id),
-                      canRequestFocus: false,
-                      skipTraversal: true,
-                      onKeyEvent: (_, event) =>
-                          wrapGridRow(index, columns, dramas.length, event),
-                      child: EnterOnce(
-                        id: drama.id,
-                        played: _entered,
-                        index: index,
-                        child: _poster(
-                          context,
-                          drama,
-                          tile,
-                          view.selection,
-                          focusNode: drama == first ? widget.entryFocus : null,
-                          hero: identical(heroOwner[drama.id], drama),
+                if (mixed)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      inset,
+                      label == null ? 12 : 0,
+                      inset,
+                      0,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: PosterMasonry(
+                        width: width,
+                        count: dramas.length,
+                        heightAt: (index, cellWidth) =>
+                            ProgressPoster.extentFor(
+                              context,
+                              cellWidth,
+                              aspect: posterAspect(dramas[index].id),
+                            ),
+                        itemBuilder: (context, index, cellWidth) => cell(
+                          dramas[index],
+                          index,
+                          count: dramas.length,
+                          across: 2,
+                          cellWidth: cellWidth,
+                          aspect: posterAspect(dramas[index].id),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          SliverPadding(
-            padding: EdgeInsets.only(
-              bottom: AppScope.of(context).television ? 27 : 32,
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      inset,
+                      label == null ? 12 : 0,
+                      inset,
+                      0,
+                    ),
+                    sliver: SliverGrid.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: gap,
+                        mainAxisSpacing: runGap,
+                        mainAxisExtent: ProgressPoster.extentFor(context, tile),
+                      ),
+                      itemCount: dramas.length,
+                      itemBuilder: (context, index) => cell(
+                        dramas[index],
+                        index,
+                        count: dramas.length,
+                        across: columns,
+                        cellWidth: tile,
+                        aspect: 2 / 3,
+                      ),
+                    ),
+                  ),
+              ],
+            SliverPadding(
+              padding: EdgeInsets.only(bottom: pageBottomInset(context)),
             ),
-          ),
-        ],
-      );
-      // 顶栏固定在上方，滑动层只包列表：横滑切站源时标题与搜索框纹丝不动。
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(top: top),
-            child: Column(children: header),
-          ),
-          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
-        ],
+          ],
+        );
+      }
+
+      return ValueListenableBuilder<int>(
+        valueListenable: CoverShapes.revision,
+        builder: (context, _, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: top),
+              child: Column(children: header),
+            ),
+            Expanded(child: swipe ? _swipe(view, scroll(context)) : scroll(context)),
+          ],
+        ),
       );
     },
   );
@@ -656,6 +696,7 @@ class _FollowPageState extends State<FollowPage> {
     Set<String>? selection, {
     FocusNode? focusNode,
     bool hero = false,
+    double aspect = 2 / 3,
   }) {
     final watch = widget.store.watched(drama.id);
     final state = widget.store.following(drama.id);
@@ -674,6 +715,7 @@ class _FollowPageState extends State<FollowPage> {
     return ProgressPoster(
       drama: drama,
       width: width,
+      aspect: aspect,
       focusNode: focusNode,
       progress: watch != null && total > 0 ? watch.episode / total : 0,
       caption: caption,

@@ -273,6 +273,13 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
+  /// 详情页大封面按实际显示尺寸解码，避免用列表的小图放大后发糊。
+  int _heroDecodeWidth(double width) =>
+      (width * MediaQuery.devicePixelRatioOf(context)).round().clamp(
+        440,
+        1440,
+      );
+
   double _startAt(int index, {required bool resume}) {
     final watch = _details!.watch;
     return resume &&
@@ -630,7 +637,7 @@ class _DetailPageState extends State<DetailPage> {
                               drama: drama,
                               radius: 16,
                               details: false,
-                              crop: true,
+                              decodeWidth: _heroDecodeWidth(heroWidth),
                               alignment: landscape
                                   ? Alignment.center
                                   : Alignment.topCenter,
@@ -752,13 +759,22 @@ class _DetailPageState extends State<DetailPage> {
                 if (_canDownload)
                   FocusRing(
                     radius: m.button / 2,
-                    child: IconButton.filledTonal(
-                      tooltip: '下载选集',
-                      onPressed: _ready ? _download : null,
-                      style: IconButton.styleFrom(
-                        minimumSize: Size.square(m.button),
+                    child: Tooltip(
+                      message: '下载选集',
+                      child: OutlinedButton.icon(
+                        onPressed: _ready ? _download : null,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: Size(0, m.button),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          iconSize: m.buttonIcon - 2,
+                          textStyle: TextStyle(
+                            fontSize: m.buttonText - 1,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('下载'),
                       ),
-                      icon: const Icon(Icons.download_rounded),
                     ),
                   ),
                 Expanded(child: _playButton(details, m)),
@@ -1859,10 +1875,11 @@ class _DetailPageState extends State<DetailPage> {
 
   Widget _downloadButton(_Metrics m) => FocusRing(
     radius: m.button / 2,
-    child: FilledButton.tonalIcon(
+    child: OutlinedButton.icon(
       onPressed: _ready ? _download : null,
-      style: FilledButton.styleFrom(
+      style: OutlinedButton.styleFrom(
         minimumSize: Size(0, m.button),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         iconSize: m.buttonIcon - 2,
         textStyle: TextStyle(
           fontSize: m.buttonText - 1,
