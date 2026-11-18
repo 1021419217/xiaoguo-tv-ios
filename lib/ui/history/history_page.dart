@@ -554,7 +554,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   child: Semantics(
                     header: true,
                     child: Text(
-                      period.key,
+                      period,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
