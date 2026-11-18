@@ -70,7 +70,7 @@ abstract final class AppTheme {
 
     // pureBlack 只把「底」压到纯黑，容器层级继续保留玻璃拟态的冷调深灰，
     // 这样胶囊、卡片、对话框依旧有分层，不会糊成一片。
-    final scheme = pureBlack && dark
+    var scheme = pureBlack && dark
         ? glassScheme.copyWith(
             surface: Colors.black,
             surfaceDim: Colors.black,
@@ -82,9 +82,28 @@ abstract final class AppTheme {
           )
         : glassScheme;
 
+    // 深色层的灰往主题色偏一点：纯中性灰会让整屏发"脏"，带 5~8% 的色相后
+    // 卡片、弹层、导航才有统一的冷暖倾向。
+    if (dark) {
+      Color tint(Color base, double alpha) =>
+          Color.alphaBlend(scheme.primary.withValues(alpha: alpha), base);
+      scheme = scheme.copyWith(
+        surface: tint(scheme.surface, 0.04),
+        surfaceContainerLow: tint(const Color(0xFF141416), 0.05),
+        surfaceContainer: tint(const Color(0xFF1C1C1E), 0.06),
+        surfaceContainerHigh: tint(const Color(0xFF232326), 0.07),
+        surfaceContainerHighest: tint(const Color(0xFF2A2A2E), 0.08),
+      );
+    }
+
     const radius = AppRadius.surface;
     final background = dark
-        ? (pureBlack ? Colors.black : const Color(0xFF0A0A0C))
+        ? (pureBlack
+              ? Colors.black
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.03),
+                  const Color(0xFF0A0A0C),
+                ))
         : scheme.surfaceContainerLowest;
     // 卡片用半透明磨砂：低不透明度 + 细描边，让下层内容与模糊透出来。
     final glass = CardThemeData(
