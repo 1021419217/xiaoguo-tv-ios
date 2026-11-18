@@ -98,16 +98,20 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: widget.padding.add(
-            const EdgeInsets.symmetric(vertical: 6.5),
+            const EdgeInsets.symmetric(vertical: 8),
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Color.lerp(
-              ink.withValues(alpha: 0.06),
-              AppColors.accent,
-              weight,
+            border: Border(
+              bottom: BorderSide(
+                color: Color.lerp(
+                  Colors.transparent,
+                  AppColors.accent,
+                  weight,
+                )!,
+                width: 2,
+              ),
             ),
-            borderRadius: BorderRadius.circular(999),
           ),
           child: Text(
             widget.labels[i],
@@ -118,11 +122,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               height: 1.15,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               letterSpacing: -0.1,
-              color: Color.lerp(
-                dim,
-                AppColors.onAccent,
-                weight,
-              ),
+              color: Color.lerp(dim, ink, weight),
             ),
           ),
         ),
@@ -165,18 +165,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
             ),
           )
         : Padding(padding: const EdgeInsets.all(3), child: row);
-    if (!widget.track) return Padding(padding: widget.margin, child: content);
-    return Padding(
-      padding: widget.margin,
-      child: Container(
-        decoration: BoxDecoration(
-          color: ink.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: ink.withValues(alpha: 0.08)),
-        ),
-        child: content,
-      ),
-    );
+    return Padding(padding: widget.margin, child: content);
   }
 
   @override
