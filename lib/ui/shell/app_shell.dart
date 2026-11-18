@@ -344,24 +344,36 @@ class _AppShellState extends State<AppShell>
           extendBody: true,
           bottomNavigationBar: covered
               ? null
-              : ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: NavigationBar(
-                      selectedIndex: tabs.indexOf(_tab),
-                      onDestinationSelected: (index) {
-                        unawaited(HapticFeedback.selectionClick());
-                        _tap(tabs[index]);
-                      },
-                      destinations: [
-                        for (final tab in tabs)
-                          NavigationDestination(
-                            key: ValueKey('nav-${tab.name}'),
-                            icon: _badged(tab, Icon(tab.icon)),
-                            selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                            label: tab.label,
-                          ),
-                      ],
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: NavigationBar(
+                        height: 62,
+                        backgroundColor: const Color(0xB3151518),
+                        selectedIndex: tabs.indexOf(_tab),
+                        onDestinationSelected: (index) {
+                          unawaited(HapticFeedback.selectionClick());
+                          _tap(tabs[index]);
+                        },
+                        destinations: [
+                          for (final tab in tabs)
+                            NavigationDestination(
+                              key: ValueKey('nav-${tab.name}'),
+                              icon: _badged(tab, Icon(tab.icon)),
+                              selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
+                              label: tab.label,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
