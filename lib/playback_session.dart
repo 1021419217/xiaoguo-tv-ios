@@ -708,14 +708,15 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
+        final native = player.platform;
+        if (native is NativePlayer) {
+          await native.setProperty(
+            'start',
+            position > 0 ? position.toString() : '0',
+          );
+        }
         await player.open(
-          Media(
-            plan.url,
-            httpHeaders: plan.headers,
-            start: position > 0
-                ? Duration(milliseconds: (position * 1000).round())
-                : null,
-          ),
+          Media(plan.url, httpHeaders: plan.headers),
           play: _foreground && _playIntent,
         );
         if (!_current(ticket)) return;
@@ -832,6 +833,10 @@ class PlaybackSession extends ChangeNotifier {
       await _configure(standby, plan);
       await _limitCache(standby, true);
       await _selectAudio(standby, false);
+      final platform = standby.platform;
+      if (platform is NativePlayer) {
+        await platform.setProperty('start', '0');
+      }
       await standby.open(
         Media(plan.url, httpHeaders: plan.headers),
         play: false,
