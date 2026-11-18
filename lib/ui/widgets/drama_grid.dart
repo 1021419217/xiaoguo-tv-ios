@@ -50,11 +50,12 @@ bool usePosterMasonry(BuildContext context, String source) =>
     AppScope.formFactorOf(context) == FormFactor.phone &&
     CoverShapes.isMixed(source);
 
-/// 单张封面的排版比例：已知实际宽高比就用它，否则按竖版兜底。
-double posterAspect(String dramaId) {
-  final ratio = CoverShapes.ratioOf(dramaId);
+/// 单张封面的排版比例：已知实际宽高比就用它（格子跟着图片走，不裁切），
+/// 未知时按竖版兜底；下载完成前封面组件读到真实比例会再纠正。
+double posterAspect(String source, String dramaId) {
+  final ratio = CoverShapes.ratioOf(source, dramaId);
   if (ratio <= 0) return 2 / 3;
-  return ratio.clamp(0.5, 1.75);
+  return ratio;
 }
 
 /// 两列瀑布流：每格按自身高度落进较短的一栏，和「发现」页同一套排法。
@@ -229,12 +230,12 @@ class DramaSliverGrid extends StatelessWidget {
         heightAt: (index, tile) => DramaTile.extentFor(
           context,
           tile,
-          aspect: posterAspect(items[index].id),
+          aspect: posterAspect(items[index].source, items[index].id),
         ),
         itemBuilder: (context, index, tileWidth) => _cell(
           context,
           index,
-          aspect: posterAspect(items[index].id),
+          aspect: posterAspect(items[index].source, items[index].id),
           columns: 2,
           heroIndex: heroIndex,
         ),

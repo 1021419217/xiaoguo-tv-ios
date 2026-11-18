@@ -23,7 +23,7 @@ class _PosterButton extends StatefulWidget {
     this.checked,
     this.aspect = 2 / 3,
   });
-  final Widget cover;
+  final Widget Function(ValueChanged<double> onAspect) cover;
   final List<Widget> caption;
   final String label;
   final VoidCallback onTap;
@@ -41,11 +41,27 @@ class _PosterButtonState extends State<_PosterButton> {
   bool _focused = false;
   bool _hovered = false;
   bool _pressed = false;
+  double? _ratio;
+
+  /// 封面读出来的真实比例优先，保证格子跟着图片走、不裁切。
+  void _setAspect(double ratio) {
+    if (!mounted || ratio <= 0) return;
+    if ((ratio - (_ratio ?? widget.aspect)).abs() < 0.005) return;
+    setState(() => _ratio = ratio);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PosterButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 同一位置换成另一部剧时，别沿用上一张封面的比例。
+    if (oldWidget.label != widget.label) _ratio = null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final visible = focusVisible(_focused);
     final layer = _pressed ? 0.12 : (_hovered ? 0.08 : 0.0);
+    final aspect = _ratio ?? widget.aspect;
     final button = InkWell(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -61,14 +77,14 @@ class _PosterButtonState extends State<_PosterButton> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: widget.aspect,
+            aspectRatio: aspect,
             child: FocusOutline(
               visible: visible,
               radius: _coverRadius,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.cover,
+                  widget.cover(_setAspect),
                   IgnorePointer(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 120),
@@ -178,12 +194,13 @@ class DramaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _PosterButton(
-    cover: DramaCover(
+    cover: (onAspect) => DramaCover(
       drama: drama,
       radius: _coverRadius,
       rank: rank,
       showScore: showScore,
       exploreBlur: exploreBlur,
+      onAspect: onAspect,
       heroScope: AppScope.of(context).television || !Visibility.of(context)
           ? null
           : heroScope,
@@ -261,13 +278,14 @@ class ProgressPoster extends StatelessWidget {
       width: width,
       child: _PosterButton(
         aspect: aspect,
-        cover: Stack(
+        cover: (onAspect) => Stack(
           fit: StackFit.expand,
           children: [
             DramaCover(
               drama: drama,
               radius: _coverRadius,
               details: false,
+              onAspect: onAspect,
               heroScope:
                   television || selected != null || !Visibility.of(context)
                   ? null

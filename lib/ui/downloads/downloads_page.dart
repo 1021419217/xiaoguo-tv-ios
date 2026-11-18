@@ -805,7 +805,10 @@ class _DownloadsPageState extends State<DownloadsPage>
                   heightAt: (index, tileWidth) => ProgressPoster.extentFor(
                     context,
                     tileWidth,
-                    aspect: posterAspect(view.downloaded[index].drama.id),
+                    aspect: posterAspect(
+                      view.downloaded[index].drama.source,
+                      view.downloaded[index].drama.id,
+                    ),
                   ),
                   itemBuilder: (context, index, tileWidth) {
                     final item = view.downloaded[index];
@@ -813,7 +816,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       item,
                       index,
                       tileWidth,
-                      posterAspect(item.drama.id),
+                      posterAspect(item.drama.source, item.drama.id),
                     );
                   },
                 ),

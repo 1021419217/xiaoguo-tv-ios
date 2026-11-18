@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -48,6 +49,7 @@ class DramaCover extends StatelessWidget {
     this.exploreBlur = false,
     this.alignment = Alignment.center,
     this.decodeWidth = 440,
+    this.onAspect,
   });
   final Drama drama;
   final double radius;
@@ -59,6 +61,10 @@ class DramaCover extends StatelessWidget {
   /// 解码宽度（物理像素）。列表里的小封面用默认值即可，详情页的大封面
   /// 传更大的值，否则放大后会糊。
   final int decodeWidth;
+
+  /// 封面真实宽高比（宽 / 高）读出来后回调一次，按图片本身排版，
+  /// 不依赖站源声明或历史学习结果。
+  final ValueChanged<double>? onAspect;
   final int? rank;
   final String? heroScope;
   static const imagesDisabled = bool.fromEnvironment('DISABLE_REMOTE_IMAGES');
@@ -88,6 +94,7 @@ class DramaCover extends StatelessWidget {
             placeholder: const SizedBox.shrink(),
             alignment: alignment,
             decodeWidth: decodeWidth,
+            onAspect: onAspect,
             fit: BoxFit.cover,
           ),
       ],
@@ -214,6 +221,7 @@ class CoverImage extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.decodeWidth = 440,
+    this.onAspect,
   });
   final Drama drama;
   final AppRepository repository;
@@ -224,6 +232,9 @@ class CoverImage extends StatefulWidget {
 
   /// 解码宽度（物理像素）。同一张封面用同一宽度才会命中同一份解码缓存。
   final int decodeWidth;
+
+  /// 封面真实宽高比（宽 / 高）读出来后回调一次。
+  final ValueChanged<double>? onAspect;
 
   @override
   State<CoverImage> createState() => _CoverImageState();
@@ -238,6 +249,7 @@ class _CoverImageState extends State<CoverImage> {
 
   /// 已经拿到本地文件时直接同步出图：不再先空一帧再淡入，进出详情不闪。
   String? _path;
+  String? _measuredPath;
   int _revision = 0;
   bool _failed = false;
   bool _retryOnFailure = false;
@@ -284,18 +296,61 @@ class _CoverImageState extends State<CoverImage> {
     _request = null;
     _file = null;
     _path = null;
+    _measuredPath = null;
     final cached = CoverLoader.cachedPath(widget.repository, widget.drama);
     if (cached != null && File(cached).existsSync()) {
       _path = cached;
+      unawaited(_measure(cached));
       return;
     }
     _file = CoverLoader.cached(widget.repository, widget.drama);
-    if (_file != null) return;
+    if (_file != null) {
+      unawaited(_measureWhenReady(_file!));
+      return;
+    }
     final request = _request = CoverLoader.request(
       widget.repository,
       widget.drama,
     );
     _file = request.file;
+    unawaited(_measureWhenReady(_file!));
+  }
+
+  Future<void> _measureWhenReady(Future<String> file) async {
+    try {
+      final path = await file;
+      if (mounted) await _measure(path);
+    } catch (_) {
+      // 取封面失败会走展示层的错误态，这里不用再处理。
+    }
+  }
+
+  /// 直接读文件头拿真实宽高比：瀑布流按它排版，不再依赖站源声明或
+  /// 上一次学习的结果，图片是横的就排横的，竖的就排竖的。
+  Future<void> _measure(String path) async {
+    if (_measuredPath == path) return;
+    _measuredPath = path;
+    double ratio = 0;
+    try {
+      final bytes = await File(path).readAsBytes();
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      ratio = descriptor.width / descriptor.height;
+      descriptor.dispose();
+      buffer.dispose();
+    } catch (_) {
+      return;
+    }
+    if (ratio <= 0) return;
+    unawaited(
+      CoverShapes.learn(
+        widget.drama.source,
+        widget.drama.id,
+        path,
+        ratio: ratio,
+      ),
+    );
+    if (mounted) widget.onAspect?.call(ratio);
   }
 
   void _metadataChanged() {
@@ -335,6 +390,7 @@ class _CoverImageState extends State<CoverImage> {
     setState(() {
       _request = null;
       _path = null;
+      _measuredPath = null;
       _failed = _retryOnFailure = false;
       _failedPath = null;
       _file = widget.repository.cover(
@@ -342,6 +398,7 @@ class _CoverImageState extends State<CoverImage> {
         force: true,
       );
     });
+    if (_file case final file?) unawaited(_measureWhenReady(file));
   }
 
   Widget _failure(String? path) {
@@ -376,9 +433,7 @@ class _CoverImageState extends State<CoverImage> {
   );
 
   Widget _resolved(String path) {
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
-    );
+    unawaited(_measure(path));
     final sharp = _image(path, widget.decodeWidth, onError: () => _failure(path));
     if (widget.decodeWidth <= _thumbWidth) return sharp;
     // 大图解码要几帧：先铺已经缓存的小图，大图在它上面淡入，

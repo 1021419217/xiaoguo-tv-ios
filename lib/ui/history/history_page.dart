@@ -611,7 +611,10 @@ class _HistoryPageState extends State<HistoryPage> {
                             ProgressPoster.extentFor(
                               context,
                               cellWidth,
-                              aspect: posterAspect(entries[index].drama.id),
+                              aspect: posterAspect(
+                                entries[index].drama.source,
+                                entries[index].drama.id,
+                              ),
                             ),
                         itemBuilder: (context, index, cellWidth) => cell(
                           entries[index],
@@ -619,7 +622,10 @@ class _HistoryPageState extends State<HistoryPage> {
                           count: entries.length,
                           across: 2,
                           cellWidth: cellWidth,
-                          aspect: posterAspect(entries[index].drama.id),
+                          aspect: posterAspect(
+                            entries[index].drama.source,
+                            entries[index].drama.id,
+                          ),
                         ),
                       ),
                     ),

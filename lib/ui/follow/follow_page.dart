@@ -626,7 +626,10 @@ class _FollowPageState extends State<FollowPage> {
                             ProgressPoster.extentFor(
                               context,
                               cellWidth,
-                              aspect: posterAspect(dramas[index].id),
+                              aspect: posterAspect(
+                                dramas[index].source,
+                                dramas[index].id,
+                              ),
                             ),
                         itemBuilder: (context, index, cellWidth) => cell(
                           dramas[index],
@@ -634,7 +637,10 @@ class _FollowPageState extends State<FollowPage> {
                           count: dramas.length,
                           across: 2,
                           cellWidth: cellWidth,
-                          aspect: posterAspect(dramas[index].id),
+                          aspect: posterAspect(
+                            dramas[index].source,
+                            dramas[index].id,
+                          ),
                         ),
                       ),
                     ),
