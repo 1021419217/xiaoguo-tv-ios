@@ -188,7 +188,7 @@ class _Tab extends StatelessWidget {
     // 文字颜色跟随主题（onSurface），浅色顶栏下不会再出现白字消失。
     final ink = colors.onSurface;
     final labelColor = selected
-        ? (dark ? const Color(0xFF111114) : colors.surface)
+        ? colors.onPrimary
         : ink.withValues(alpha: dark ? 0.66 : 0.72);
     return Semantics(
       selected: selected,
@@ -211,7 +211,7 @@ class _Tab extends StatelessWidget {
                   : EdgeInsets.zero,
               decoration: selected
                   ? BoxDecoration(
-                      color: ink.withValues(alpha: 0.94),
+                      color: colors.primary,
                       borderRadius: BorderRadius.circular(17),
                     )
                   : null,

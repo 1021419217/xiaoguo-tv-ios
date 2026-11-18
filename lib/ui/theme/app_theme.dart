@@ -124,9 +124,9 @@ abstract final class AppTheme {
       ),
       // 分段标签栏（下载页等）也走黑白反色，不用主题蓝。
       tabBarTheme: TabBarThemeData(
-        labelColor: dark ? Colors.white : scheme.primary,
+        labelColor: scheme.primary,
         unselectedLabelColor: scheme.onSurfaceVariant,
-        indicatorColor: dark ? Colors.white : scheme.primary,
+        indicatorColor: scheme.primary,
         indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -152,13 +152,13 @@ abstract final class AppTheme {
           ),
         ),
       ),
-      // 主按钮一律「白底黑字胶囊」，选中态同样靠反色，而不是主题色高亮。
+      // 主按钮走主题色：界面需要一处稳定的强调色，否则整屏只有黑白灰。
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: dark ? const Color(0xFFF2F2F5) : scheme.primary,
-          foregroundColor: dark ? const Color(0xFF111114) : scheme.onPrimary,
-          disabledBackgroundColor: Colors.white.withValues(alpha: 0.16),
-          disabledForegroundColor: Colors.white.withValues(alpha: 0.45),
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          disabledBackgroundColor: scheme.onSurface.withValues(alpha: 0.14),
+          disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.42),
           shape: const StadiumBorder(),
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
@@ -177,9 +177,7 @@ abstract final class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          if (selected) {
-            return dark ? const Color(0xFFF2F2F5) : scheme.primary;
-          }
+          if (selected) return scheme.primary;
           return dark
               ? Colors.white.withValues(alpha: 0.10)
               : scheme.surfaceContainerHighest;
@@ -191,8 +189,8 @@ abstract final class AppTheme {
         }),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: dark ? Colors.white : scheme.primary,
-        linearTrackColor: Colors.white.withValues(alpha: 0.22),
+        color: scheme.primary,
+        linearTrackColor: scheme.onSurface.withValues(alpha: 0.16),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: scheme.onSurfaceVariant,
@@ -212,7 +210,7 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w600,
           height: 1.3,
         ),
-        actionTextColor: const Color(0xFF8EC5FF),
+        actionTextColor: scheme.primary,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.surfaceAll,
           side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
@@ -252,18 +250,18 @@ abstract final class AppTheme {
             : Colors.white.withValues(alpha: 0.80),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: Colors.white.withValues(alpha: 0.14),
+        indicatorColor: scheme.primary.withValues(alpha: dark ? 0.22 : 0.16),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return theme.textTheme.labelMedium?.copyWith(
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
         }),
       ),

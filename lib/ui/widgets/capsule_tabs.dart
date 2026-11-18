@@ -102,7 +102,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           decoration: BoxDecoration(
             color: Color.lerp(
               ink.withValues(alpha: 0.06),
-              ink,
+              theme.colorScheme.primary,
               weight,
             ),
             borderRadius: BorderRadius.circular(999),
@@ -118,7 +118,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               letterSpacing: -0.1,
               color: Color.lerp(
                 dim,
-                dark ? const Color(0xFF111114) : theme.colorScheme.surface,
+                theme.colorScheme.onPrimary,
                 weight,
               ),
             ),
