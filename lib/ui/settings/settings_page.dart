@@ -289,7 +289,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         titleMedium: text.titleMedium?.copyWith(
           fontSize: 17,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: -0.3,
         ),
         titleSmall: text.titleSmall?.copyWith(
@@ -533,7 +533,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     '设置',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -720,7 +720,7 @@ class _DetailHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontSize: 22,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -0.4,
                 ),
               ),
@@ -758,7 +758,7 @@ class _GroupItem extends StatelessWidget {
       selected: selected,
       textStyle: theme.textTheme.titleSmall?.copyWith(
         fontSize: 16,
-        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w600,
         letterSpacing: -0.2,
         color: theme.colorScheme.onSurface,
       ),
