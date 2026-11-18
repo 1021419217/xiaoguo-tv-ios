@@ -119,7 +119,7 @@ class DramaCover extends StatelessWidget {
             repository: AppScope.of(context).repository,
             placeholder: const SizedBox.shrink(),
             alignment: alignment,
-            fit: crop ? BoxFit.cover : BoxFit.contain,
+            fit: crop ? BoxFit.cover : BoxFit.cover,
           ),
         ],
       ],
