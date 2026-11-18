@@ -1186,8 +1186,11 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
   /// 模块重新取地址时命中缓存才能绕过 TLS 指纹这一关。
   Future<void> _verify() async {
     final session = widget.session;
-    final source = SourceSite.byId(session.detail.drama.sourceId);
-    final baseUrl = source.baseUrl;
+    final drama = session.detail.drama;
+    final source = SourceSite.byId(
+      drama.source.isNotEmpty ? drama.source : drama.sourceId,
+    );
+    final baseUrl = verifyBaseUrl(source, widget.error);
     final host = Uri.tryParse(baseUrl)?.host ?? '';
     if (baseUrl.isEmpty || host.isEmpty || _verifying) return;
     setState(() => _verifying = true);
@@ -1233,9 +1236,13 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final session = widget.session;
-    final source = SourceSite.byId(session.detail.drama.sourceId);
+    final drama = session.detail.drama;
+    final source = SourceSite.byId(
+      drama.source.isNotEmpty ? drama.source : drama.sourceId,
+    );
     // 在线站源且有主页可验证时，才给「去验证」入口；本地播放不显示。
-    final canVerify = !session.localFailure && source.baseUrl.isNotEmpty;
+    final canVerify =
+        !session.localFailure && verifyBaseUrl(source, widget.error).isNotEmpty;
     return ColoredBox(
       color: Colors.black.withValues(alpha: .9),
       child: Center(

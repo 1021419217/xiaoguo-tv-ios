@@ -314,8 +314,11 @@ class _AutoLoadMoreState extends State<AutoLoadMore> {
 }
 
 class FeedFooter extends StatelessWidget {
-  const FeedFooter({super.key, required this.feed});
+  const FeedFooter({super.key, required this.feed, this.onVerify});
   final DramaFeed feed;
+
+  /// 分页失败且属于「站点要求浏览器验证」时，用这个入口替代「重试」。
+  final VoidCallback? onVerify;
 
   @override
   Widget build(BuildContext context) {
@@ -323,6 +326,7 @@ class FeedFooter extends StatelessWidget {
     final caption = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
+    final needsVerify = onVerify != null && feed.error.contains('浏览器验证');
     return SizedBox(
       height: 72,
       child: FadeSwitcher(
@@ -359,10 +363,12 @@ class FeedFooter extends StatelessWidget {
                       FocusRing(
                         radius: 999,
                         child: TextButton(
-                          onPressed: feed.hasMore
+                          onPressed: needsVerify
+                              ? onVerify
+                              : feed.hasMore
                               ? feed.loadMore
                               : () => feed.reload(force: true),
-                          child: const Text('重试'),
+                          child: Text(needsVerify ? '去验证' : '重试'),
                         ),
                       ),
                     ],
