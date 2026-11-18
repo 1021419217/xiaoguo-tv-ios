@@ -121,6 +121,11 @@ class DramaSliverGrid extends StatelessWidget {
   );
 
   Widget _layout(BuildContext context) {
+    final source = items.isEmpty ? '' : items.first.source;
+    if (AppScope.formFactorOf(context) == FormFactor.phone &&
+        CoverShapes.isMixed(source)) {
+      return _masonry(context);
+    }
     return _grid(context);
   }
 

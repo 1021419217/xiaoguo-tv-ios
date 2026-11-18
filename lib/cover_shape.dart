@@ -19,7 +19,7 @@ class CoverShapes {
 
   static const maxSamples = 12;
   static const _margin = 2;
-  static const _mixedHits = 2;
+  static const _mixedHits = 4;
   static const _prefix = 'coverShape.';
 
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
