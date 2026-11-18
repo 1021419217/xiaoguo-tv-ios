@@ -260,7 +260,7 @@ class _LivePageState extends State<LivePage> {
     final favourites = widget.store.favourites.length;
     final merging = _progressTotal > 0 && _loading && _platform == _allId;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Row(
         children: [
           CapsuleTabs(
@@ -388,7 +388,7 @@ class _LivePageState extends State<LivePage> {
           (_channels.length / (columns * rowsFor(12))).ceil(),
         );
         final badge = plainPages > 1;
-        final top = badge ? 42.0 : 12.0;
+        final top = badge ? 30.0 : 12.0;
         final rows = rowsFor(top);
         final perPage = columns * rows;
         final pages = math.max(1, (_channels.length / perPage).ceil());
@@ -416,7 +416,7 @@ class _LivePageState extends State<LivePage> {
             if (badge)
               Positioned(
                 right: 16,
-                top: 8,
+                top: 0,
                 child: IgnorePointer(
                   child: _PageBadge(page: _page, pages: pages),
                 ),
@@ -506,18 +506,39 @@ class _ChannelTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final initial = channel.name.isEmpty
+        ? '#'
+        : channel.name.substring(0, 1);
     return FocusRing(
-      radius: 16,
+      radius: 18,
       child: Material(
-        color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        color: colors.surfaceContainerHigh.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
             child: Row(
               children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colors.primary.withValues(alpha: 0.16),
+                  ),
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: colors.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -527,13 +548,16 @@ class _ChannelTile extends StatelessWidget {
                         channel.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (channel.number.isNotEmpty)
                         Text(
                           channel.number,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: colors.onSurfaceVariant,
                           ),
                         ),
@@ -542,6 +566,7 @@ class _ChannelTile extends StatelessWidget {
                 ),
                 Icon(
                   Icons.play_circle_outline_rounded,
+                  size: 22,
                   color: colors.onSurfaceVariant,
                 ),
               ],
