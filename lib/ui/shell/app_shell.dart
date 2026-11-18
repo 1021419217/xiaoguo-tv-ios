@@ -345,12 +345,14 @@ class _AppShellState extends State<AppShell>
           bottomNavigationBar: covered
               ? null
               : Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                  padding: EdgeInsets.zero,
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,
