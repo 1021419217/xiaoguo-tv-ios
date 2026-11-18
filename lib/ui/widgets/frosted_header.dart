@@ -66,9 +66,9 @@ class GlassTitle extends StatelessWidget {
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     return Row(
       children: [
-        Semantics(
-          header: true,
-          child: Flexible(
+        Flexible(
+          child: Semantics(
+            header: true,
             child: Text(
               title,
               maxLines: 1,
