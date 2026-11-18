@@ -340,19 +340,19 @@ class _AppShellState extends State<AppShell>
       },
       child: switch (AppScope.formFactorOf(context)) {
         FormFactor.phone => Scaffold(
-          body: pages,
-          extendBody: true,
-          bottomNavigationBar: covered
-              ? null
-              : Padding(
-                  padding: EdgeInsets.zero,
+          body: Stack(
+            children: [
+              pages,
+              if (!covered)
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: MediaQuery.paddingOf(context).bottom + 6,
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-                      border: Border(
-                        top: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,
@@ -379,6 +379,8 @@ class _AppShellState extends State<AppShell>
                     ),
                   ),
                 ),
+            ],
+          ),
         ),
         FormFactor.pad || FormFactor.window => _wide(pages),
         FormFactor.television => Scaffold(
