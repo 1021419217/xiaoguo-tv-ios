@@ -68,60 +68,32 @@ class GlassTitle extends StatelessWidget {
       children: [
         Semantics(
           header: true,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(19),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      ink.withValues(alpha: dark ? 0.11 : 0.07),
-                      ink.withValues(alpha: dark ? 0.05 : 0.025),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(19),
-                  border: Border.all(
-                    color: ink.withValues(alpha: dark ? 0.15 : 0.10),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                          color: ink,
-                        ),
-                      ),
-                    ),
-                    if (count case final value?) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        '· $value',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: ink.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+          child: Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 27,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                height: 1.1,
+                color: ink,
               ),
             ),
           ),
         ),
+        if (count case final value?) ...[
+          const SizedBox(width: 7),
+          Text(
+            '· $value',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: ink.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
         if (expand) const Spacer(),
       ],
     );
