@@ -187,9 +187,8 @@ class _Tab extends StatelessWidget {
     // 选中时把外层留白等量让给胶囊内边距，标签总宽度不变，切换不跳动。
     // 文字颜色跟随主题（onSurface），浅色顶栏下不会再出现白字消失。
     final ink = colors.onSurface;
-    final accent = colors.primary;
     final labelColor = selected
-        ? ink
+        ? (dark ? const Color(0xFF111114) : colors.surface)
         : ink.withValues(alpha: dark ? 0.66 : 0.72);
     return Semantics(
       selected: selected,
@@ -212,11 +211,8 @@ class _Tab extends StatelessWidget {
                   : EdgeInsets.zero,
               decoration: selected
                   ? BoxDecoration(
-                      color: accent.withValues(alpha: dark ? 0.16 : 0.09),
+                      color: ink.withValues(alpha: 0.94),
                       borderRadius: BorderRadius.circular(17),
-                      border: Border.all(
-                        color: accent.withValues(alpha: dark ? 0.30 : 0.20),
-                      ),
                     )
                   : null,
               child: Text(

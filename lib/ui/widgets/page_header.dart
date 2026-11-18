@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
-import 'frosted_header.dart';
+import '../theme/tokens.dart';
 
 /// 页面主标题：超粗白色大标题，可带灰色数量后缀（如「追剧 · 62」）。
-/// 手机端改成与首页同款的低对比磨砂玻璃胶囊，电视端保留纯文字大标题。
+/// 手机端与电视端同一套纯文字标题，不再把标题做成胶囊。
 class PageHeader extends StatelessWidget {
   const PageHeader({
     super.key,
@@ -25,7 +25,6 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
       child: SizedBox(
@@ -42,40 +41,8 @@ class PageHeader extends StatelessWidget {
                   ),
                   _ =>
                     AppScope.formFactorOf(context) == FormFactor.television
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -0.4,
-                                      ),
-                                ),
-                              ),
-                              if (count case final value?) ...[
-                                const SizedBox(width: 6),
-                                Text(
-                                  '· $value',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w500,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                ),
-                              ],
-                            ],
-                          )
-                        : GlassTitle(title: title, count: count),
+                        ? _titleRow(context, 22)
+                        : _titleRow(context, AppType.display),
                 },
               ),
             ),
@@ -83,6 +50,41 @@ class PageHeader extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _titleRow(BuildContext context, double fontSize) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              height: 1.1,
+              color: colors.onSurface,
+            ),
+          ),
+        ),
+        if (count case final value?) ...[
+          const SizedBox(width: 7),
+          Text(
+            '· $value',
+            style: TextStyle(
+              fontSize: fontSize > 24 ? 13 : 15,
+              fontWeight: FontWeight.w500,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

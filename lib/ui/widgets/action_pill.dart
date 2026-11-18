@@ -64,9 +64,9 @@ class ActionPill extends StatelessWidget {
         colors.error.withValues(alpha: active ? 0.92 : 0.36),
       ),
       ActionTone.neutral => (
-        ink.withValues(alpha: active ? 0.07 : 0.03),
-        ink.withValues(alpha: active ? 0.14 : 0.06),
-        ink.withValues(alpha: active ? 0.88 : 0.30),
+        Colors.transparent,
+        Colors.transparent,
+        ink.withValues(alpha: active ? 0.92 : 0.30),
       ),
     };
     final pill = FocusRing(

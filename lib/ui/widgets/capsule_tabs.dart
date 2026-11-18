@@ -100,9 +100,12 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: ink.withValues(alpha: 0.12 * weight),
+            color: Color.lerp(
+              ink.withValues(alpha: 0.06),
+              ink,
+              weight,
+            ),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: ink.withValues(alpha: 0.14 * weight)),
           ),
           child: Text(
             widget.labels[i],
@@ -113,7 +116,11 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               height: 1.15,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               letterSpacing: -0.1,
-              color: Color.lerp(dim, ink, weight),
+              color: Color.lerp(
+                dim,
+                dark ? const Color(0xFF111114) : theme.colorScheme.surface,
+                weight,
+              ),
             ),
           ),
         ),
