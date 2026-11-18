@@ -264,7 +264,6 @@ class _PlaybackPageState extends State<PlaybackPage> {
         LandscapePlayerPage(
           store: widget.store,
           handle: widget.handle,
-          followSensor: !portraitStyle,
           onMiniWindow: mini,
         ),
       FormFactor.phone => PortraitPlayerPage(
@@ -272,7 +271,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         handle: widget.handle,
         onFullscreen: _wideVideo
             ? () => unawaited(
-                AppDevice.setPlayerOrientation(PlayerOrientation.landscape),
+                AppDevice.setPlayerOrientation(PlayerOrientation.lockedLandscape),
               )
             : null,
         onMiniWindow: mini,

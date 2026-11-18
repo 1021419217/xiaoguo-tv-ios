@@ -178,7 +178,8 @@ class MainActivity : FlutterActivity() {
         orientationMode = mode
         val landscape = mode == "landscape"
         requestedOrientation = when (mode) {
-            "landscape", "lockedLandscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            "lockedLandscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             "lockedPortrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
