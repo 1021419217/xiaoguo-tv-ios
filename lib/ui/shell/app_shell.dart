@@ -402,8 +402,9 @@ class _AppShellState extends State<AppShell>
       bottom: 0,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.transparent,
+          color: colors.surfaceContainerLow,
           borderRadius: radius,
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
         ),
         child: ClipRRect(
           borderRadius: radius,
