@@ -4,11 +4,12 @@ import 'package:flutter/services.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../theme/motion.dart';
+import '../theme/tokens.dart';
 import 'cover_image.dart';
 import 'focus_ring.dart';
 import 'motion/motion_widgets.dart';
 
-const _coverRadius = 12.0;
+const _coverRadius = AppRadius.content;
 
 class _PosterButton extends StatefulWidget {
   const _PosterButton({
@@ -217,6 +218,7 @@ class ProgressPoster extends StatelessWidget {
     this.width = 100,
     this.selected,
     this.badge,
+    this.dotColor,
     this.heroScope,
   });
   final Drama drama;
@@ -225,16 +227,19 @@ class ProgressPoster extends StatelessWidget {
   final String caption;
   final String? tag;
   final String? badge;
+  final Color? dotColor;
   final VoidCallback onTap;
   final VoidCallback? onMore;
   final FocusNode? focusNode;
   final double width;
   final bool? selected;
 
+  static const _titleLines = 2;
+
   static double extentFor(BuildContext context, double width) {
     final scaler = MediaQuery.textScalerOf(context);
     final television = AppScope.of(context).television;
-    final title = scaler.scale(television ? 15 : 14) * 1.3;
+    final title = scaler.scale(television ? 15 : 14) * 1.3 * _titleLines;
     final caption = scaler.scale(television ? 13 : 12) * 1.3;
     return (width * 1.5 + 8 + title + 2 + caption).ceilToDouble();
   }
@@ -260,25 +265,45 @@ class ProgressPoster extends StatelessWidget {
             ),
             if (tag case final tag?)
               Positioned(
-                left: 8,
-                top: 8,
+                left: AppSpace.sm,
+                top: AppSpace.sm,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
+                  padding: EdgeInsets.fromLTRB(
+                    dotColor == null ? AppSpace.sm : 6,
+                    3,
+                    AppSpace.sm,
+                    3,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    tag,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
+                    color: Colors.black.withValues(alpha: 0.62),
+                    borderRadius: AppRadius.badgeAll,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.14),
                     ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (dotColor case final dotColor?) ...[
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: dotColor,
+                          ),
+                          child: const SizedBox.square(dimension: 4),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        tag,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: AppType.caption,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -401,7 +426,7 @@ class ProgressPoster extends StatelessWidget {
               fontWeight: FontWeight.w600,
               height: 1.3,
             ),
-            1,
+            _titleLines,
           ),
           const SizedBox(height: 2),
           _line(

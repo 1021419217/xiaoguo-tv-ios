@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'motion.dart';
+import 'tokens.dart';
 
 /// 全剧TV「Lumenic 玻璃拟态」视觉 + 小果 2.0 的 pureBlack / pageTransitions。
 ///
@@ -81,7 +82,7 @@ abstract final class AppTheme {
           )
         : glassScheme;
 
-    const radius = 18.0;
+    const radius = AppRadius.surface;
     final background = dark
         ? (pureBlack ? Colors.black : const Color(0xFF0A0A0C))
         : scheme.surfaceContainerLowest;
@@ -138,7 +139,7 @@ abstract final class AppTheme {
         backgroundColor: scheme.surfaceContainerHigh,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.surfaceAll,
           side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
@@ -146,7 +147,9 @@ abstract final class AppTheme {
         backgroundColor: scheme.surfaceContainerHigh,
         elevation: 0,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.surface),
+          ),
         ),
       ),
       // 主按钮一律「白底黑字胶囊」，选中态同样靠反色，而不是主题色高亮。
@@ -211,7 +214,7 @@ abstract final class AppTheme {
         ),
         actionTextColor: const Color(0xFF8EC5FF),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppRadius.surfaceAll,
           side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
         ),
         dismissDirection: DismissDirection.down,
