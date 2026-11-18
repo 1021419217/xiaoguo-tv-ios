@@ -314,11 +314,15 @@ class _DownloadsPageState extends State<DownloadsPage>
     final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.error,
-          foregroundColor: colors.onError,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         onPressed: selection.isEmpty || _busy
             ? null
@@ -332,8 +336,14 @@ class _DownloadsPageState extends State<DownloadsPage>
   Widget _mergeSelectedButton(_View view) {
     final selection = view.selection!;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
         onPressed: selection.isEmpty || _busy
             ? null
             : () => _mergeSelected(view),
@@ -359,11 +369,15 @@ class _DownloadsPageState extends State<DownloadsPage>
     final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.error,
-          foregroundColor: colors.onError,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         onPressed: selection.isEmpty || _busy ? null : () => _cancel(selection),
         icon: const Icon(Icons.close_rounded, size: 18),
@@ -443,38 +457,37 @@ class _DownloadsPageState extends State<DownloadsPage>
             ),
       // SafeArea 已经让出「状态栏 + 顶栏（含标签条）」的高度，
       // 再叠 kToolbarHeight 只会多出一条空白。
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _chipsSlot(context, _sourceChips(view, inset: 16, scroll: true)),
-            Expanded(child: body),
-          ],
-        ),
-      ),
-      bottomNavigationBar: selection == null
-          ? null
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 80 + 12,
-              ),
-              child: SizedBox(
-                height: 48,
+      body: Stack(
+        children: [
+          SafeArea(
+            top: true,
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _chipsSlot(
+                  context,
+                  _sourceChips(view, inset: 16, scroll: true),
+                ),
+                Expanded(child: body),
+              ],
+            ),
+          ),
+          if (selection != null && selection.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 80 + 8,
+              child: Center(
                 child: Row(
-                  spacing: 12,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final action in _selectionActions(view))
-                      Expanded(child: action),
-                  ],
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 10,
+                  children: _selectionActions(view),
                 ),
               ),
             ),
+        ],
+      ),
     );
   }
 

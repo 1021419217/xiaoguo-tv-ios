@@ -315,11 +315,15 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
   Widget _deleteButton(DownloadedDrama item, Set<String> selection) {
     final colors = Theme.of(context).colorScheme;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.error,
-          foregroundColor: colors.onError,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         onPressed: selection.isEmpty || _busy
             ? null
@@ -365,21 +369,20 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
         bottom: false,
         child: _content(context, item, selection, inset: 16),
       ),
-      bottomNavigationBar: selection == null || item == null
+      bottomNavigationBar: selection == null || selection.isEmpty || item == null
           ? null
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  height: 48,
+                child: Center(
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 12,
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 10,
                     children: [
-                      Expanded(child: _mergeButton(item, selection)),
+                      _mergeButton(item, selection),
                       if (Platform.isAndroid)
-                        Expanded(child: _exportButton(item, selection)),
-                      Expanded(child: _deleteButton(item, selection)),
+                        _exportButton(item, selection),
+                      _deleteButton(item, selection),
                     ],
                   ),
                 ),

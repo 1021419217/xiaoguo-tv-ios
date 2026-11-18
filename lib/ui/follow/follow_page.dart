@@ -212,11 +212,15 @@ class _FollowPageState extends State<FollowPage> {
     final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.error,
-          foregroundColor: colors.onError,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         onPressed: selection.isEmpty ? null : () => _unfollow(selection),
         icon: const Icon(Icons.bookmark_remove_outlined, size: 18),
@@ -296,54 +300,54 @@ class _FollowPageState extends State<FollowPage> {
   Widget _phone(BuildContext context, _View view) {
     final selection = view.selection;
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: _content(
-          context,
-          view,
-          inset: 16,
-          swipe: true,
-          header: [
-            FadeSwitcher(
-              child: selection == null
-                  ? PageHeader(
-                      key: const ValueKey(false),
-                      title: '追剧',
-                      titleChild: widget.headerChild,
-                      actions: [_editButtonFor(view)],
-                    )
-                  : PageHeader(
-                      key: const ValueKey(true),
-                      title: '已选择 ${selection.length} 部',
-                      actions: [
-                        _selectAll(view),
-                        ActionPill(
-                          icon: Icons.done_rounded,
-                          label: '完成',
-                          onPressed: _finishEditing,
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: _content(
+              context,
+              view,
+              inset: 16,
+              swipe: true,
+              header: [
+                FadeSwitcher(
+                  child: selection == null
+                      ? PageHeader(
+                          key: const ValueKey(false),
+                          title: '追剧',
+                          titleChild: widget.headerChild,
+                          actions: [_editButtonFor(view)],
+                        )
+                      : PageHeader(
+                          key: const ValueKey(true),
+                          title: '已选择 ${selection.length} 部',
+                          actions: [
+                            _selectAll(view),
+                            ActionPill(
+                              icon: Icons.done_rounded,
+                              label: '完成',
+                              onPressed: _finishEditing,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: _search(),
+                ),
+                ?_sources(view, inset: 16, scroll: true),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: _search(),
+          ),
+          if (selection != null && selection.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 80 + 8,
+              child: Center(child: _unfollowButton(view)),
             ),
-            ?_sources(view, inset: 16, scroll: true),
-          ],
-        ),
+        ],
       ),
-      bottomNavigationBar: selection == null
-          ? null
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 80 + 12,
-              ),
-              child: SizedBox(height: 48, child: _unfollowButton(view)),
-            ),
     );
   }
 

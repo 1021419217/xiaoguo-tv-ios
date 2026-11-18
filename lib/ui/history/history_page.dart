@@ -227,11 +227,15 @@ class _HistoryPageState extends State<HistoryPage> {
     final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
-      radius: 20,
+      radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.error,
-          foregroundColor: colors.onError,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          minimumSize: const Size(0, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
         onPressed: selection.isEmpty
             ? null
@@ -372,34 +376,34 @@ class _HistoryPageState extends State<HistoryPage> {
         ],
       ),
       // SafeArea 已让出「状态栏 + 磨砂顶栏」，不再叠 kToolbarHeight。
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: _content(
-          context,
-          view,
-          inset: 16,
-          swipe: true,
-          header: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
-              child: _search(),
+      body: Stack(
+        children: [
+          SafeArea(
+            top: true,
+            bottom: false,
+            child: _content(
+              context,
+              view,
+              inset: 16,
+              swipe: true,
+              header: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
+                  child: _search(),
+                ),
+                ?_sources(view, inset: 16, scroll: true),
+              ],
             ),
-            ?_sources(view, inset: 16, scroll: true),
-          ],
-        ),
+          ),
+          if (selection != null && selection.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 80 + 8,
+              child: Center(child: _deleteButton(view)),
+            ),
+        ],
       ),
-      bottomNavigationBar: selection == null
-          ? null
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 80 + 12,
-              ),
-              child: SizedBox(height: 48, child: _deleteButton(view)),
-            ),
     );
   }
 
