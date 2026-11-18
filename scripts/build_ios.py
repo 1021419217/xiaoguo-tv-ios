@@ -130,7 +130,12 @@ def main():
     else:
         # 新版 Xcode 镜像会拦下 flutter build 的未签名设备构建，
         # 这里只让 flutter 生成工程配置，编译交给 xcodebuild 并显式关签名。
-        run([flutter, 'build', 'ios', '--release', '--no-pub', '--config-only', *app.flutter_arguments])
+        # flutter build 在这一步只负责生成工程配置；新版 Xcode 会在末尾的部署校验失败，
+        # 这里忽略它的返回码，编译与打包交给下面的 xcodebuild。
+        try:
+            run([flutter, 'build', 'ios', '--release', '--no-codesign', '--no-pub', *app.flutter_arguments])
+        except subprocess.CalledProcessError:
+            pass
         derived = root / 'build' / 'ios_dd'
         run([
             'xcodebuild',
