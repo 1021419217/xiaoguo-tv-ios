@@ -340,10 +340,7 @@ class _AppShellState extends State<AppShell>
       child: switch (AppScope.formFactorOf(context)) {
         FormFactor.phone => Scaffold(
           body: Stack(
-            children: [
-              pages,
-              if (!covered) _bottomBar(context, tabs),
-            ],
+            children: [pages, if (!covered) _bottomBar(context, tabs)],
           ),
         ),
         FormFactor.pad || FormFactor.window => _wide(pages),
@@ -406,32 +403,29 @@ class _AppShellState extends State<AppShell>
           borderRadius: radius,
           border: Border(top: BorderSide(color: colors.outlineVariant)),
         ),
-        child: ClipRRect(
-          borderRadius: radius,
-          child: SafeArea(
-            top: false,
-            child: NavigationBar(
-              height: 62,
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              indicatorColor: Colors.transparent,
-              selectedIndex: tabs.indexOf(_tab),
-              onDestinationSelected: (index) {
-                unawaited(HapticFeedback.selectionClick());
-                _tap(tabs[index]);
-              },
-              destinations: [
-                for (final tab in tabs)
-                  NavigationDestination(
-                    key: ValueKey('nav-${tab.name}'),
-                    icon: _badged(tab, Icon(tab.icon)),
-                    selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                    label: tab.label,
-                  ),
-              ],
-            ),
+        child: SafeArea(
+          top: false,
+          child: NavigationBar(
+            height: 62,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            indicatorColor: Colors.transparent,
+            selectedIndex: tabs.indexOf(_tab),
+            onDestinationSelected: (index) {
+              unawaited(HapticFeedback.selectionClick());
+              _tap(tabs[index]);
+            },
+            destinations: [
+              for (final tab in tabs)
+                NavigationDestination(
+                  key: ValueKey('nav-${tab.name}'),
+                  icon: _badged(tab, Icon(tab.icon)),
+                  selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
+                  label: tab.label,
+                ),
+            ],
           ),
         ),
       ),

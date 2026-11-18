@@ -15,6 +15,15 @@ import 'motion/motion_widgets.dart';
 const vipGold = Color(0xFFF6C86B);
 const onVipGold = Color(0xFF40300D);
 
+/// 按实际显示宽度解码，最多不超过调用方给的上限；小缩略图不再按大图
+/// 的尺寸解码，列表滚动时少占内存也少一次缩放。
+int _decodeWidthFor(BuildContext context, double width, int cap) {
+  if (!width.isFinite || width <= 0) return cap;
+  final pixels = (width * MediaQuery.devicePixelRatioOf(context)).ceil();
+  if (pixels < 1) return 1;
+  return pixels < cap ? pixels : cap;
+}
+
 class VipBadge extends StatelessWidget {
   const VipBadge({super.key});
 
@@ -246,6 +255,7 @@ class _CoverImageState extends State<CoverImage> {
 
   CoverRequest? _request;
   Future<String>? _file;
+  final _decodedWidths = <int>{};
 
   /// 已经拿到本地文件时直接同步出图：不再先空一帧再淡入，进出详情不闪。
   String? _path;
@@ -377,13 +387,19 @@ class _CoverImageState extends State<CoverImage> {
 
   Future<void> _retry(String? path) async {
     if (path != null) {
-      for (final width in {_thumbWidth, widget.decodeWidth}) {
+      final widths =
+          (_decodedWidths.isEmpty
+                  ? {_thumbWidth, widget.decodeWidth}
+                  : _decodedWidths)
+              .toList();
+      for (final width in widths) {
         await ResizeImage.resizeIfNeeded(
           width,
           null,
           FileImage(File(path)),
         ).evict();
       }
+      _decodedWidths.clear();
     }
     if (!mounted) return;
     _request?.cancel();
@@ -418,32 +434,38 @@ class _CoverImageState extends State<CoverImage> {
     );
   }
 
-  Widget _image(
-    String path,
-    int width, {
-    required Widget Function() onError,
-  }) => Image.file(
-    File(path),
-    fit: widget.fit,
-    alignment: widget.alignment,
-    cacheWidth: width,
-    excludeFromSemantics: true,
-    frameBuilder: fadeInFrameBuilder,
-    errorBuilder: (_, _, _) => onError(),
-  );
+  Widget _image(String path, int width, {required Widget Function() onError}) {
+    _decodedWidths.add(width);
+    return Image.file(
+      File(path),
+      fit: widget.fit,
+      alignment: widget.alignment,
+      cacheWidth: width,
+      excludeFromSemantics: true,
+      frameBuilder: fadeInFrameBuilder,
+      errorBuilder: (_, _, _) => onError(),
+    );
+  }
 
   Widget _resolved(String path) {
     unawaited(_measure(path));
-    final sharp = _image(path, widget.decodeWidth, onError: () => _failure(path));
-    if (widget.decodeWidth <= _thumbWidth) return sharp;
-    // 大图解码要几帧：先铺已经缓存的小图，大图在它上面淡入，
-    // 进出详情时既不空一帧，也不会一直糊着。
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _image(path, _thumbWidth, onError: () => const SizedBox.shrink()),
-        sharp,
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? _decodeWidthFor(context, constraints.maxWidth, widget.decodeWidth)
+            : widget.decodeWidth;
+        final sharp = _image(path, width, onError: () => _failure(path));
+        if (width <= _thumbWidth) return sharp;
+        // 大图解码要几帧：先铺已经缓存的小图，大图在它上面淡入，
+        // 进出详情时既不空一帧，也不会一直糊着。
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _image(path, _thumbWidth, onError: () => const SizedBox.shrink()),
+            sharp,
+          ],
+        );
+      },
     );
   }
 

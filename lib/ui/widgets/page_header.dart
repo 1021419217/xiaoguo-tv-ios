@@ -26,7 +26,7 @@ class PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: SizedBox(
         height: 62,
         child: Row(
@@ -47,7 +47,11 @@ class PageHeader extends StatelessWidget {
               ),
             ),
             if (actions.isNotEmpty)
-              Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: actions),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 8,
+                children: actions,
+              ),
           ],
         ),
       ),

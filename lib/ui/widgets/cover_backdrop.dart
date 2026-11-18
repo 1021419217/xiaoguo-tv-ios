@@ -48,6 +48,7 @@ class CoverBackdrop extends StatelessWidget {
                           repository: AppScope.of(context).repository,
                           placeholder: fallback,
                           retryable: false,
+                          decodeWidth: 240,
                         ),
                 ),
               ),

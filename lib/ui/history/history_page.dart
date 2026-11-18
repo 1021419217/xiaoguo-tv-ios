@@ -194,7 +194,7 @@ class _HistoryPageState extends State<HistoryPage> {
     }.toList(),
   );
 
-  /// 顶栏只留 38 圆钮：编辑 / 清空最多两个动作，其它操作进编辑态再出现。
+  /// 顶栏只留两个 38 圆钮：编辑 / 清空，且同用中性色调，红色只留给确认框里的删除。
   List<Widget> _browseActions(_View view) => [
     BarButton(
       icon: Icons.edit_outlined,
@@ -207,7 +207,6 @@ class _HistoryPageState extends State<HistoryPage> {
       icon: Icons.delete_sweep_outlined,
       tooltip: '清空',
       size: 38,
-      tone: BarTone.danger,
       onPressed: view.shown.isEmpty
           ? null
           : () => _remove(_ids(view), clear: true),
@@ -368,7 +367,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   : [_selectAll(view)],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 20),
         ],
       ),
       // SafeArea 已让出「状态栏 + 磨砂顶栏」，不再叠 kToolbarHeight。
@@ -391,11 +390,14 @@ class _HistoryPageState extends State<HistoryPage> {
       ),
       bottomNavigationBar: selection == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(height: 48, child: _deleteButton(view)),
+          : Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 62 + 12,
               ),
+              child: SizedBox(height: 48, child: _deleteButton(view)),
             ),
     );
   }
@@ -605,31 +607,28 @@ class _HistoryPageState extends State<HistoryPage> {
                 if (mixed)
                   SliverPadding(
                     padding: EdgeInsets.symmetric(horizontal: inset),
-                    sliver: SliverToBoxAdapter(
-                      child: PosterMasonry(
-                        width: width,
-                        count: entries.length,
-                        heightAt: (index, cellWidth) =>
-                            ProgressPoster.extentFor(
-                              context,
-                              cellWidth,
-                              aspect: posterAspect(
-                                entries[index].drama.source,
-                                entries[index].drama.id,
-                              ),
-                            ),
-                        itemBuilder: (context, index, cellWidth) => cell(
-                          entries[index],
-                          index,
-                          count: entries.length,
-                          across: 2,
-                          cellWidth: cellWidth,
-                          aspect: posterAspect(
-                            entries[index].drama.source,
-                            entries[index].drama.id,
-                          ),
-                          adaptive: true,
+                    sliver: PosterMasonry(
+                      width: width,
+                      count: entries.length,
+                      heightAt: (index, cellWidth) => ProgressPoster.extentFor(
+                        context,
+                        cellWidth,
+                        aspect: posterAspect(
+                          entries[index].drama.source,
+                          entries[index].drama.id,
                         ),
+                      ),
+                      itemBuilder: (context, index, cellWidth) => cell(
+                        entries[index],
+                        index,
+                        count: entries.length,
+                        across: 2,
+                        cellWidth: cellWidth,
+                        aspect: posterAspect(
+                          entries[index].drama.source,
+                          entries[index].drama.id,
+                        ),
+                        adaptive: true,
                       ),
                     ),
                   )

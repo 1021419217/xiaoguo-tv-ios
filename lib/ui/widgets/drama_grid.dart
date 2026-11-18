@@ -17,8 +17,7 @@ import 'motion/motion_widgets.dart';
   double width, {
   bool wide = false,
 }) => switch (AppScope.formFactorOf(context)) {
-  FormFactor.phone =>
-    wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
+  FormFactor.phone => wide ? (2, 12.0, 20.0) : (3, 10.0, 22.0),
   FormFactor.television => (
     ((width + 20) / (wide ? 200 : 120)).floor().clamp(3, 8),
     20.0,
@@ -36,11 +35,7 @@ import 'motion/motion_widgets.dart';
   ),
 };
 
-double dramaTileWidth(
-  BuildContext context,
-  double width, {
-  bool wide = false,
-}) {
+double dramaTileWidth(BuildContext context, double width, {bool wide = false}) {
   final (columns, spacing, _) = _gridLayout(context, width, wide: wide);
   return (width - (columns - 1) * spacing) / columns;
 }
@@ -59,6 +54,9 @@ double posterAspect(String source, String dramaId) {
 }
 
 /// 两列瀑布流：每格按自身高度落进较短的一栏，和「发现」页同一套排法。
+///
+/// 两栏各是一条 [SliverList]，只构建进入视口的格子；原来把全部格子塞进
+/// 一个 Column 再交给 [SliverToBoxAdapter]，长列表会一次性建完、滚动就卡。
 class PosterMasonry extends StatelessWidget {
   const PosterMasonry({
     super.key,
@@ -83,32 +81,40 @@ class PosterMasonry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tileWidth = (width - padding.horizontal - spacing) / 2;
-    final left = <Widget>[];
-    final right = <Widget>[];
+    final left = <int>[];
+    final right = <int>[];
     var leftHeight = 0.0;
     var rightHeight = 0.0;
     for (var index = 0; index < count; index++) {
-      final cell = Padding(
-        padding: EdgeInsets.only(bottom: spacing),
-        child: itemBuilder(context, index, tileWidth),
-      );
       final height = heightAt(index, tileWidth) + spacing;
       if (leftHeight <= rightHeight) {
-        left.add(cell);
+        left.add(index);
         leftHeight += height;
       } else {
-        right.add(cell);
+        right.add(index);
         rightHeight += height;
       }
     }
-    return Padding(
+    Widget column(List<int> indices) => SliverList.builder(
+      itemCount: indices.length,
+      itemBuilder: (context, position) {
+        final index = indices[position];
+        return Padding(
+          padding: EdgeInsets.only(bottom: spacing),
+          child: itemBuilder(context, index, tileWidth),
+        );
+      },
+    );
+    return SliverPadding(
       padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: tileWidth, child: Column(children: left)),
-          SizedBox(width: spacing),
-          SizedBox(width: tileWidth, child: Column(children: right)),
+      sliver: SliverCrossAxisGroup(
+        slivers: [
+          SliverCrossAxisExpanded(flex: 1, sliver: column(left)),
+          SliverConstrainedCrossAxis(
+            maxExtent: spacing,
+            sliver: SliverToBoxAdapter(child: SizedBox(width: spacing)),
+          ),
+          SliverCrossAxisExpanded(flex: 1, sliver: column(right)),
         ],
       ),
     );
@@ -200,7 +206,8 @@ class DramaSliverGrid extends StatelessWidget {
   }
 
   Widget _grid(BuildContext context) {
-    final wide = items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
+    final wide =
+        items.isNotEmpty && CoverShapes.isLandscape(items.first.source);
     final (columns, _, _) = _gridLayout(context, width, wide: wide);
     final heroIndex = heroScope == null
         ? const <String, int>{}
@@ -222,24 +229,22 @@ class DramaSliverGrid extends StatelessWidget {
     final heroIndex = heroScope == null
         ? const <String, int>{}
         : firstIndexById(items, (drama) => drama.id);
-    return SliverToBoxAdapter(
-      child: PosterMasonry(
-        width: width,
-        count: items.length,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        heightAt: (index, tile) => DramaTile.extentFor(
-          context,
-          tile,
-          aspect: posterAspect(items[index].source, items[index].id),
-        ),
-        itemBuilder: (context, index, tileWidth) => _cell(
-          context,
-          index,
-          aspect: posterAspect(items[index].source, items[index].id),
-          columns: 2,
-          heroIndex: heroIndex,
-          adaptive: true,
-        ),
+    return PosterMasonry(
+      width: width,
+      count: items.length,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      heightAt: (index, tile) => DramaTile.extentFor(
+        context,
+        tile,
+        aspect: posterAspect(items[index].source, items[index].id),
+      ),
+      itemBuilder: (context, index, tileWidth) => _cell(
+        context,
+        index,
+        aspect: posterAspect(items[index].source, items[index].id),
+        columns: 2,
+        heroIndex: heroIndex,
+        adaptive: true,
       ),
     );
   }

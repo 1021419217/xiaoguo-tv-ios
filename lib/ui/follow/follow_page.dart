@@ -336,7 +336,12 @@ class _FollowPageState extends State<FollowPage> {
       bottomNavigationBar: selection == null
           ? null
           : Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 62 + 12,
+              ),
               child: SizedBox(height: 48, child: _unfollowButton(view)),
             ),
     );
@@ -620,31 +625,28 @@ class _FollowPageState extends State<FollowPage> {
                       inset,
                       0,
                     ),
-                    sliver: SliverToBoxAdapter(
-                      child: PosterMasonry(
-                        width: width,
-                        count: dramas.length,
-                        heightAt: (index, cellWidth) =>
-                            ProgressPoster.extentFor(
-                              context,
-                              cellWidth,
-                              aspect: posterAspect(
-                                dramas[index].source,
-                                dramas[index].id,
-                              ),
-                            ),
-                        itemBuilder: (context, index, cellWidth) => cell(
-                          dramas[index],
-                          index,
-                          count: dramas.length,
-                          across: 2,
-                          cellWidth: cellWidth,
-                          aspect: posterAspect(
-                            dramas[index].source,
-                            dramas[index].id,
-                          ),
-                          adaptive: true,
+                    sliver: PosterMasonry(
+                      width: width,
+                      count: dramas.length,
+                      heightAt: (index, cellWidth) => ProgressPoster.extentFor(
+                        context,
+                        cellWidth,
+                        aspect: posterAspect(
+                          dramas[index].source,
+                          dramas[index].id,
                         ),
+                      ),
+                      itemBuilder: (context, index, cellWidth) => cell(
+                        dramas[index],
+                        index,
+                        count: dramas.length,
+                        across: 2,
+                        cellWidth: cellWidth,
+                        aspect: posterAspect(
+                          dramas[index].source,
+                          dramas[index].id,
+                        ),
+                        adaptive: true,
                       ),
                     ),
                   )
@@ -691,7 +693,9 @@ class _FollowPageState extends State<FollowPage> {
               padding: EdgeInsets.only(top: top),
               child: Column(children: header),
             ),
-            Expanded(child: swipe ? _swipe(view, scroll(context)) : scroll(context)),
+            Expanded(
+              child: swipe ? _swipe(view, scroll(context)) : scroll(context),
+            ),
           ],
         ),
       );

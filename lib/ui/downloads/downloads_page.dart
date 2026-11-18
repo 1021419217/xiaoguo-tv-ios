@@ -260,13 +260,14 @@ class _DownloadsPageState extends State<DownloadsPage>
   String _selectedTitle(Set<String> selection) =>
       '已选择 ${selection.length} ${_downloadedTab ? '部' : '集'}';
 
+  bool get _hasFinishedMerges =>
+      widget.merges.tasks.any((task) => task.finished);
+
   Widget _clearMerges() => BarButton(
     icon: Icons.clear_all_rounded,
     tooltip: '清除已结束',
     size: 38,
-    onPressed: widget.merges.tasks.any((task) => task.finished)
-        ? widget.merges.clearFinished
-        : null,
+    onPressed: _hasFinishedMerges ? widget.merges.clearFinished : null,
   );
 
   Future<void> _mergeSelected(_View view) async {
@@ -421,7 +422,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                 ],
                 if (_downloadedTab && view.downloaded.isNotEmpty)
                   _editButton(view),
-                if (_mergeTab) _clearMerges(),
+                if (_mergeTab && _hasFinishedMerges) _clearMerges(),
                 const SizedBox(width: 8),
               ],
               bottom: PreferredSize(
@@ -456,19 +457,22 @@ class _DownloadsPageState extends State<DownloadsPage>
       ),
       bottomNavigationBar: selection == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  height: 48,
-                  child: Row(
-                    spacing: 12,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final action in _selectionActions(view))
-                        Expanded(child: action),
-                    ],
-                  ),
+          : Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                MediaQuery.paddingOf(context).bottom + 62 + 12,
+              ),
+              child: SizedBox(
+                height: 48,
+                child: Row(
+                  spacing: 12,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final action in _selectionActions(view))
+                      Expanded(child: action),
+                  ],
                 ),
               ),
             ),
@@ -524,7 +528,9 @@ class _DownloadsPageState extends State<DownloadsPage>
                       ),
                     ),
                   ),
-                  if (view.selection != null || _editable(view) || _mergeTab)
+                  if (view.selection != null ||
+                      _editable(view) ||
+                      (_mergeTab && _hasFinishedMerges))
                     FadeSwitcher(
                       duration: Motion.short,
                       alignment: AlignmentDirectional.centerEnd,
@@ -560,7 +566,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                               key: const ValueKey('downloaded'),
                               child: _editButton(view),
                             )
-                          : _mergeTab
+                          : _mergeTab && _hasFinishedMerges
                           ? KeyedSubtree(
                               key: const ValueKey('merges'),
                               child: _clearMerges(),
@@ -707,12 +713,7 @@ class _DownloadsPageState extends State<DownloadsPage>
         ? 16.0
         : 24.0;
     return ListView.separated(
-      padding: EdgeInsets.fromLTRB(
-        inset,
-        12,
-        inset,
-        pageBottomInset(context),
-      ),
+      padding: EdgeInsets.fromLTRB(inset, 12, inset, pageBottomInset(context)),
       itemCount: tasks.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) => _MergeRow(
@@ -803,31 +804,35 @@ class _DownloadsPageState extends State<DownloadsPage>
               view.downloaded.first.drama.source,
             );
             if (mixed) {
-              return SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: pageBottomInset(context)),
-                child: PosterMasonry(
-                  width: constraints.maxWidth,
-                  count: view.downloaded.length,
-                  padding: EdgeInsets.fromLTRB(inset, 12, inset, 0),
-                  heightAt: (index, tileWidth) => ProgressPoster.extentFor(
-                    context,
-                    tileWidth,
-                    aspect: posterAspect(
-                      view.downloaded[index].drama.source,
-                      view.downloaded[index].drama.id,
-                    ),
-                  ),
-                  itemBuilder: (context, index, tileWidth) {
-                    final item = view.downloaded[index];
-                    return poster(
-                      item,
-                      index,
+              return CustomScrollView(
+                slivers: [
+                  PosterMasonry(
+                    width: constraints.maxWidth,
+                    count: view.downloaded.length,
+                    padding: EdgeInsets.fromLTRB(inset, 12, inset, 0),
+                    heightAt: (index, tileWidth) => ProgressPoster.extentFor(
+                      context,
                       tileWidth,
-                      posterAspect(item.drama.source, item.drama.id),
-                      adaptive: true,
-                    );
-                  },
-                ),
+                      aspect: posterAspect(
+                        view.downloaded[index].drama.source,
+                        view.downloaded[index].drama.id,
+                      ),
+                    ),
+                    itemBuilder: (context, index, tileWidth) {
+                      final item = view.downloaded[index];
+                      return poster(
+                        item,
+                        index,
+                        tileWidth,
+                        posterAspect(item.drama.source, item.drama.id),
+                        adaptive: true,
+                      );
+                    },
+                  ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: pageBottomInset(context)),
+                  ),
+                ],
               );
             }
             return GridView.builder(
@@ -844,12 +849,8 @@ class _DownloadsPageState extends State<DownloadsPage>
                 mainAxisExtent: ProgressPoster.extentFor(context, tile),
               ),
               itemCount: view.downloaded.length,
-              itemBuilder: (context, index) => poster(
-                view.downloaded[index],
-                index,
-                tile,
-                2 / 3,
-              ),
+              itemBuilder: (context, index) =>
+                  poster(view.downloaded[index], index, tile, 2 / 3),
             );
           },
         );
