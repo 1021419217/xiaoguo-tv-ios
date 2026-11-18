@@ -345,7 +345,7 @@ class _AppShellState extends State<AppShell>
           bottomNavigationBar: covered
               ? null
               : Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(22),

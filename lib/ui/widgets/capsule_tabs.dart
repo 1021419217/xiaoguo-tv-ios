@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/tokens.dart';
+
 /// 统一的胶囊分段控件：模块页、下载页、追剧页共用同一套外观与手感。
 ///
 /// 关键点（上一版几个页面的痛点都在这里）：
@@ -102,7 +104,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           decoration: BoxDecoration(
             color: Color.lerp(
               ink.withValues(alpha: 0.06),
-              theme.colorScheme.primary,
+              AppColors.accent,
               weight,
             ),
             borderRadius: BorderRadius.circular(999),
@@ -118,7 +120,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               letterSpacing: -0.1,
               color: Color.lerp(
                 dim,
-                theme.colorScheme.onPrimary,
+                AppColors.onAccent,
                 weight,
               ),
             ),

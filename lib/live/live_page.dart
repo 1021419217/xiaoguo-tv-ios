@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../ui/app_scope.dart';
+import '../ui/theme/tokens.dart';
 import '../ui/widgets/capsule_tabs.dart';
 import '../local_store.dart';
 
@@ -527,14 +528,14 @@ class _ChannelTile extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colors.primary.withValues(alpha: 0.16),
+                    color: AppColors.accent.withValues(alpha: 0.16),
                   ),
                   child: Text(
                     initial,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: colors.primary,
+                      color: AppColors.accent,
                     ),
                   ),
                 ),

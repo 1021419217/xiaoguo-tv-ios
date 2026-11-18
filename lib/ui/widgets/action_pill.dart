@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'focus_ring.dart';
+import '../theme/tokens.dart';
 
 enum ActionTone {
   /// 普通操作：低对比玻璃胶囊。
@@ -54,9 +55,9 @@ class ActionPill extends StatelessWidget {
     final active = onPressed != null;
     final (background, border, foreground) = switch (tone) {
       ActionTone.accent => (
-        colors.primary.withValues(alpha: active ? 0.94 : 0.20),
+        AppColors.accent.withValues(alpha: active ? 0.94 : 0.20),
         Colors.transparent,
-        colors.onPrimary,
+        AppColors.onAccent,
       ),
       ActionTone.danger => (
         colors.error.withValues(alpha: active ? 0.10 : 0.04),

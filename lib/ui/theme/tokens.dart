@@ -12,6 +12,12 @@ abstract final class AppRadius {
   static const BorderRadius pillAll = BorderRadius.all(Radius.circular(999));
 }
 
+abstract final class AppColors {
+  /// 品牌强调色：与 App 图标同一套橙红，所有选中态/主按钮/进度都用它。
+  static const accent = Color(0xFFFF664F);
+  static const onAccent = Color(0xFFFFFFFF);
+}
+
 abstract final class AppSpace {
   static const xs = 4.0;
   static const sm = 8.0;
