@@ -91,6 +91,9 @@ class DramaCover extends StatelessWidget {
         ),
       ),
     );
+    // Always build the same wrapper so the CoverImage state is kept when the
+    // hero condition flips; HeroMode just turns the flight on or off.
+    final heroEnabled = heroScope != null && drama.id.isNotEmpty;
     Widget image = Stack(
       fit: StackFit.expand,
       children: [
@@ -103,14 +106,12 @@ class DramaCover extends StatelessWidget {
             placeholder: const SizedBox.shrink(),
             alignment: alignment,
             decodeWidth: decodeWidth,
+            adaptiveDecode: !heroEnabled,
             onAspect: onAspect,
             fit: BoxFit.cover,
           ),
       ],
     );
-    // Always build the same wrapper so the CoverImage state is kept when the
-    // hero condition flips; HeroMode just turns the flight on or off.
-    final heroEnabled = heroScope != null && drama.id.isNotEmpty;
     final blurred =
         CoverBlurScope.of(context)?.blurs(drama, explore: exploreBlur) ?? false;
     image = HeroMode(
@@ -230,6 +231,7 @@ class CoverImage extends StatefulWidget {
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.decodeWidth = 440,
+    this.adaptiveDecode = true,
     this.onAspect,
   });
   final Drama drama;
@@ -241,6 +243,10 @@ class CoverImage extends StatefulWidget {
 
   /// 解码宽度（物理像素）。同一张封面用同一宽度才会命中同一份解码缓存。
   final int decodeWidth;
+
+  /// Hero 飞行时尺寸每帧都在变，按布局解码会反复换 provider；这种封面
+  /// 固定用 [decodeWidth]，其余封面按实际显示尺寸解码。
+  final bool adaptiveDecode;
 
   /// 封面真实宽高比（宽 / 高）读出来后回调一次。
   final ValueChanged<double>? onAspect;
@@ -451,7 +457,7 @@ class _CoverImageState extends State<CoverImage> {
     unawaited(_measure(path));
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.hasBoundedWidth
+        final width = widget.adaptiveDecode && constraints.hasBoundedWidth
             ? _decodeWidthFor(context, constraints.maxWidth, widget.decodeWidth)
             : widget.decodeWidth;
         final sharp = _image(path, width, onError: () => _failure(path));
