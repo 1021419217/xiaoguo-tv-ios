@@ -1,0 +1,22 @@
+{
+  "id": "avple",
+  "name": "AVPLE",
+  "version": "1.0.0",
+  "description": "分類视频 · 搜索 · 片商/女优二级页",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "avple.tv",
+    "*.avple.tv",
+    "assert.avple.tv",
+    "asserts.avple.tv",
+    "*.cdnedge.live"
+  ],
+  "capabilities": ["search"],
+  "aliases": ["avple.tv", "www.avple.tv"],
+  "baseUrl": "https://avple.tv",
+  "allowEmptyCatalog": false,
+  "noHostRotation": true,
+  "browserFingerprint": true
+}
