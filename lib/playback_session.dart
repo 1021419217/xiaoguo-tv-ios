@@ -652,6 +652,7 @@ class PlaybackSession extends ChangeNotifier {
         'seg_max_retry=3',
         'strict=experimental',
         'allowed_extensions=ALL',
+        'advanced_editlist=0',
         plan.local
             ? 'protocol_whitelist=[file,crypto,data]'
             : 'protocol_whitelist=[http,https,tcp,tls,crypto,data,file]',
