@@ -6,13 +6,7 @@ const slugPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
 const genrePattern = /\/(?:dm[0-9]+\/)?cn\/genres\/([^/?#]+)\/?$/;
 const pagePattern = /[?&]page=([0-9]{1,7})/;
-// 播放地址的 CDN 域名不止一个（surrit.* / fourhoi.* 等，且会更换），
-// 任何「域名 + UUID + 播放路径」都认；只有 UUID 时用已知可达的 CDN 兜底。
-const uuidText = "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
-const videoUrlPattern = new RegExp(
-  "(https?://[a-z0-9.-]+)/" + uuidText + "/(?:playlist\\.m3u8|\\d{3,4}p/)",
-  "i",
-);
+const mediaPattern = /https?:\/\/surrit\.com\/[0-9a-f-]{36}\/playlist\.m3u8/;
 const packedPattern = /eval\(function\(p,a,c,k,e,d\)\{.*?\}\('((?:[^'\\]|\\.)*)',([0-9]+),([0-9]+),'((?:[^'\\]|\\.)*)'\.split\('\|'\)/gs;
 
 function truncate(text, limit) {
@@ -368,20 +362,14 @@ function unpack(match) {
 }
 
 function mediaAddress(body) {
-  const fromText = (text) => {
-    const withUrl = text.match(videoUrlPattern);
-    if (!withUrl) {
-      return "";
-    }
-    return withUrl[1] + "/" + withUrl[2].toLowerCase() + "/playlist.m3u8";
-  };
   for (const match of body.matchAll(packedPattern)) {
-    const address = fromText(unpack(match));
-    if (address !== "") {
-      return address;
+    const found = unpack(match).match(mediaPattern);
+    if (found) {
+      return found[0];
     }
   }
-  return fromText(body);
+  const direct = body.match(mediaPattern);
+  return direct ? direct[0] : "";
 }
 
 function fetchDocument(address) {

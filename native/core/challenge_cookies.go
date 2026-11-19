@@ -33,9 +33,33 @@ func challengeHostKey(host string) string {
 	return key
 }
 
-func challengeLookup(host string) challengeCredential {
+// 只有这几个站点真正依赖 Cloudflare cf_clearance 人机验证：它们验证后必须用
+// WebView 的真实 UA + Safari 指纹重发，否则通行 cookie 会被判成「换了浏览器的
+// 机器人」而作废。除此之外的所有站点（含 MissAV）一律不参与验证态切换，走与
+// 上游一致的干净 Chrome 指纹——历史 cookie 不再影响它们的指纹/UA/取页方式，
+// 从根本上避免被旧的、已失效的验证记录拖进反复验证的死循环。
+var verifiedChallengeHosts = []string{
+	"jable.tv", "fs1.app", "mushroomtrack.com",
+	"avple.tv", "avple.app", "cdnedge.live",
+	"5lxtv.com", "avtube.xyz",
+}
+
+func isVerifiedChallengeHost(host string) bool {
 	key := challengeHostKey(host)
 	if key == "" {
+		return false
+	}
+	for _, root := range verifiedChallengeHosts {
+		if key == root || strings.HasSuffix(key, "."+root) {
+			return true
+		}
+	}
+	return false
+}
+
+func challengeLookup(host string) challengeCredential {
+	key := challengeHostKey(host)
+	if key == "" || !isVerifiedChallengeHost(host) {
 		return challengeCredential{}
 	}
 	challengeCookies.mu.RLock()
