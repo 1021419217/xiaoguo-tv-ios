@@ -7,11 +7,10 @@ const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
 const genrePattern = /\/(?:dm[0-9]+\/)?cn\/genres\/([^/?#]+)\/?$/;
 const pagePattern = /[?&]page=([0-9]{1,7})/;
 // 播放地址的 CDN 域名不止一个（surrit.* / fourhoi.* 等，且会更换），
-// 只按域名匹配会让一部分片子解析不出地址。改为：优先用页面里的完整根地址，
-// 否则只认 UUID，用已知可达的 CDN 拼 playlist.m3u8。
+// 任何「域名 + UUID + 播放路径」都认；只有 UUID 时用已知可达的 CDN 兜底。
 const uuidText = "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
-const surritHostPattern = new RegExp(
-  "https?://(?:surrit|fourhoi)\\.[a-z0-9.-]+/" + uuidText + "/?",
+const videoUrlPattern = new RegExp(
+  "(https?://[a-z0-9.-]+)/" + uuidText + "/(?:playlist\\.m3u8|\\d{3,4}p/)",
   "i",
 );
 const uuidPattern = new RegExp(uuidText, "i");
@@ -372,9 +371,9 @@ function unpack(match) {
 
 function mediaAddress(body) {
   const fromText = (text) => {
-    const host = text.match(surritHostPattern);
-    if (host) {
-      return host[0].replace(/\/?$/, "/") + "playlist.m3u8";
+    const withUrl = text.match(videoUrlPattern);
+    if (withUrl) {
+      return withUrl[1] + "/" + withUrl[2].toLowerCase() + "/playlist.m3u8";
     }
     const uuid = text.match(uuidPattern);
     if (uuid) {
