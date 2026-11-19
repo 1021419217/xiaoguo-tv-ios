@@ -20,7 +20,7 @@ import 'live_store.dart';
 const _favouritesId = '__favourites';
 
 /// 「全部频道」伪 ID：把源站所有分类的频道合并去重成一个列表。
-const _allId = '__all';
+
 
 /// 直播频道列表页。
 ///
@@ -48,6 +48,7 @@ class LivePage extends StatefulWidget {
 class _LivePageState extends State<LivePage> {
   LiveSource? _source;
   String _platform = '';
+  List<LivePlatform> _platforms = const [];
   List<LiveChannel> _channels = const [];
   List<LiveChannel> _lastGood = const [];
   String _lastGoodPlatform = '';
@@ -56,10 +57,6 @@ class _LivePageState extends State<LivePage> {
   String? _error;
   int _generation = 0;
   final _pager = PageController(initialPage: 1);
-
-  /// 「全部频道」合并进度：已拉完的分类数 / 总分类数。
-  int _progressDone = 0;
-  int _progressTotal = 0;
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
 
@@ -113,17 +110,19 @@ class _LivePageState extends State<LivePage> {
       final platforms = await widget.repository.platforms(source, force: force);
       if (!mounted || token != _generation) return;
       setState(() {
-        _platform = platforms.isEmpty ? '' : _allId;
-        _progressTotal = platforms.length;
+        _platforms = platforms;
+        _platform = '';
+        _channels = const [];
+        _loading = platforms.isNotEmpty;
       });
-      if (platforms.isNotEmpty && _pager.hasClients) {
-        _pager.jumpToPage(1);
-      }
       if (platforms.isEmpty) {
         setState(() => _loading = false);
         return;
       }
-      await _loadAll();
+      final first = platforms.first;
+      setState(() => _platform = first.id);
+      if (_pager.hasClients) _pager.jumpToPage(1);
+      await _loadPlatform(first);
     } catch (error) {
       if (!mounted || token != _generation) return;
       setState(() {
@@ -134,46 +133,55 @@ class _LivePageState extends State<LivePage> {
     }
   }
 
-  /// 一次性把所有分类的频道合并去重，边拉边显示，避免用户对着空页面等。
-  Future<void> _loadAll() async {
+  /// 只拉当前分类，不再把所有分类合并成一个「全部频道」。
+  Future<void> _loadPlatform(
+    LivePlatform platform, {
+    bool force = false,
+  }) async {
     final source = _source;
     if (source == null) return;
-    final token = _generation;
+    final token = ++_generation;
     setState(() {
       _loading = true;
       _failed = false;
       _error = null;
-      _progressDone = 0;
-      _channels = _lastGoodPlatform == _allId ? _lastGood : const [];
+      _channels = _lastGoodPlatform == platform.id ? _lastGood : const [];
     });
     try {
-      final channels = await widget.repository.allChannels(
+      final channels = await widget.repository.channels(
         source,
-        onProgress: (merged, done, total) {
-          if (!mounted || token != _generation) return;
-          setState(() {
-            _channels = merged;
-            _progressDone = done;
-            _progressTotal = total;
-          });
-        },
+        platform,
+        force: force,
       );
       if (!mounted || token != _generation) return;
       setState(() {
         _channels = channels;
         _lastGood = channels;
-        _lastGoodPlatform = _allId;
+        _lastGoodPlatform = platform.id;
         _loading = false;
+        _failed = channels.isEmpty;
       });
+      final at = _platforms.indexWhere((item) => item.id == platform.id);
+      if (mounted && at >= 0 && _pager.hasClients) {
+        _pager.jumpToPage(at + 1);
+      }
     } catch (error) {
       if (!mounted || token != _generation) return;
       setState(() {
         _loading = false;
-        _channels = _lastGoodPlatform == _allId ? _lastGood : const [];
+        _channels = _lastGoodPlatform == platform.id ? _lastGood : const [];
         _failed = _channels.isEmpty;
         _error = '$error';
       });
     }
+  }
+
+  Future<void> _refreshCurrent() async {
+    final current = _platforms
+        .where((platform) => platform.id == _platform)
+        .firstOrNull;
+    if (current != null) return _loadPlatform(current, force: true);
+    return _loadPlatforms(force: true);
   }
 
   void _selectSource(LiveSource source) {
@@ -183,6 +191,7 @@ class _LivePageState extends State<LivePage> {
     setState(() {
       _source = source;
       _platform = '';
+      _platforms = const [];
       _channels = const [];
       _lastGood = const [];
       _lastGoodPlatform = '';
@@ -192,14 +201,14 @@ class _LivePageState extends State<LivePage> {
 
   void _selectPlatform(String id, {bool fromSwipe = false}) {
     if (id == _platform) return;
-    if (!fromSwipe && _pager.hasClients) {
-      _pager.animateToPage(
-        id == _favouritesId ? 0 : 1,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    }
     if (id == _favouritesId) {
+      if (!fromSwipe && _pager.hasClients) {
+        _pager.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
       ++_generation;
       setState(() {
         _platform = _favouritesId;
@@ -210,19 +219,17 @@ class _LivePageState extends State<LivePage> {
       });
       return;
     }
-    if (id != _allId) return;
-    if (_lastGoodPlatform == _allId && _lastGood.isNotEmpty) {
-      ++_generation;
-      setState(() {
-        _platform = _allId;
-        _channels = _lastGood;
-        _loading = false;
-        _failed = false;
-        _error = null;
-      });
-      return;
+    final at = _platforms.indexWhere((platform) => platform.id == id);
+    if (at < 0) return;
+    if (!fromSwipe && _pager.hasClients) {
+      _pager.animateToPage(
+        at + 1,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
     }
-    unawaited(_loadAll());
+    setState(() => _platform = id);
+    unawaited(_loadPlatform(_platforms[at]));
   }
 
   @override
@@ -253,36 +260,48 @@ class _LivePageState extends State<LivePage> {
     body: SafeArea(top: true, bottom: false, child: _body(context)),
   );
 
-  /// 顶栏只放标题与刷新。分类从标题行里挪出来单独占一行——上一版把
-  /// 「收藏 / 全部频道 / 源名」全塞进顶栏，小屏上会横向滚动，太挤。
+  /// 分类条：收藏 + 源里每个分类各一枚，横向滚动；不再把所有分类
+  /// 合并成一个「全部频道」。
   Widget _platformBar() {
     final favourites = widget.store.favourites.length;
-    final merging = _progressTotal > 0 && _loading && _platform == _allId;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+    return SizedBox(
+      height: 62,
       child: Row(
         children: [
-          GlassChip(
-            label: merging
-                ? '全部频道 $_progressDone/$_progressTotal'
-                : '全部频道',
-            selected: _platform == _allId,
-            onTap: () => _selectPlatform(_allId),
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+              itemCount: _platforms.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return GlassChip(
+                    label: favourites == 0 ? '收藏' : '收藏 $favourites',
+                    selected: _platform == _favouritesId,
+                    height: 42,
+                    onTap: () => _selectPlatform(_favouritesId),
+                  );
+                }
+                final platform = _platforms[index - 1];
+                return GlassChip(
+                  label: platform.name,
+                  selected: _platform == platform.id,
+                  height: 42,
+                  onTap: () => _selectPlatform(platform.id),
+                );
+              },
+            ),
           ),
-          const Spacer(),
           if (_sources.length > 1) ...[
             GlassChip(
               label: _source?.name ?? '直播源',
               selected: false,
+              height: 42,
               onTap: () => unawaited(_pickSource(_sources)),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 16),
           ],
-          GlassChip(
-            label: favourites == 0 ? '收藏' : '收藏 $favourites',
-            selected: _platform == _favouritesId,
-            onTap: () => _selectPlatform(_favouritesId),
-          ),
         ],
       ),
     );
@@ -332,7 +351,7 @@ class _LivePageState extends State<LivePage> {
         message: _error,
         icon: Icons.cloud_off_rounded,
         action: '重试',
-        onAction: () => unawaited(_loadPlatforms(force: true)),
+        onAction: () => unawaited(_refreshCurrent()),
       );
     }
     return Column(
@@ -340,10 +359,7 @@ class _LivePageState extends State<LivePage> {
       children: [
         _platformBar(),
         if (_loading && _channels.isNotEmpty)
-          LinearProgressIndicator(
-            minHeight: 2,
-            value: _progressTotal > 0 ? _progressDone / _progressTotal : null,
-          ),
+          const LinearProgressIndicator(minHeight: 2),
         Expanded(child: _channelBody(context)),
       ],
     );
@@ -351,20 +367,23 @@ class _LivePageState extends State<LivePage> {
 
   Widget _channelBody(BuildContext context) {
     if (_loading && _channels.isEmpty) {
-      return StatusView.loading(
-        title: _progressTotal > 0
-            ? '正在合并频道 $_progressDone/$_progressTotal'
-            : '正在加载频道',
-      );
+      return const StatusView.loading(title: '正在加载分类');
     }
     if (_channels.isEmpty) {
       final favourite = _platform == _favouritesId;
+      final current = _platforms
+          .where((platform) => platform.id == _platform)
+          .firstOrNull;
       return StatusView(
-        title: favourite ? '还没有收藏频道' : '暂时没有可用的频道',
+        title: favourite ? '还没有收藏频道' : '这个分类暂时没有频道',
         message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '下拉刷新或点下面按钮重新抓取。',
         icon: favourite ? Icons.star_border_rounded : Icons.tv_off_rounded,
         action: favourite ? null : '刷新',
-        onAction: favourite ? null : () => _loadPlatforms(force: true),
+        onAction: favourite
+            ? null
+            : () => current != null
+            ? _loadPlatform(current, force: true)
+            : _loadPlatforms(force: true),
       );
     }
     // 电视与桌面窗口沿用纵向网格（遥控器 / 滚轮），手机与平板改成横向分页：
@@ -375,22 +394,20 @@ class _LivePageState extends State<LivePage> {
     };
     if (wide) {
       return RefreshIndicator(
-        onRefresh: () => _loadPlatforms(force: true),
+        onRefresh: _refreshCurrent,
         child: _grid(_channels, bottom: 24 + widget.bottomInset),
       );
     }
     return PageView.builder(
       controller: _pager,
-      itemCount: 2,
+      itemCount: _platforms.length + 1,
       onPageChanged: (page) {
         unawaited(HapticFeedback.selectionClick());
-        _selectPlatform(
-          page == 0 ? _favouritesId : _allId,
-          fromSwipe: true,
-        );
+        final id = page == 0 ? _favouritesId : _platforms[page - 1].id;
+        _selectPlatform(id, fromSwipe: true);
       },
       itemBuilder: (context, page) => RefreshIndicator(
-        onRefresh: () => _loadPlatforms(force: true),
+        onRefresh: _refreshCurrent,
         child: _grid(
           _channels,
           top: 12,
