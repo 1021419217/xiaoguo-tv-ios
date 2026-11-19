@@ -9,11 +9,24 @@ bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 String verifyBaseUrl(SourceSite? site, String error) {
   // 多镜像站（如 HSCK）baseUrl 可能不是这次真正失败的域名；优先用报错
   // 里的实际 host，验证页和随后请求才会落在同一个域名上。
+  final base = site?.baseUrl ?? '';
+  final expected = Uri.tryParse(base)?.host.toLowerCase() ?? '';
   final match = RegExp(
     r'([a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,})',
   ).firstMatch(error);
-  if (match != null) return 'https://${match.group(1)}';
-  return site?.baseUrl ?? '';
+  if (match == null) return base;
+  final host = match.group(1)!.toLowerCase();
+  // 只有当报错里的域名确实属于该站点时才用它。否则会拿 CDN 域名
+  // （比如 surrit.com / *.b-cdn.net）当站点去验证——那个页面一打开就是
+  // 「Sorry, you have been blocked」，验证永远过不了。
+  if (expected.isNotEmpty) {
+    final belongs =
+        host == expected ||
+        host.endsWith('.$expected') ||
+        expected.endsWith('.$host');
+    if (!belongs) return base;
+  }
+  return 'https://$host';
 }
 
 /// 不同模块/网关对「要人机验证」的文案不完全一致，统一判断一次。
