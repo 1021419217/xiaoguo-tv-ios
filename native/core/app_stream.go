@@ -496,22 +496,6 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 			}
 		}
 	}
-	// rou.video 之类把分片整体包进 PNG 的 roUd chunk（分片本身是 TS/MP4），
-	// 这里读完解包再转发；不是这种包装的原样放回，不影响普通图片。
-	if request.Method == http.MethodGet && len(head) == 0 &&
-		(strings.Contains(contentType, "image/png") || strings.HasSuffix(strings.ToLower(finalURL.Path), ".png")) {
-		if data, readErr := io.ReadAll(io.LimitReader(reader, 64<<20)); readErr == nil {
-			if payload, ok := unwrapPNGPayload(data); ok {
-				reader = bufio.NewReader(bytes.NewReader(payload))
-				response.Header.Set("Content-Type", "video/mp2t")
-				response.Header.Del("Content-Length")
-				response.Header.Del("Content-Range")
-				response.Header.Del("Accept-Ranges")
-			} else {
-				reader = bufio.NewReader(bytes.NewReader(data))
-			}
-		}
-	}
 	for _, name := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
 		if value := response.Header.Get(name); value != "" {
 			writer.Header().Set(name, value)
