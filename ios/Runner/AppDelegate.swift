@@ -415,8 +415,10 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       let waiting = title.isEmpty || title.contains("just a moment") || title.contains("请稍候")
         || title.contains("請稍候") || title.contains("attention required")
         || title.contains("checking") || title.contains("verifying")
-      if auto, waiting {
-        self.note("正在验证，请稍候…")
+      // 手动点「完成」也不能在挑战页还没过的时候收尾，否则会把无效
+      // cookie 存下来，表现就是验证完仍然一直 403、怎么点都没内容。
+      if waiting {
+        self.note("验证还没完成，请等页面跳转后再点「完成」")
         return
       }
       self.harvest(manual: !auto)
