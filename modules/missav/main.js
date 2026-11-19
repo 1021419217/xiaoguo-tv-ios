@@ -13,8 +13,6 @@ const videoUrlPattern = new RegExp(
   "(https?://[a-z0-9.-]+)/" + uuidText + "/(?:playlist\\.m3u8|\\d{3,4}p/)",
   "i",
 );
-const uuidPattern = new RegExp(uuidText, "i");
-const fallbackVideoHost = "https://surrit.mrstcdn.store";
 const packedPattern = /eval\(function\(p,a,c,k,e,d\)\{.*?\}\('((?:[^'\\]|\\.)*)',([0-9]+),([0-9]+),'((?:[^'\\]|\\.)*)'\.split\('\|'\)/gs;
 
 function truncate(text, limit) {
@@ -372,14 +370,10 @@ function unpack(match) {
 function mediaAddress(body) {
   const fromText = (text) => {
     const withUrl = text.match(videoUrlPattern);
-    if (withUrl) {
-      return withUrl[1] + "/" + withUrl[2].toLowerCase() + "/playlist.m3u8";
+    if (!withUrl) {
+      return "";
     }
-    const uuid = text.match(uuidPattern);
-    if (uuid) {
-      return fallbackVideoHost + "/" + uuid[1].toLowerCase() + "/playlist.m3u8";
-    }
-    return "";
+    return withUrl[1] + "/" + withUrl[2].toLowerCase() + "/playlist.m3u8";
   };
   for (const match of body.matchAll(packedPattern)) {
     const address = fromText(unpack(match));
