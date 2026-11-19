@@ -75,6 +75,8 @@ class _ModulesPageState extends State<ModulesPage>
   List<SourceModule>? _modules;
   List<String>? _moving;
   String? _error;
+  bool _testing = false;
+  Map<String, int?> _latency = const {};
   ModuleStore? _index;
   String? _indexError;
   bool _busy = false;
@@ -303,6 +305,8 @@ class _ModulesPageState extends State<ModulesPage>
     }
     Widget card(SourceModule module) => _InstalledCard(
       module: module,
+      latency: _latency[module.id],
+      tested: _latency.containsKey(module.id),
       update: _updateFor(module, latest[module.id]),
       enabled: _store.sourceEnabled(module.id),
       onToggle:
@@ -319,6 +323,28 @@ class _ModulesPageState extends State<ModulesPage>
     );
     final header = <Widget>[
       if (_error case final error?) _Note(error),
+      if (modules != null && modules.isNotEmpty)
+        SettingsCard(
+          children: [
+            SettingsTile(
+              icon: Icons.speed_rounded,
+              title: _testing ? '正在测源…' : '站源测速',
+              subtitle: _testing
+                  ? '正在逐个请求分类接口，最多 8 秒'
+                  : _latency.isEmpty
+                  ? '测一遍各站源的连接速度'
+                  : '已测 ${_latency.length} 个站源，点一下重测',
+              enabled: !_testing && !_store.locked,
+              trailing: _testing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+              onTap: _testing || _store.locked ? null : _runSpeedTest,
+            ),
+          ],
+        ),
       if (modules != null && modules.isNotEmpty && !_store.locked)
         SettingsCard(
           children: [
@@ -377,6 +403,39 @@ class _ModulesPageState extends State<ModulesPage>
         ),
       ],
     );
+  }
+
+  Future<void> _runSpeedTest() async {
+    if (_testing) return;
+    final repository = AppScope.of(context).repository;
+    final sites = _store.permittedSources;
+    setState(() {
+      _testing = true;
+      _latency = const {};
+    });
+    final results = <String, int?>{};
+    final queue = [...sites];
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        final site = queue.removeAt(0);
+        final watch = Stopwatch()..start();
+        try {
+          await repository
+              .categories(site.id, force: true)
+              .timeout(const Duration(seconds: 8));
+          results[site.id] = watch.elapsedMilliseconds;
+        } catch (_) {
+          results[site.id] = null;
+        }
+      }
+    }
+
+    await Future.wait([for (var i = 0; i < 4; i++) worker()]);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _latency = results;
+    });
   }
 
   Future<void> _reorder(int oldIndex, int newIndex) async {
@@ -733,9 +792,13 @@ class _InstalledCard extends StatelessWidget {
     required this.onUpdate,
     required this.onUninstall,
     required this.onExport,
+    this.latency,
+    this.tested = false,
   });
   final SourceModule module;
   final ModuleIndexEntry? update;
+  final int? latency;
+  final bool tested;
   final bool enabled;
   final ValueChanged<bool>? onToggle;
   final bool admin;
@@ -796,6 +859,29 @@ class _InstalledCard extends StatelessWidget {
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: colors.onSurface.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ),
+          if (tested)
+            Row(
+              spacing: 4,
+              children: [
+                Icon(
+                  Icons.speed_rounded,
+                  size: 13,
+                  color: latency == null
+                      ? colors.error
+                      : colors.onSurfaceVariant,
+                ),
+                Text(
+                  latency == null ? '连接失败' : '${latency}ms',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: latency == null
+                        ? colors.error
+                        : colors.onSurfaceVariant,
                   ),
                 ),
               ],
