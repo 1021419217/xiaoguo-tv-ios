@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -57,8 +55,7 @@ class _LivePageState extends State<LivePage> {
   bool _failed = false;
   String? _error;
   int _generation = 0;
-  final _pager = PageController();
-  int _page = 0;
+  final _pager = PageController(initialPage: 1);
 
   /// 「全部频道」合并进度：已拉完的分类数 / 总分类数。
   int _progressDone = 0;
@@ -119,6 +116,9 @@ class _LivePageState extends State<LivePage> {
         _platform = platforms.isEmpty ? '' : _allId;
         _progressTotal = platforms.length;
       });
+      if (platforms.isNotEmpty && _pager.hasClients) {
+        _pager.jumpToPage(1);
+      }
       if (platforms.isEmpty) {
         setState(() => _loading = false);
         return;
@@ -178,7 +178,7 @@ class _LivePageState extends State<LivePage> {
 
   void _selectSource(LiveSource source) {
     if (source.id == _source?.id) return;
-    _resetPages();
+    if (_pager.hasClients) _pager.jumpToPage(1);
     widget.repository.clear();
     setState(() {
       _source = source;
@@ -190,9 +190,15 @@ class _LivePageState extends State<LivePage> {
     unawaited(_loadPlatforms());
   }
 
-  void _selectPlatform(String id) {
+  void _selectPlatform(String id, {bool fromSwipe = false}) {
     if (id == _platform) return;
-    _resetPages();
+    if (!fromSwipe && _pager.hasClients) {
+      _pager.animateToPage(
+        id == _favouritesId ? 0 : 1,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
     if (id == _favouritesId) {
       ++_generation;
       setState(() {
@@ -217,12 +223,6 @@ class _LivePageState extends State<LivePage> {
       return;
     }
     unawaited(_loadAll());
-  }
-
-  /// 换分类或换源后回到第一页：否则停在第 7 页会看到空白。
-  void _resetPages() {
-    _page = 0;
-    if (_pager.hasClients) _pager.jumpToPage(0);
   }
 
   @override
@@ -372,61 +372,21 @@ class _LivePageState extends State<LivePage> {
       _ => false,
     };
     if (wide) return _grid(_channels, bottom: 24 + widget.bottomInset);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const inset = 16.0, gap = 10.0, cell = 220.0, tile = 64.0;
-        final columns = math.max(
-          1,
-          ((constraints.maxWidth - inset * 2) / (cell + gap)).ceil(),
-        );
-        // 翻页角标放在顶部：放右下会被底栏导航和最后一行频道卡片压住。
-        int rowsFor(double top) => math.max(
-          1,
-          ((constraints.maxHeight - top - 12 - widget.bottomInset + gap) /
-                  (tile + gap))
-              .floor(),
-        );
-        final plainPages = math.max(
-          1,
-          (_channels.length / (columns * rowsFor(12))).ceil(),
-        );
-        final badge = plainPages > 1;
-        final top = badge ? 42.0 : 12.0;
-        final rows = rowsFor(top);
-        final perPage = columns * rows;
-        final pages = math.max(1, (_channels.length / perPage).ceil());
-        return Stack(
-          children: [
-            PageView.builder(
-              controller: _pager,
-              itemCount: pages,
-              onPageChanged: (page) {
-                if (page == _page) return;
-                unawaited(HapticFeedback.selectionClick());
-                setState(() => _page = page);
-              },
-              itemBuilder: (context, page) {
-                final from = page * perPage;
-                final to = math.min(from + perPage, _channels.length);
-                return _grid(
-                  _channels.sublist(from, to),
-                  top: top,
-                  bottom: 12 + widget.bottomInset,
-                  scrollable: false,
-                );
-              },
-            ),
-            if (badge)
-              Positioned(
-                right: 16,
-                top: 8,
-                child: IgnorePointer(
-                  child: _PageBadge(page: _page, pages: pages),
-                ),
-              ),
-          ],
+    return PageView.builder(
+      controller: _pager,
+      itemCount: 2,
+      onPageChanged: (page) {
+        unawaited(HapticFeedback.selectionClick());
+        _selectPlatform(
+          page == 0 ? _favouritesId : _allId,
+          fromSwipe: true,
         );
       },
+      itemBuilder: (context, page) => _grid(
+        _channels,
+        top: 12,
+        bottom: 12 + widget.bottomInset,
+      ),
     );
   }
 
@@ -439,10 +399,10 @@ class _LivePageState extends State<LivePage> {
     padding: EdgeInsets.fromLTRB(16, top, 16, bottom),
     physics: scrollable ? null : const NeverScrollableScrollPhysics(),
     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: 220,
-      mainAxisExtent: 64,
+      maxCrossAxisExtent: 280,
+      mainAxisExtent: 172,
       crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
+      mainAxisSpacing: 12,
     ),
     itemCount: channels.length,
     itemBuilder: (context, index) {
@@ -474,33 +434,6 @@ class _LivePageState extends State<LivePage> {
   }
 }
 
-/// 右下角的翻页指示：`2 / 7`。频道上千时圆点会糊成一片，数字更清楚。
-class _PageBadge extends StatelessWidget {
-  const _PageBadge({required this.page, required this.pages});
-
-  final int page;
-  final int pages;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-    ),
-    child: Text(
-      '${page + 1} / $pages',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        fontFeatures: [FontFeature.tabularFigures()],
-      ),
-    ),
-  );
-}
-
 class _ChannelTile extends StatelessWidget {
   const _ChannelTile({required this.channel, required this.onTap});
   final LiveChannel channel;
@@ -510,50 +443,178 @@ class _ChannelTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return FocusRing(
-      radius: 16,
+      radius: 18,
       child: Material(
         color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        channel.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 104,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _cover(colors),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Color(0xB3000000)],
+                        ),
                       ),
-                      if (channel.number.isNotEmpty)
-                        Text(
+                    ),
+                    const Positioned(
+                      left: 8,
+                      top: 8,
+                      child: _LiveBadge(),
+                    ),
+                    if (channel.number.isNotEmpty)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Text(
                           channel.number,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(color: Colors.black54, blurRadius: 4),
+                            ],
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      left: 10,
+                      right: 10,
+                      bottom: 7,
+                      child: Text(
+                        channel.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                          shadows: [
+                            Shadow(color: Colors.black87, blurRadius: 5),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 8, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          channel.group.isNotEmpty
+                              ? channel.group
+                              : channel.source.isNotEmpty
+                              ? channel.source
+                              : '直播中',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             color: colors.onSurfaceVariant,
                           ),
                         ),
+                      ),
+                      Icon(
+                        Icons.play_circle_outline_rounded,
+                        size: 18,
+                        color: colors.onSurfaceVariant,
+                      ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.play_circle_outline_rounded,
-                  color: colors.onSurfaceVariant,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _cover(ColorScheme colors) {
+    final logo = channel.logo.trim();
+    final fallback = _fallback(colors);
+    if (logo.isEmpty) return fallback;
+    return Image.network(
+      logo,
+      fit: BoxFit.cover,
+      cacheWidth: 480,
+      errorBuilder: (_, _, _) => fallback,
+      loadingBuilder: (context, child, progress) =>
+          progress == null ? child : fallback,
+    );
+  }
+
+  Widget _fallback(ColorScheme colors) {
+    final initial = channel.name.isEmpty ? '直播' : channel.name.characters.first;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.primary.withValues(alpha: 0.42),
+            colors.surfaceContainerHighest,
+          ],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFF3B57),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.circle, size: 6, color: Colors.white),
+        SizedBox(width: 4),
+        Text(
+          'LIVE',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            height: 1,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 全局共享的直播仓库：复用同一个 HttpClient 与频道缓存，避免每次进入直播页

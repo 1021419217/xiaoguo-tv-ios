@@ -460,6 +460,13 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         }
         return
       }
+      // 自动轮询只提示、不替用户收尾：91 这类站会先出年龄确认页，
+      // 旧 cookie 已经存在时若自动 finish，页面 0.5 秒就消失，用户根本
+      // 来不及点「我已满 18 岁」。统一由用户点「完成」再收尾。
+      if !manual {
+        self.note("已检测到通行 cookie，请点右上角「完成」继续")
+        return
+      }
       let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
       web.evaluateJavaScript("navigator.userAgent") { agent, _ in
         self.finish(header, agent as? String)

@@ -1947,14 +1947,23 @@ class _DetailPageState extends State<DetailPage> {
     final needsVerify =
         verifyBaseUrl(SourceSite.byId(details.drama.source), error).isNotEmpty &&
         needsBrowserVerify(error);
+    final message = needsVerify
+        ? '$error\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+        : error.isEmpty
+        ? '可以更新剧集信息后重试。'
+        : error;
+    final theme = Theme.of(context);
     return StatusView(
       key: const ValueKey('error'),
       title: details.error != null ? '剧集信息暂时不可用' : '暂时没有可播放的集数',
-      message: needsVerify
-          ? '$error\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
-          : error.isEmpty
-          ? '可以更新剧集信息后重试。'
-          : error,
+      message: message,
+      messageChild: RetryCountdown(
+        text: message,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        onExpired: details.load,
+      ),
       icon: Icons.error_outline_rounded,
       action: needsVerify ? '去验证' : '重试',
       onAction: needsVerify

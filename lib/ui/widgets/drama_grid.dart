@@ -135,6 +135,9 @@ class PosterMasonry extends StatelessWidget {
       }
     }
     Widget column(List<int> indices) => SliverList.builder(
+      // 删除一条后列内索引会整体前移；给 sliver 换 key 强制重建，
+      // 避免旧的 itemCount / extent 残留出空洞。
+      key: ValueKey('${indices.length}:${indices.join(',')}'),
       itemCount: indices.length,
       itemBuilder: (context, position) {
         final index = indices[position];
