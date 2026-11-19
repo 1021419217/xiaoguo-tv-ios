@@ -164,11 +164,12 @@ class _RetryCountdownState extends State<RetryCountdown> {
   @override
   Widget build(BuildContext context) {
     final match = _seconds.firstMatch(widget.text);
-    final text = match == null
+    final number = match?.group(1);
+    final text = match == null || number == null
         ? widget.text
         : widget.text.replaceRange(
-            match.start(1),
-            match.end(1),
+            match.start,
+            match.start + number.length,
             '$_remaining',
           );
     return Text(text, textAlign: TextAlign.center, style: widget.style);

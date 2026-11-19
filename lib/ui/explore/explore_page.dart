@@ -383,6 +383,11 @@ class ExplorePageState extends State<ExplorePage> {
     }
     // 先取出待抓队列：saveChallenge 会清空页缓存和这个队列，必须提前拿。
     final pending = await repository.pendingWebPages();
+    final blocked = await repository.blockedUrl(host);
+    final urls = [
+      ...pending,
+      if (blocked.isNotEmpty && !pending.contains(blocked)) blocked,
+    ];
     final saved = await repository.saveChallenge(
       host,
       solved.cookie,
@@ -395,7 +400,7 @@ class ExplorePageState extends State<ExplorePage> {
     // 把刚才被挑战的页面 URL 交给那台验证过的 WKWebView，用同一指纹抓回 HTML，
     // 注入 Go 页缓存——模块下次取页命中缓存，就绕开了 TLS 指纹这一关。
     var primed = 0;
-    for (final url in pending) {
+    for (final url in urls) {
       final pageHost = Uri.tryParse(url)?.host ?? host;
       final html = await AppDevice.webFetch(url, pageHost);
       if (html == null || html.isEmpty) continue;

@@ -1207,6 +1207,11 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
       }
       // 先取待抓队列，saveChallenge 会把它一起清空。
       final pending = await repository.pendingWebPages();
+      final blocked = await repository.blockedUrl(host);
+      final urls = [
+        ...pending,
+        if (blocked.isNotEmpty && !pending.contains(blocked)) blocked,
+      ];
       await repository.saveChallenge(
         host,
         solved.cookie,
@@ -1214,7 +1219,7 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
       );
       if (!mounted) return;
       var primed = 0;
-      for (final url in pending) {
+      for (final url in urls) {
         final pageHost = Uri.tryParse(url)?.host ?? host;
         final html = await AppDevice.webFetch(url, pageHost);
         if (html == null || html.isEmpty) continue;

@@ -108,6 +108,8 @@ abstract class AppRepository {
   Future<bool> setWebPage(String url, String body) async => false;
   /// 取出被 Cloudflare 挑战、待 WebView 重抓的 URL。
   Future<List<String>> pendingWebPages() async => const [];
+  /// 该主机最近一次被 403/429 拦下的真实 URL，验证后补抓用。
+  Future<String> blockedUrl(String host) async => '';
   Future<void> cancelCatalog() async {}
   Future<void> cancelSuggestions() async {}
   Future<void> cancelRecommendations() async {}
@@ -878,6 +880,11 @@ class NativeRepository extends AppRepository {
       for (final item in result['urls'] as List? ?? const [])
         if (item is String) item,
     ];
+  }
+  @override
+  Future<String> blockedUrl(String host) async {
+    final result = await _call({'action': 'blockedUrl', 'host': host});
+    return result['url'] as String? ?? '';
   }
   @override
   Future<List<SourceModule>> modules() async {

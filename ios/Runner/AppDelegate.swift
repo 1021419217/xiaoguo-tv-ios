@@ -168,8 +168,16 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
   func webFetch(url: URL, host: String, completion: @escaping (String?) -> Void) {
     DispatchQueue.main.async {
       let key = Self.hostKey(host)
+      // 同 registrable domain 的验证 WebView 也复用：www 验证完去抓 m/www
+      // 子域时，cookie 虽然共享，但 TLS/JS 指纹只有原来那台 WebView 对得上。
+      let cachedKey = self.solved[key] != nil
+        ? key
+        : self.solved.keys.first { candidate in
+            key == candidate || key.hasSuffix("." + candidate)
+              || candidate.hasSuffix("." + key)
+          }
       let web: WKWebView
-      if let cached = self.solved[key] {
+      if let cachedKey, let cached = self.solved[cachedKey] {
         web = cached
       } else {
         let config = WKWebViewConfiguration()

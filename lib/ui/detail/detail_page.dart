@@ -1909,6 +1909,11 @@ class _DetailPageState extends State<DetailPage> {
       return;
     }
     final pending = await repository.pendingWebPages();
+    final blocked = await repository.blockedUrl(host);
+    final urls = [
+      ...pending,
+      if (blocked.isNotEmpty && !pending.contains(blocked)) blocked,
+    ];
     final saved = await repository.saveChallenge(
       host,
       solved.cookie,
@@ -1917,7 +1922,7 @@ class _DetailPageState extends State<DetailPage> {
     if (!mounted) return;
     if (!saved) _say('验证结果没能写入，请再试一次');
     var primed = 0;
-    for (final url in pending) {
+    for (final url in urls) {
       final pageHost = Uri.tryParse(url)?.host ?? host;
       final html = await AppDevice.webFetch(url, pageHost);
       if (html == null || html.isEmpty) continue;

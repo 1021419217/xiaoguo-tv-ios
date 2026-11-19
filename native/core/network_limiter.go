@@ -87,6 +87,7 @@ type requestLimiter struct {
 	backoffs           map[string]*RequestBackoff
 	backgroundBackoffs map[string]*RequestBackoff
 	forbiddenStreaks   map[string]int
+	blockedUrls        map[string]string
 	changed            chan struct{}
 }
 
@@ -100,7 +101,7 @@ func newRequestLimiter(concurrency int, interval time.Duration) *requestLimiter 
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	return &requestLimiter{concurrency: concurrency, interval: interval, gates: map[string]*requestGate{}, backoffs: map[string]*RequestBackoff{}, backgroundBackoffs: map[string]*RequestBackoff{}, forbiddenStreaks: map[string]int{}, changed: make(chan struct{})}
+	return &requestLimiter{concurrency: concurrency, interval: interval, gates: map[string]*requestGate{}, backoffs: map[string]*RequestBackoff{}, backgroundBackoffs: map[string]*RequestBackoff{}, forbiddenStreaks: map[string]int{}, blockedUrls: map[string]string{}, changed: make(chan struct{})}
 }
 
 func (limiter *requestLimiter) notifyLocked() {
@@ -118,6 +119,14 @@ func (limiter *requestLimiter) clearBackoffs() {
 	limiter.backgroundBackoffs = map[string]*RequestBackoff{}
 	limiter.forbiddenStreaks = map[string]int{}
 	limiter.notifyLocked()
+}
+
+// lastBlockedURL 返回该主机最近一次被 403/429 拦下的真实 URL。
+// 验证完成后用它补抓当前页，避免待抓队列为空时验证完仍然没内容。
+func (limiter *requestLimiter) lastBlockedURL(host string) string {
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	return limiter.blockedUrls[strings.ToLower(strings.TrimSpace(host))]
 }
 
 func (limiter *requestLimiter) acquire(ctx context.Context, request *http.Request) (func(), error) {
@@ -251,6 +260,7 @@ func (limiter *requestLimiter) observeBlock(request *http.Request, response *htt
 		backoffs = limiter.backgroundBackoffs
 	}
 	backoffs[host] = &RequestBackoff{host: host, until: time.Now().Add(delay), status: response.StatusCode}
+	limiter.blockedUrls[host] = request.URL.String()
 	limiter.notifyLocked()
 	limiter.mu.Unlock()
 }
