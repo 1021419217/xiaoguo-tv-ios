@@ -467,6 +467,9 @@ func nativeDispatch(input nativeInput) (any, error) {
 	case "peekPendingWebPages":
 		// 只读查看待抓 URL，不清空：播放页自动重抓用，避免抢走人工验证的队列。
 		return map[string]any{"urls": PeekPendingWebPages()}, nil
+	case "challengeReady":
+		// 该主机是否已有通行 cookie：没有时不要自动重抓，否则抓到的是挑战页。
+		return map[string]any{"ready": ChallengeCookie(input.Host) != ""}, nil
 	case "blockedUrl":
 		url := ""
 		if limiter := engine.downloader.limiter; limiter != nil {

@@ -1201,6 +1201,14 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
     }
     _lastRepair = now;
     final repository = AppScope.of(context).repository;
+    final drama = widget.session.detail.drama;
+    final source = SourceSite.byId(
+      drama.source.isNotEmpty ? drama.source : drama.sourceId,
+    );
+    final host = Uri.tryParse(verifyBaseUrl(source, widget.error))?.host ?? '';
+    // 还没验证过就别抓：那时抓到的是 Cloudflare 挑战页，写进缓存反而让
+    // 后续解析一直读到坏页面。留给用户点「去验证」。
+    if (host.isEmpty || !await repository.challengeReady(host)) return;
     // 只读队列：不能把「去验证」要用的 URL 取走，否则人工验证后无页可抓。
     final pending = await repository.peekPendingWebPages();
     if (pending.isEmpty) return;
@@ -1215,6 +1223,7 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
           DiaryService.add('[Play] 重抓失败：$url');
           continue;
         }
+        DiaryService.add('[Play] 重抓 ${html.length} 字节：$url');
         if (await repository.setWebPage(url, html)) primed++;
       }
       DiaryService.add('[Play] 自动重抓完成 $primed/${pending.length}');

@@ -110,6 +110,8 @@ abstract class AppRepository {
   Future<List<String>> pendingWebPages() async => const [];
   /// 只读查看待抓 URL，不清空：播放页自动重抓用。
   Future<List<String>> peekPendingWebPages() async => const [];
+  /// 该主机是否已有通行 cookie。
+  Future<bool> challengeReady(String host) async => false;
   /// 该主机最近一次被 403/429 拦下的真实 URL，验证后补抓用。
   Future<String> blockedUrl(String host) async => '';
   Future<void> cancelCatalog() async {}
@@ -890,6 +892,11 @@ class NativeRepository extends AppRepository {
       for (final item in result['urls'] as List? ?? const [])
         if (item is String) item,
     ];
+  }
+  @override
+  Future<bool> challengeReady(String host) async {
+    final result = await _call({'action': 'challengeReady', 'host': host});
+    return result['ready'] == true;
   }
   @override
   Future<String> blockedUrl(String host) async {
