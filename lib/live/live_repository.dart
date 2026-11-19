@@ -259,27 +259,51 @@ class LiveRepository {
         ? decoded['zhubo'] ?? decoded['list'] ?? decoded['data']
         : decoded;
     if (rows is! List) throw AppFailure('该分类暂时没有频道');
-    final reliable = <LiveChannel>[];
-    final fallback = <LiveChannel>[];
-    final seen = <String>{};
-    var number = 0;
+    // 面板里同一主播常重复出现在多行，名字只差空格/大小写；按归一化
+    // 名字合并成一张卡，并把所有线路并进去，播放时再按线路回退。
+    final merged = <String, LiveChannel>{};
     for (final row in rows.whereType<Map>()) {
       final name = '${row['title'] ?? ''}'.trim();
       final url = '${row['address'] ?? ''}'.trim();
-      if (name.isEmpty || !isPlayableLiveUrl(url) || !seen.add(name)) continue;
+      if (name.isEmpty || !isPlayableLiveUrl(url)) continue;
       if (_cctv.hasMatch(name)) continue;
-      number++;
-      final channel = LiveChannel(
+      final key = _mergeKey(name);
+      final existing = merged[key];
+      if (existing != null) {
+        final urls = [...existing.urls];
+        if (!urls.contains(url)) urls.add(url);
+        merged[key] = existing.withUrls(urls);
+        continue;
+      }
+      merged[key] = LiveChannel(
         key: LiveChannel.makeKey(source.id, platform.name, name),
         name: name,
         urls: [url],
-        number: number.toString().padLeft(3, '0'),
         headers: source.headers,
         logo: '${row['img'] ?? ''}'.trim(),
         group: platform.name,
         source: source.id,
       );
-      (url.startsWith('rtmp') ? fallback : reliable).add(channel);
+    }
+    final reliable = <LiveChannel>[];
+    final fallback = <LiveChannel>[];
+    var number = 0;
+    for (final channel in merged.values) {
+      number++;
+      final renumbered = LiveChannel(
+        key: channel.key,
+        name: channel.name,
+        urls: channel.urls,
+        number: number.toString().padLeft(3, '0'),
+        headers: channel.headers,
+        logo: channel.logo,
+        group: channel.group,
+        source: channel.source,
+        tvgId: channel.tvgId,
+        token: channel.token,
+        subtitle: channel.subtitle,
+      );
+      (channel.url.startsWith('rtmp') ? fallback : reliable).add(renumbered);
     }
     return [...reliable, ...fallback];
   }

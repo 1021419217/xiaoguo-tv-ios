@@ -57,6 +57,8 @@ class _LivePageState extends State<LivePage> {
   String? _error;
   int _generation = 0;
   final _pager = PageController(initialPage: 1);
+  final _categoryScroll = ScrollController();
+  final _categoryKeys = <String, GlobalKey>{};
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
 
@@ -83,6 +85,7 @@ class _LivePageState extends State<LivePage> {
   void dispose() {
     widget.store.removeListener(_storeChanged);
     _pager.dispose();
+    _categoryScroll.dispose();
     super.dispose();
   }
 
@@ -121,6 +124,7 @@ class _LivePageState extends State<LivePage> {
       }
       final first = platforms.first;
       setState(() => _platform = first.id);
+      _revealCategory(first.id);
       if (_pager.hasClients) _pager.jumpToPage(1);
       await _loadPlatform(first);
     } catch (error) {
@@ -218,6 +222,7 @@ class _LivePageState extends State<LivePage> {
         _failed = false;
         _error = null;
       });
+      _revealCategory(_favouritesId);
       return;
     }
     final at = _platforms.indexWhere((platform) => platform.id == id);
@@ -230,7 +235,21 @@ class _LivePageState extends State<LivePage> {
       );
     }
     setState(() => _platform = id);
+    _revealCategory(id);
     unawaited(_loadPlatform(_platforms[at]));
+  }
+
+  void _revealCategory(String id) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _categoryKeys[id]?.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   @override
@@ -270,28 +289,40 @@ class _LivePageState extends State<LivePage> {
       child: Row(
         children: [
           Expanded(
-            child: ListView.separated(
+            child: SingleChildScrollView(
+              controller: _categoryScroll,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-              itemCount: _platforms.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return GlassChip(
-                    label: favourites == 0 ? '收藏' : '收藏 $favourites',
-                    selected: _platform == _favouritesId,
-                    height: 42,
-                    onTap: () => _selectPlatform(_favouritesId),
-                  );
-                }
-                final platform = _platforms[index - 1];
-                return GlassChip(
-                  label: platform.name,
-                  selected: _platform == platform.id,
-                  height: 42,
-                  onTap: () => _selectPlatform(platform.id),
-                );
-              },
+              child: Row(
+                spacing: 8,
+                children: [
+                  KeyedSubtree(
+                    key: _categoryKeys.putIfAbsent(
+                      _favouritesId,
+                      GlobalKey.new,
+                    ),
+                    child: GlassChip(
+                      label: favourites == 0 ? '收藏' : '收藏 $favourites',
+                      selected: _platform == _favouritesId,
+                      height: 42,
+                      onTap: () => _selectPlatform(_favouritesId),
+                    ),
+                  ),
+                  for (final platform in _platforms)
+                    KeyedSubtree(
+                      key: _categoryKeys.putIfAbsent(
+                        platform.id,
+                        GlobalKey.new,
+                      ),
+                      child: GlassChip(
+                        label: platform.name,
+                        selected: _platform == platform.id,
+                        height: 42,
+                        onTap: () => _selectPlatform(platform.id),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           if (_sources.length > 1) ...[
