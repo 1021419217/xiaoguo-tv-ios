@@ -110,13 +110,18 @@ class SourceSite {
   }
 
   static void _arrange() {
-    int rank(SourceSite site) {
-      final index = _order.indexOf(site.id);
-      return index < 0 ? _order.length + _installed.indexOf(site) : index;
-    }
-
+    final fallback = <String, int>{
+      for (var index = 0; index < _installed.length; index++)
+        _installed[index].id: _order.length + index,
+    };
     _all = List.unmodifiable(
-      [..._installed]..sort((a, b) => rank(a).compareTo(rank(b))),
+      [..._installed]..sort((a, b) {
+        final left = _order.indexOf(a.id);
+        final right = _order.indexOf(b.id);
+        return (left < 0 ? fallback[a.id]! : left).compareTo(
+          right < 0 ? fallback[b.id]! : right,
+        );
+      }),
     );
     _available = List.unmodifiable(_all.where((site) => site.available));
   }

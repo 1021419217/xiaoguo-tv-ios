@@ -12,5 +12,6 @@
   ],
   "capabilities": ["search"],
   "allowEmptyCatalog": false,
-  "baseUrl": "https://www.eporner.com"
+  "baseUrl": "https://www.eporner.com",
+  "coverAspect": "portrait"
 }

@@ -40,11 +40,13 @@ ModuleIndexEntry? _updateFor(SourceModule module, ModuleIndexEntry? entry) =>
 
 List<SourceModule> _arranged(List<SourceModule> modules, List<String> order) {
   final byId = {for (final module in modules) module.id: module};
-  return [
-    for (final id in order)
-      if (byId.remove(id) case final module?) module,
-    ...byId.values,
-  ];
+  final result = <SourceModule>[];
+  for (final id in order) {
+    final module = byId.remove(id);
+    if (module != null) result.add(module);
+  }
+  result.addAll(byId.values);
+  return result;
 }
 
 Map<String, String> _missingSources(
