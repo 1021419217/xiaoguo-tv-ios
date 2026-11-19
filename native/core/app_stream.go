@@ -500,16 +500,16 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	// 这里读完解包再转发；不是这种包装的原样放回，不影响普通图片。
 	if request.Method == http.MethodGet && len(head) == 0 &&
 		(strings.Contains(contentType, "image/png") || strings.HasSuffix(strings.ToLower(finalURL.Path), ".png")) {
-		if data, readErr := io.ReadAll(io.LimitReader(reader, 64<<20)); readErr == nil {
-			if payload, ok := unwrapPNGPayload(data); ok {
-				reader = bufio.NewReader(bytes.NewReader(payload))
-				response.Header.Set("Content-Type", "video/mp2t")
-				response.Header.Del("Content-Length")
-				response.Header.Del("Content-Range")
-				response.Header.Del("Accept-Ranges")
-			} else {
-				reader = bufio.NewReader(bytes.NewReader(data))
-			}
+		data, readErr := io.ReadAll(io.LimitReader(reader, 64<<20))
+		if payload, ok := unwrapPNGPayload(data); ok && readErr == nil {
+			reader = bufio.NewReader(bytes.NewReader(payload))
+			response.Header.Set("Content-Type", "video/mp2t")
+			response.Header.Del("Content-Length")
+			response.Header.Del("Content-Range")
+			response.Header.Del("Accept-Ranges")
+		} else {
+			// 不是这种包装（或没读完）就原样转发，已读部分和剩余拼接，不丢字节。
+			reader = bufio.NewReader(io.MultiReader(bytes.NewReader(data), reader))
 		}
 	}
 	for _, name := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
