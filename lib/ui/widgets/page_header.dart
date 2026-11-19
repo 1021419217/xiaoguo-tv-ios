@@ -12,9 +12,11 @@ class PageHeader extends StatelessWidget {
     this.actions = const [],
     this.count,
     this.titleChild,
+    this.leading,
   });
   final String title;
   final List<Widget> actions;
+  final Widget? leading;
 
   /// 显示在标题右侧的灰色数量，例如 `62`。
   final String? count;
@@ -32,6 +34,10 @@ class PageHeader extends StatelessWidget {
         height: 62,
         child: Row(
           children: [
+            if (leading case final leading?) ...[
+              leading,
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: Semantics(
                 header: true,

@@ -14,7 +14,9 @@ import '../../models.dart';
 import '../app_scope.dart';
 import '../explore/explore_page.dart';
 import '../explore/source_actions.dart';
-import '../library/library_page.dart';
+import '../downloads/downloads_page.dart';
+import '../follow/follow_page.dart';
+import '../history/history_page.dart';
 import '../settings/settings_page.dart';
 import '../update_prompt.dart';
 import '../modules/module_install.dart';
@@ -26,7 +28,7 @@ import '../widgets/source_bar.dart';
 
 enum AppTab {
   explore('发现', Icons.explore_outlined, Icons.explore),
-  follow('追剧', Icons.bookmark_border_rounded, Icons.bookmark_rounded),
+  history('历史', Icons.history_rounded, Icons.history_rounded),
   live('直播', Icons.live_tv_outlined, Icons.live_tv_rounded),
   settings('设置', Icons.tune_rounded, Icons.tune_rounded);
 
@@ -92,7 +94,7 @@ class _AppShellState extends State<AppShell>
   ];
   final _tabFocus = [for (final _ in AppTab.values) FocusNode()];
   final _tabScrolls = [for (final _ in AppTab.values) ScrollController()];
-  final _followEntry = FocusNode();
+
   final _settingsEntry = FocusNode();
   final _header = FocusNode();
   final _televisionTabs = GlobalKey();
@@ -150,7 +152,7 @@ class _AppShellState extends State<AppShell>
     for (final hero in _heroes) {
       hero.dispose();
     }
-    _followEntry.dispose();
+
     _settingsEntry.dispose();
     _header.dispose();
     _exitWindow?.cancel();
@@ -268,20 +270,22 @@ class _AppShellState extends State<AppShell>
 
   Widget _root(AppTab tab) => switch (tab) {
     AppTab.explore => ExplorePage(key: _explore, store: widget.store),
-    AppTab.follow => LibraryPage(
-      store: widget.store,
-      downloads: _downloads!,
-      converter: _converter!,
-      merges: _merges!,
-      entryFocus: _followEntry,
-      onExitUp: _tabFocus[AppTab.follow.index].requestFocus,
-    ),
+    AppTab.history => HistoryPage(store: widget.store, root: true),
     AppTab.live => LivePage(
       repository: sharedLiveRepository(),
       store: liveStoreFor(widget.store),
       bottomInset: AppScope.formFactorOf(context) == FormFactor.phone ? 88 : 0,
     ),
-    AppTab.settings => SettingsPage(store: widget.store),
+    AppTab.settings => SettingsPage(
+      store: widget.store,
+      followPage: (_) => _FollowStandalone(store: widget.store),
+      downloadsPage: (_) => DownloadsPage(
+        store: widget.store,
+        downloads: _downloads!,
+        converter: _converter!,
+        merges: _merges!,
+      ),
+    ),
   };
 
   @override
@@ -387,9 +391,10 @@ class _AppShellState extends State<AppShell>
                           setState(() => _headerFocused = focused),
                       onKeyEvent: (_, event) {
                         final entry = switch (_tab) {
-                          AppTab.follow => _followEntry,
                           AppTab.settings => _settingsEntry,
-                          AppTab.explore || AppTab.live => null,
+                          AppTab.explore ||
+                          AppTab.history ||
+                          AppTab.live => null,
                         };
                         if (event is KeyUpEvent ||
                             event.logicalKey != LogicalKeyboardKey.arrowDown ||
@@ -411,7 +416,7 @@ class _AppShellState extends State<AppShell>
     );
   }
 
-  Widget _badged(AppTab tab, Widget icon) => tab == AppTab.follow
+  Widget _badged(AppTab tab, Widget icon) => tab == AppTab.settings
       ? _DownloadBadge(downloads: _downloads!, child: icon)
       : icon;
 
@@ -727,6 +732,32 @@ class _SideItem extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FollowStandalone extends StatefulWidget {
+  const _FollowStandalone({required this.store});
+  final LocalStore store;
+
+  @override
+  State<_FollowStandalone> createState() => _FollowStandaloneState();
+}
+
+class _FollowStandaloneState extends State<_FollowStandalone> {
+  final _focus = FocusNode();
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FollowPage(
+    store: widget.store,
+    entryFocus: _focus,
+    onExitUp: _focus.requestFocus,
+    standalone: true,
+  );
 }
 
 class _DownloadBadge extends StatelessWidget {

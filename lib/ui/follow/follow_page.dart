@@ -36,10 +36,12 @@ class FollowPage extends StatefulWidget {
     required this.entryFocus,
     required this.onExitUp,
     this.headerChild,
+    this.standalone = false,
   });
   final LocalStore store;
   final FocusNode entryFocus;
   final VoidCallback onExitUp;
+  final bool standalone;
 
   /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
   final Widget? headerChild;
@@ -315,6 +317,13 @@ class _FollowPageState extends State<FollowPage> {
                           key: const ValueKey(false),
                           title: '追剧',
                           titleChild: widget.headerChild,
+                          leading: widget.standalone
+                              ? IconButton(
+                                  tooltip: '返回',
+                                  onPressed: () => Navigator.maybePop(context),
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                )
+                              : null,
                           actions: [_editButtonFor(view)],
                         )
                       : PageHeader(

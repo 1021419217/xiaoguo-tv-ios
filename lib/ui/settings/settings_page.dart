@@ -132,9 +132,13 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.store,
     this.initialGroup = SettingsGroup.appearance,
+    this.followPage,
+    this.downloadsPage,
   });
   final LocalStore store;
   final SettingsGroup initialGroup;
+  final WidgetBuilder? followPage;
+  final WidgetBuilder? downloadsPage;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -352,6 +356,35 @@ class _SettingsPageState extends State<SettingsPage> {
             // 顶部不再额外加留白：SafeArea 已经把状态栏与磨砂顶栏让出来了。
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
             children: [
+              if (widget.followPage != null || widget.downloadsPage != null) ...[
+                const SectionHeader(
+                  title: '内容',
+                  padding: EdgeInsets.fromLTRB(4, 2, 8, 6),
+                ),
+                GroupCard(
+                  children: [
+                    if (widget.followPage != null)
+                      SettingsTile(
+                        icon: Icons.bookmark_border_rounded,
+                        iconColor: _tileColors[0],
+                        title: '追剧',
+                        subtitle: '收藏的剧集与更新提醒',
+                        onTap: () =>
+                            openPage<void>(context, widget.followPage!),
+                      ),
+                    if (widget.downloadsPage != null)
+                      SettingsTile(
+                        icon: Icons.download_rounded,
+                        iconColor: _tileColors[1],
+                        title: '下载管理',
+                        subtitle: '下载中、已下载与合并任务',
+                        onTap: () =>
+                            openPage<void>(context, widget.downloadsPage!),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
               const SectionHeader(
                 title: '常用',
                 padding: EdgeInsets.fromLTRB(4, 2, 8, 6),

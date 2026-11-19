@@ -418,7 +418,14 @@ class _DownloadsPageState extends State<DownloadsPage>
       appBar: selection == null
           ? glassAppBar(
               titleSpacing: 16,
-              title: widget.headerChild == null ? '下载' : null,
+              leading: widget.headerChild == null
+                  ? IconButton(
+                      tooltip: '返回',
+                      onPressed: () => Navigator.maybePop(context),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    )
+                  : null,
+              title: widget.headerChild == null ? '下载管理' : null,
               titleWidget: widget.headerChild,
               actions: [
                 // 只在真的有可暂停 / 可继续的任务时才出现对应圆钮，顶栏不会
