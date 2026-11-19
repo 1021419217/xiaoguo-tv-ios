@@ -1,0 +1,18 @@
+{
+  "id": "5lxtv",
+  "name": "5L",
+  "version": "1.0.0",
+  "description": "分类视频 · 搜索 · 女优二级页",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "5lxtv.com",
+    "*.5lxtv.com",
+    "*.avtube.xyz"
+  ],
+  "capabilities": ["search"],
+  "aliases": ["5lxtv.com", "www.5lxtv.com"],
+  "baseUrl": "https://5lxtv.com",
+  "allowEmptyCatalog": false
+}
