@@ -212,6 +212,7 @@ class _LivePageState extends State<LivePage> {
         _failed = _channels.isEmpty;
         _error = '$error';
       });
+      if (_channels.isEmpty) unawaited(_removeEmptyCategory(platform));
     }
   }
 
