@@ -49,6 +49,7 @@ class _LivePageState extends State<LivePage> {
   LiveSource? _source;
   String _platform = '';
   List<LivePlatform> _platforms = const [];
+  List<LivePlatform> _visiblePlatforms = const [];
   List<LiveChannel> _channels = const [];
   List<LiveChannel> _lastGood = const [];
   String _lastGoodPlatform = '';
@@ -117,8 +118,14 @@ class _LivePageState extends State<LivePage> {
     try {
       final platforms = await widget.repository.platforms(source, force: force);
       if (!mounted || token != _generation) return;
+      final visible = [
+        for (final platform in platforms)
+          if (platform.count >= 5) platform,
+      ].take(10).toList();
+      if (visible.isEmpty) visible.addAll(platforms.take(8));
       setState(() {
         _platforms = platforms;
+        _visiblePlatforms = visible;
         _platform = '';
         _channels = const [];
         _loading = platforms.isNotEmpty;
@@ -127,7 +134,7 @@ class _LivePageState extends State<LivePage> {
         setState(() => _loading = false);
         return;
       }
-      final first = platforms.first;
+      final first = visible.first;
       setState(() => _platform = first.id);
       _revealCategory(first.id);
       if (_pager.hasClients) _pager.jumpToPage(1);
@@ -182,7 +189,9 @@ class _LivePageState extends State<LivePage> {
         _loading = false;
         _failed = visible.isEmpty;
       });
-      final at = _platforms.indexWhere((item) => item.id == platform.id);
+      final at = _visiblePlatforms.indexWhere(
+        (item) => item.id == platform.id,
+      );
       if (mounted && at >= 0 && _pager.hasClients) {
         _pager.jumpToPage(at + 1);
       }
@@ -214,6 +223,7 @@ class _LivePageState extends State<LivePage> {
       _platform = '';
       _channelOwners.clear();
       _platforms = const [];
+      _visiblePlatforms = const [];
       _channels = const [];
       _lastGood = const [];
       _lastGoodPlatform = '';
@@ -242,31 +252,49 @@ class _LivePageState extends State<LivePage> {
       _revealCategory(_favouritesId);
       return;
     }
-    final at = _platforms.indexWhere((platform) => platform.id == id);
-    if (at < 0) return;
-    if (!fromSwipe && _pager.hasClients) {
-      _pager.animateToPage(
-        at + 1,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
+    final platform = _platforms
+        .where((platform) => platform.id == id)
+        .firstOrNull;
+    if (platform == null) return;
+    var at = _visiblePlatforms.indexWhere((item) => item.id == id);
+    if (at < 0) {
+      // 从「全部分类」里选的冷门分类临时放进顶栏，最多保留 11 个常用项。
+      final next = [..._visiblePlatforms];
+      if (next.length >= 11) next.removeLast();
+      next.add(platform);
+      at = next.length - 1;
+      setState(() {
+        _visiblePlatforms = next;
+        _platform = id;
+      });
+    } else {
+      setState(() => _platform = id);
     }
-    setState(() => _platform = id);
+    if (!fromSwipe && _pager.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pager.hasClients) return;
+        _pager.animateToPage(
+          at + 1,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
     _revealCategory(id);
-    unawaited(_loadPlatform(_platforms[at]));
+    unawaited(_loadPlatform(platform));
   }
 
   void _revealCategory(String id) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_categoryScroll.hasClients || _platforms.isEmpty) {
+      if (!mounted || !_categoryScroll.hasClients || _visiblePlatforms.isEmpty) {
         return;
       }
       final index = id == _favouritesId
           ? 0
-          : _platforms.indexWhere((platform) => platform.id == id) + 1;
+          : _visiblePlatforms.indexWhere((platform) => platform.id == id) + 1;
       if (index <= 0) return;
       final max = _categoryScroll.position.maxScrollExtent;
-      final target = (max * index / _platforms.length).clamp(0.0, max);
+      final target = (max * index / _visiblePlatforms.length).clamp(0.0, max);
       _categoryScroll.animateTo(
         target,
         duration: const Duration(milliseconds: 220),
@@ -316,7 +344,7 @@ class _LivePageState extends State<LivePage> {
               controller: _categoryScroll,
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-              itemCount: _platforms.length + 1,
+              itemCount: _visiblePlatforms.length + 1,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -327,7 +355,7 @@ class _LivePageState extends State<LivePage> {
                     onTap: () => _selectPlatform(_favouritesId),
                   );
                 }
-                final platform = _platforms[index - 1];
+                final platform = _visiblePlatforms[index - 1];
                 return GlassChip(
                   label: platform.name,
                   selected: _platform == platform.id,
@@ -337,6 +365,13 @@ class _LivePageState extends State<LivePage> {
               },
             ),
           ),
+          GlassChip(
+            label: '全部分类',
+            selected: false,
+            height: 42,
+            onTap: () => unawaited(_pickCategory()),
+          ),
+          const SizedBox(width: 8),
           if (_sources.length > 1) ...[
             GlassChip(
               label: _source?.name ?? '直播源',
@@ -349,6 +384,48 @@ class _LivePageState extends State<LivePage> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickCategory() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * 0.78,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text(
+                  '全部分类',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _platforms.length,
+                  itemBuilder: (context, index) {
+                    final platform = _platforms[index];
+                    return ListTile(
+                      title: Text(platform.name),
+                      subtitle: Text('${platform.count} 个频道'),
+                      trailing: platform.id == _platform
+                          ? const Icon(Icons.check_rounded)
+                          : null,
+                      onTap: () => Navigator.pop(sheetContext, platform.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null && mounted) _selectPlatform(picked);
   }
 
   Future<void> _pickSource(List<LiveSource> sources) async {
@@ -453,14 +530,18 @@ class _LivePageState extends State<LivePage> {
     }
     return PageView.builder(
       controller: _pager,
-      itemCount: _platforms.length + 1,
+      itemCount: _visiblePlatforms.length + 1,
       onPageChanged: (page) {
         unawaited(HapticFeedback.selectionClick());
-        final id = page == 0 ? _favouritesId : _platforms[page - 1].id;
+        final id = page == 0
+            ? _favouritesId
+            : _visiblePlatforms[page - 1].id;
         _selectPlatform(id, fromSwipe: true);
       },
       itemBuilder: (context, page) {
-        final id = page == 0 ? _favouritesId : _platforms[page - 1].id;
+        final id = page == 0
+            ? _favouritesId
+            : _visiblePlatforms[page - 1].id;
         if (id != _platform) {
           return const Center(child: CircularProgressIndicator());
         }
