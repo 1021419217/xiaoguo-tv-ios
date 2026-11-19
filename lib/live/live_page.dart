@@ -361,8 +361,10 @@ class _LivePageState extends State<LivePage> {
       final favourite = _platform == _favouritesId;
       return StatusView(
         title: favourite ? '还没有收藏频道' : '暂时没有可用的频道',
-        message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '下拉刷新或稍后重试。',
+        message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '下拉刷新或点下面按钮重新抓取。',
         icon: favourite ? Icons.star_border_rounded : Icons.tv_off_rounded,
+        action: favourite ? null : '刷新',
+        onAction: favourite ? null : () => _loadPlatforms(force: true),
       );
     }
     // 电视与桌面窗口沿用纵向网格（遥控器 / 滚轮），手机与平板改成横向分页：
@@ -371,7 +373,12 @@ class _LivePageState extends State<LivePage> {
       FormFactor.television || FormFactor.window => true,
       _ => false,
     };
-    if (wide) return _grid(_channels, bottom: 24 + widget.bottomInset);
+    if (wide) {
+      return RefreshIndicator(
+        onRefresh: () => _loadPlatforms(force: true),
+        child: _grid(_channels, bottom: 24 + widget.bottomInset),
+      );
+    }
     return PageView.builder(
       controller: _pager,
       itemCount: 2,
@@ -382,10 +389,13 @@ class _LivePageState extends State<LivePage> {
           fromSwipe: true,
         );
       },
-      itemBuilder: (context, page) => _grid(
-        _channels,
-        top: 12,
-        bottom: 12 + widget.bottomInset,
+      itemBuilder: (context, page) => RefreshIndicator(
+        onRefresh: () => _loadPlatforms(force: true),
+        child: _grid(
+          _channels,
+          top: 12,
+          bottom: 12 + widget.bottomInset,
+        ),
       ),
     );
   }
@@ -397,7 +407,9 @@ class _LivePageState extends State<LivePage> {
     bool scrollable = true,
   }) => GridView.builder(
     padding: EdgeInsets.fromLTRB(16, top, 16, bottom),
-    physics: scrollable ? null : const NeverScrollableScrollPhysics(),
+    physics: scrollable
+        ? const AlwaysScrollableScrollPhysics()
+        : const NeverScrollableScrollPhysics(),
     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
       maxCrossAxisExtent: 280,
       mainAxisExtent: 172,

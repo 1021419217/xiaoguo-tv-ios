@@ -44,7 +44,9 @@ class LiveRepository {
   ///    这样「这个地址播不出来」不会直接变成「这个主播没了」。
   ///
   /// 秀场面板有 130 个分类、每个分类几十个主播，全量串行拉要十几秒，
-  /// 因此这里 6 路并发，并把每批结果通过 [onProgress] 交给页面增量渲染。
+  /// 因此这里 3 路并发，并把每批结果通过 [onProgress] 交给页面增量渲染。
+  /// 6 路并发容易触发源站限流，失败分类会被静默丢掉，表现为频道数偏少
+  /// 且每次刷新人员都在变；失败分类会在首轮结束后顺序补拉一次。
   Future<List<LiveChannel>> allChannels(
     LiveSource source, {
     void Function(List<LiveChannel> merged, int done, int total)? onProgress,
@@ -55,6 +57,7 @@ class LiveRepository {
     final merged = <LiveChannel>[];
     var done = 0;
     final queue = [...list];
+    final failed = <LivePlatform>[];
 
     int absorb(LiveChannel channel) {
       final key = _mergeKey(channel.name);
@@ -82,22 +85,33 @@ class LiveRepository {
       );
     }
 
-    Future<void> worker() async {
-      while (queue.isNotEmpty) {
-        final platform = queue.removeAt(0);
-        try {
-          for (final channel in await channels(source, platform)) {
-            absorb(channel);
-          }
-        } catch (_) {
-          // 单个分类失败只影响它自己，不阻断整体合并。
+    Future<void> fetch(LivePlatform platform, {bool retry = false}) async {
+      try {
+        for (final channel in await channels(source, platform)) {
+          absorb(channel);
         }
+      } catch (_) {
+        // 单个分类失败只影响它自己，不阻断整体合并；首轮失败先记下，
+        // 全部跑完后顺序补拉一次，避免源站限流把一半频道吞掉。
+        if (!retry) failed.add(platform);
+      }
+      if (!retry) {
         done++;
         if (done % 4 == 0 || done == list.length) publish();
       }
     }
 
-    await Future.wait([for (var at = 0; at < 6; at++) worker()]);
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        await fetch(queue.removeAt(0));
+      }
+    }
+
+    await Future.wait([for (var at = 0; at < 3; at++) worker()]);
+    for (final platform in failed) {
+      await fetch(platform, retry: true);
+    }
+    publish();
     return [
       for (var at = 0; at < merged.length; at++) _renumber(merged[at], at),
     ];
