@@ -479,20 +479,25 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 	var head []byte
 	if request.Method == http.MethodGet {
 		rangeHeader := strings.TrimSpace(request.Header.Get("Range"))
-		// 只处理 TS 分片：MP4、播放列表、图片一律不进这段，避免任何误判
-		lowerType := strings.ToLower(response.Header.Get("Content-Type"))
-		looksTS := strings.Contains(lowerType, "mp2t") ||
-			strings.Contains(lowerType, "octet-stream") ||
-			strings.HasSuffix(strings.ToLower(finalURL.Path), ".ts")
-		if looksTS && (rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-")) {
+		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
 			head = make([]byte, 4096)
 			n, _ := io.ReadFull(reader, head)
 			head = head[:n]
-			if stripped := stripFakeTSHeader(head); len(stripped) < len(head) {
-				head = stripped
-				response.Header.Del("Content-Length")
-				response.Header.Del("Content-Range")
-				response.Header.Del("Accept-Ranges")
+			// 有的站把 TS 分片伪装成图片（.image 后缀 + PNG 头），只看 Content-Type
+			// 和后缀会漏判，这里把 PNG 魔数也当作 TS 候选，交给 stripFakeTSHeader 定夺。
+			lowerType := strings.ToLower(response.Header.Get("Content-Type"))
+			fakeImage := bytes.HasPrefix(head, []byte{0x89, 'P', 'N', 'G'})
+			looksTS := fakeImage ||
+				strings.Contains(lowerType, "mp2t") ||
+				strings.Contains(lowerType, "octet-stream") ||
+				strings.HasSuffix(strings.ToLower(finalURL.Path), ".ts")
+			if looksTS {
+				if stripped := stripFakeTSHeader(head); len(stripped) < len(head) {
+					head = stripped
+					response.Header.Del("Content-Length")
+					response.Header.Del("Content-Range")
+					response.Header.Del("Accept-Ranges")
+				}
 			}
 		}
 	}
