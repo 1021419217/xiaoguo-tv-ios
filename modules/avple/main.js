@@ -9,6 +9,7 @@ const HOST = 'avple.app';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const PAGE_LIMIT = 100;
 const MEDIA_PREFIX = '/file/avple-asserts/';
+const PLAY_TTL = 30 * 60 * 1000;
 
 const CDN_PREFIXES = [
   'd862cp', 'q2cyl7', 'u89ey', 'zo392', 'wo880', '6m7d', '8bb88', 'fa678',
@@ -224,6 +225,27 @@ function mediaUrl(play) {
   return 'https://' + CDN_PREFIXES[index] + '1.cdnedge.live' + MEDIA_PREFIX + value.replace(/^\/+/, '');
 }
 
+// play 是固定的 hls/{token}/playlist.m3u8，详情页解析一次就够，播放时不必再抓整页。
+function cachePlay(sourceId, play) {
+  const value = String(play || '').trim();
+  if (value === '') {
+    return;
+  }
+  try {
+    host.cacheSet('play:' + sourceId, value, PLAY_TTL);
+  } catch (error) {
+    /* 缓存不可用时忽略 */
+  }
+}
+
+function cachedPlay(sourceId) {
+  try {
+    return String(host.cacheGet('play:' + sourceId) || '').trim();
+  } catch (error) {
+    return '';
+  }
+}
+
 function sourceIdOf(task) {
   const prefix = host.source + ':';
   let value = String((task && task.dramaId) || '').trim();
@@ -296,6 +318,7 @@ module.exports = {
       throw new Error('AVPLE 详情页结构变化，没有找到视频数据');
     }
     const title = truncate(String(instance.title || '').trim() || id, 512);
+    cachePlay(id, instance.play);
     const tags = stringList(instance.tags);
     const actors = stringList(instance.acters);
     const duration = String(instance.timeLengh || '').trim();
@@ -355,9 +378,14 @@ module.exports = {
       throw new Error('AVPLE 播放分集无效，请刷新详情');
     }
     const pageUrl = SITE + '/video/' + sourceId;
-    const props = pageProps(fetchPage(pageUrl));
-    const instance = props && props.instance;
-    const url = mediaUrl(instance && instance.play);
+    let play = cachedPlay(sourceId);
+    if (play === '') {
+      const props = pageProps(fetchPage(pageUrl));
+      const instance = props && props.instance;
+      play = (instance && instance.play) || '';
+      cachePlay(sourceId, play);
+    }
+    const url = mediaUrl(play);
     if (url === '') {
       throw new Error('AVPLE 页面里没有解析到播放地址');
     }
