@@ -348,24 +348,30 @@ class _AppShellState extends State<AppShell>
           extendBody: true,
           bottomNavigationBar: covered
               ? null
-              : ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: NavigationBar(
-                      selectedIndex: tabs.indexOf(_tab),
-                      onDestinationSelected: (index) {
-                        unawaited(HapticFeedback.selectionClick());
-                        _tap(tabs[index]);
-                      },
-                      destinations: [
-                        for (final tab in tabs)
-                          NavigationDestination(
-                            key: ValueKey('nav-${tab.name}'),
-                            icon: _badged(tab, Icon(tab.icon)),
-                            selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                            label: tab.label,
+              : SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: Container(
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: const Color(0xB8312E36),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .12),
+                            ),
                           ),
-                      ],
+                          child: Row(
+                            children: [
+                              for (final tab in tabs)
+                                Expanded(child: _dockTab(tab)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -419,6 +425,61 @@ class _AppShellState extends State<AppShell>
   Widget _badged(AppTab tab, Widget icon) => tab == AppTab.settings
       ? _DownloadBadge(downloads: _downloads!, child: icon)
       : icon;
+
+  Widget _dockTab(AppTab tab) {
+    final selected = tab == _tab;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        unawaited(HapticFeedback.selectionClick());
+        _tap(tab);
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            width: selected ? 58 : 40,
+            height: selected ? 40 : 38,
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withValues(alpha: .92)
+                  : Colors.white.withValues(alpha: .07),
+              borderRadius: BorderRadius.circular(selected ? 20 : 19),
+              border: Border.all(
+                color: selected
+                    ? Colors.transparent
+                    : Colors.white.withValues(alpha: .10),
+              ),
+            ),
+            child: Center(
+              child: _badged(
+                tab,
+                Icon(
+                  selected ? tab.selectedIcon : tab.icon,
+                  size: selected ? 23 : 21,
+                  color: selected ? const Color(0xFF1B1B20) : Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            tab.label,
+            style: TextStyle(
+              fontSize: 9.5,
+              height: 1.1,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: .62),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _televisionHeader() {
     final tabs = Row(
