@@ -119,22 +119,20 @@ class _DiaryViewState extends State<DiaryView> {
                           : BorderSide.none,
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: SelectionArea(
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: entries.length,
-                        itemBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            entries[index],
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              color: _failure.hasMatch(entries[index])
-                                  ? colors.error
-                                  : colors.onSurfaceVariant,
-                            ),
+                    child: ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: entries.length,
+                      itemBuilder: (context, index) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: SelectableText(
+                          entries[index],
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            color: _failure.hasMatch(entries[index])
+                                ? colors.error
+                                : colors.onSurfaceVariant,
                           ),
                         ),
                       ),
