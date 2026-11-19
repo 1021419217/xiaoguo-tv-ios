@@ -1,15 +1,6 @@
 const siteBaseUrl = "https://missav.live";
 const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
 const channel = "MissAV";
-const HOST = "missav.live";
-
-function agent() {
-  return host.challengeUA(HOST) || userAgent;
-}
-
-function cookieHeader() {
-  return host.challengeCookie(HOST) || "";
-}
 
 const slugPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
@@ -382,14 +373,7 @@ function mediaAddress(body) {
 }
 
 function fetchDocument(address) {
-  return htmlTree(
-    host.fetchText({
-      url: address,
-      referer: siteBaseUrl + "/",
-      userAgent: agent(),
-      cookie: cookieHeader(),
-    }).body,
-  );
+  return htmlTree(host.fetchText({ url: address, referer: siteBaseUrl + "/", userAgent }).body);
 }
 
 function fetchCatalogPage(page, category, query) {
@@ -498,18 +482,10 @@ module.exports = {
       throw new Error("MissAV 播放分集信息无效，请刷新详情");
     }
     const pageUrl = siteBaseUrl + "/cn/" + sourceId;
-    const body = host.fetchText({
-      url: pageUrl,
-      referer: siteBaseUrl + "/",
-      userAgent: agent(),
-      cookie: cookieHeader(),
-    }).body;
+    const body = host.fetchText({ url: pageUrl, referer: siteBaseUrl + "/", userAgent }).body;
     const address = mediaAddress(body);
     if (address === "") {
-      // 上报这个 URL：App 会用验证过的 WebView 重抓它并写进页缓存，
-      // 下次解析就能命中缓存、绕开 TLS 指纹这一关。
-      host.noteChallenge(pageUrl);
-      throw new Error("MissAV 页面里未解析到播放地址，请点「去验证」后再重试");
+      throw new Error("MissAV 页面里未解析到播放地址");
     }
     return host.prepareWebMedia({ url: address, referer: pageUrl }, channel);
   },
