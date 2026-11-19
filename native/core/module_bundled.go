@@ -76,21 +76,21 @@ func (d *Downloader) installBundledModulesLocked() {
 		d.recordModuleFailure("", err)
 	}
 	removed := d.removedBundledModules()
-	pinned := d.pinnedModules()
 	for id, module := range modules {
-		if removed[id] {
+		installed, installErr := readModule(filepath.Join(d.moduleRoot(), id))
+		// 从未安装、且用户删过内置版：尊重删除意图。
+		if installErr != nil && removed[id] {
 			continue
 		}
-		// 用户手动装的版本已锁定：即使内置版本更高，也不回灌覆盖。
-		if pinned[id] {
-			continue
-		}
-		if installed, err := readModule(filepath.Join(d.moduleRoot(), id)); err == nil &&
+		// 已装版本不低于内置版本：保持原样（含用户手动装的更高版本）。
+		// 反之则覆盖，即使那是用户手动装的旧版——手动装的是「当时那一版」，
+		// 不是「拒绝更新」。
+		if installErr == nil &&
 			!newerModuleVersion(module.manifest.Version, installed.manifest.Version) {
 			continue
 		}
-		if err := d.writeModuleLocked(id, module.raw, module.code); err != nil {
-			d.recordModuleFailure(id, err)
+		if installErr := d.writeModuleLocked(id, module.raw, module.code); installErr != nil {
+			d.recordModuleFailure(id, installErr)
 		}
 	}
 }
