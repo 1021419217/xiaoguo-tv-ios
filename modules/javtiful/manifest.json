@@ -1,0 +1,28 @@
+{
+  "id": "javtiful",
+  "name": "Javtiful",
+  "version": "1.0.0",
+  "description": "Javtiful：最新、分类、频道、女优与搜索；详情页取 ticket，POST playback 返回 MP4/HLS 线路，播放走宿主媒体代理。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "javtiful.com",
+    "*.javtiful.com",
+    "*.jav.si",
+    "*.avtik.com",
+    "*.cloudflarestorage.com",
+    "*.r2.cloudflarestorage.com"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "baseUrl": "https://javtiful.com",
+  "aliases": [
+    "javtiful.com",
+    "www.javtiful.com"
+  ],
+  "allowEmptyCatalog": false,
+  "noHostRotation": true,
+  "browserFingerprint": true
+}
