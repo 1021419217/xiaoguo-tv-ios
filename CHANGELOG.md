@@ -9,6 +9,7 @@
 - 修复验证后的页面重抓总是失败：验证用的 WebView 改为屏幕外定位（原先几乎全透明，会被系统挂起 JS），新建的取页 WebView 也挂进窗口层级。
 - 修复取页脚本没有返回值的错误：callAsyncJavaScript 取的是函数体返回值，原写法永远得到 undefined。
 - 修复 MissAV 未解析到播放地址：播放地址改为「surrit.任意域 + UUID」匹配并拼 playlist.m3u8，原规则只认 surrit.com（该域名已被拦截）。
+- 修复 MissAV 部分片子仍解析不到地址：CDN 域名不止 surrit（还有 fourhoi 等且会更换），改为优先用页面里的根地址，否则只认 UUID 用已知 CDN 拼接。
 - 界面无改动。
 - 开发快照，待实机验证。
 

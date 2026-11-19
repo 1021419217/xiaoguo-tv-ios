@@ -6,9 +6,16 @@ const slugPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
 const genrePattern = /\/(?:dm[0-9]+\/)?cn\/genres\/([^/?#]+)\/?$/;
 const pagePattern = /[?&]page=([0-9]{1,7})/;
-// 播放地址挂在 surrit.<CDN 域>/<uuid>/ 下：CDN 域名会变（surrit.com 已被拦），
-// 只认其中一段会直接失效，所以按「surrit.任意域 + UUID」匹配，再拼 playlist.m3u8。
-const surritPattern = /https?:\/\/surrit\.[a-z0-9.]+\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?/i;
+// 播放地址的 CDN 域名不止一个（surrit.* / fourhoi.* 等，且会更换），
+// 只按域名匹配会让一部分片子解析不出地址。改为：优先用页面里的完整根地址，
+// 否则只认 UUID，用已知可达的 CDN 拼 playlist.m3u8。
+const uuidText = "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
+const surritHostPattern = new RegExp(
+  "https?://(?:surrit|fourhoi)\\.[a-z0-9.-]+/" + uuidText + "/?",
+  "i",
+);
+const uuidPattern = new RegExp(uuidText, "i");
+const fallbackVideoHost = "https://surrit.mrstcdn.store";
 const packedPattern = /eval\(function\(p,a,c,k,e,d\)\{.*?\}\('((?:[^'\\]|\\.)*)',([0-9]+),([0-9]+),'((?:[^'\\]|\\.)*)'\.split\('\|'\)/gs;
 
 function truncate(text, limit) {
@@ -365,11 +372,15 @@ function unpack(match) {
 
 function mediaAddress(body) {
   const fromText = (text) => {
-    const found = text.match(surritPattern);
-    if (!found) {
-      return "";
+    const host = text.match(surritHostPattern);
+    if (host) {
+      return host[0].replace(/\/?$/, "/") + "playlist.m3u8";
     }
-    return found[0].replace(/\/?$/, "/") + "playlist.m3u8";
+    const uuid = text.match(uuidPattern);
+    if (uuid) {
+      return fallbackVideoHost + "/" + uuid[1].toLowerCase() + "/playlist.m3u8";
+    }
+    return "";
   };
   for (const match of body.matchAll(packedPattern)) {
     const address = fromText(unpack(match));
