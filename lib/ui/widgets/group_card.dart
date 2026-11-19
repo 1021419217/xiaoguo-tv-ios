@@ -2,22 +2,30 @@ import 'package:flutter/material.dart';
 
 import 'focus_ring.dart';
 
-/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带半透明磨砂底色与细描边。
+/// 由单色生成「亮面 → 暗面」的两段渐变，用于彩色图标。
+List<Color> tintGradient(Color? base) {
+  final hsl = HSLColor.fromColor(base ?? const Color(0xFF5B8DEF));
+  Color at(double delta) => hsl
+      .withLightness((hsl.lightness + delta).clamp(0.0, 1.0))
+      .withSaturation((hsl.saturation * 1.06).clamp(0.0, 1.0))
+      .toColor();
+  return [at(.12), at(-.06)];
+}
+
+/// 半透明浅色分组卡：浮在氛围背景上，卡片后面能透出底色。
 class GroupCard extends StatelessWidget {
   const GroupCard({super.key, required this.children});
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
-    // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
-    // 设置页所有条目点下去都没有任何反馈，就是这个原因。
+    // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面。
     return Material(
-      color: colors.surfaceContainer.withValues(alpha: 0.72),
+      color: Colors.white.withValues(alpha: .078),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: Colors.white.withValues(alpha: .06)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -26,8 +34,12 @@ class GroupCard extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[
             if (i > 0)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Divider(height: 1, color: colors.outlineVariant),
+                padding: const EdgeInsets.only(left: 57),
+                child: Divider(
+                  height: .5,
+                  thickness: .5,
+                  color: Colors.white.withValues(alpha: .075),
+                ),
               ),
             children[i],
           ],
@@ -71,22 +83,26 @@ class SettingsTile extends StatelessWidget {
         horizontalTitleGap: 14,
         leading: icon == null
             ? null
-            : Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconColor ?? colors.primary.withValues(alpha: 0.85),
-                  shape: BoxShape.circle,
+            : SizedBox(
+                width: 24,
+                height: 24,
+                child: ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: tintGradient(iconColor),
+                  ).createShader(bounds),
+                  child: Icon(icon, size: 22, color: Colors.white),
                 ),
-                child: Icon(icon, size: 19, color: Colors.white),
               ),
         title: Text(
           title,
-          style: TextStyle(
-            fontSize: 15.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
-            color: colors.onSurface,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+            color: Colors.white,
           ),
         ),
         subtitle: subtitle == null
