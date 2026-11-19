@@ -606,10 +606,11 @@ func (p *jsProvider) fetchText(ctx context.Context, request jsTextRequest) (jsTe
 	// tls-client 的 Safari 指纹和真 WebKit 对不上，Cloudflare 会二次拦截，
 	// 缓存命中就等于复用了「过验证那次」的指纹会话。
 	if host := hostOfURL(request.URL); host != "" && ChallengeCookie(host) != "" {
-		if body, ok := WebPage(request.URL); ok {
+		// 缓存里若是挑战页，按未命中处理：否则每次都会读到坏内容且不再重抓。
+		if body, ok := WebPage(request.URL); ok && !looksLikeChallengeBody(body) {
 			return jsTextResponse{Body: body, URL: request.URL}, nil
 		}
-		// 已验证但这一页还没抓过：记下来交给 App 重抓，
+		// 还没抓过，或抓回来的是挑战页：交给 App 重抓，
 		// 不要用 Go 客户端硬闯 TLS 指纹这一关。
 		NoteChallenged(request.URL)
 	}
@@ -636,7 +637,7 @@ func (p *jsProvider) fetch(ctx context.Context, request jsFetchRequest) (jsFetch
 	applyChallengeFetch(&request)
 	// 同 fetchText：验证过的站点先查 WebView 抓回的页面缓存。
 	if host := hostOfURL(request.URL); host != "" && ChallengeCookie(host) != "" {
-		if body, ok := WebPage(request.URL); ok {
+		if body, ok := WebPage(request.URL); ok && !looksLikeChallengeBody(body) {
 			return jsFetchResponse{Status: 200, Body: body}, nil
 		}
 		NoteChallenged(request.URL)

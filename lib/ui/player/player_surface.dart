@@ -1227,10 +1227,18 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
         final challenge = lower.contains('just a moment') ||
             lower.contains('cf-chl') ||
             lower.contains('challenge-platform') ||
-            lower.contains('turnstile');
+            lower.contains('challenge-form') ||
+            lower.contains('challenge-running') ||
+            lower.contains('challenge-stage') ||
+            lower.contains('turnstile') ||
+            lower.contains('checking your browser') ||
+            lower.contains('verifying you are human') ||
+            lower.contains('请稍候');
         DiaryService.add(
           '[Play] 重抓 ${html.length} 字符${challenge ? "（疑似挑战页）" : ""}：$url',
         );
+        // 挑战页不写缓存：写进去会让后续解析一直读到坏内容，还触发无意义的重试。
+        if (challenge) continue;
         if (await repository.setWebPage(url, html)) primed++;
       }
       DiaryService.add('[Play] 自动重抓完成 $primed/${pending.length}');

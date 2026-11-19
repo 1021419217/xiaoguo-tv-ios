@@ -133,6 +133,11 @@ func looksLikeChallengeBody(body string) bool {
 		strings.Contains(lower, "cf_chl_opt") ||
 		strings.Contains(lower, "attention required") ||
 		strings.Contains(lower, "challenge-platform") ||
+		strings.Contains(lower, "challenge-form") ||
+		strings.Contains(lower, "challenge-running") ||
+		strings.Contains(lower, "challenge-stage") ||
+		strings.Contains(lower, "checking your browser") ||
+		strings.Contains(lower, "verifying you are human") ||
 		strings.Contains(lower, "请稍候") ||
 		strings.Contains(lower, "請稍候")
 }
