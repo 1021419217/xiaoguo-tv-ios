@@ -1223,7 +1223,14 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
           DiaryService.add('[Play] 重抓失败：$url');
           continue;
         }
-        DiaryService.add('[Play] 重抓 ${html.length} 字节：$url');
+        final lower = html.toLowerCase();
+        final challenge = lower.contains('just a moment') ||
+            lower.contains('cf-chl') ||
+            lower.contains('challenge-platform') ||
+            lower.contains('turnstile');
+        DiaryService.add(
+          '[Play] 重抓 ${html.length} 字符${challenge ? "（疑似挑战页）" : ""}：$url',
+        );
         if (await repository.setWebPage(url, html)) primed++;
       }
       DiaryService.add('[Play] 自动重抓完成 $primed/${pending.length}');
