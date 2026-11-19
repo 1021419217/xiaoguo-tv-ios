@@ -111,7 +111,10 @@ class _ModulesPageState extends State<ModulesPage>
       final modules = await _repository.modules();
       if (mounted) {
         setState(() {
-          _modules = modules;
+          _modules = [
+            for (final module in modules)
+              if (module.id != 'supjav') module,
+          ];
           _error = null;
         });
       }
@@ -127,7 +130,17 @@ class _ModulesPageState extends State<ModulesPage>
     });
     try {
       final index = await _repository.moduleIndex();
-      if (mounted) setState(() => _index = index);
+      if (mounted) {
+        setState(
+          () => _index = ModuleStore(
+            [
+              for (final entry in index.entries)
+                if (entry.id != 'supjav') entry,
+            ],
+            warning: index.warning,
+          ),
+        );
+      }
     } catch (failure) {
       if (mounted) setState(() => _indexError = '$failure');
     }

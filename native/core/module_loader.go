@@ -250,6 +250,9 @@ func (d *Downloader) loadModules() {
 		Unregister(id)
 	}
 	clear(loadedModules.ids)
+	// 旧版本内置过 supjav，升级后模块目录里的副本会残留并被当成已安装；
+	// 新包已不再提供该站源，启动时清掉。
+	_ = os.RemoveAll(filepath.Join(d.moduleRoot(), "supjav"))
 	d.installBundledModulesLocked()
 	entries, err := os.ReadDir(d.moduleRoot())
 	if err != nil {
