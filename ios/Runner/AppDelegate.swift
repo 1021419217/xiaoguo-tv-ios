@@ -230,13 +230,13 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
   private func fetchPage(_ web: WKWebView, url: URL, completion: @escaping (String?) -> Void) {
     // callAsyncJavaScript 在页面 world 执行 fetch，带上同源 cookie；返回的是原始文本，
     // 交给 Go 模块按服务端 HTML 解析（和验证前模块拿到的结构一致）。
+    // callAsyncJavaScript 把这段作为 async 函数体执行并取返回值，
+    // 所以必须用 return 返回文本；直接写 IIFE 不 return 会得到 undefined。
     let js = """
-    (async function() {
-      try {
-        const r = await fetch(u, {credentials: 'include', cache: 'no-store'});
-        return await r.text();
-      } catch (e) { return ''; }
-    })()
+    try {
+      const r = await fetch(u, {credentials: 'include', cache: 'no-store'});
+      return await r.text();
+    } catch (e) { return ''; }
     """
     func doFetch() {
       // 用 async/await 形式（该 SDK 下 callAsyncJavaScript 只有这个重载，
