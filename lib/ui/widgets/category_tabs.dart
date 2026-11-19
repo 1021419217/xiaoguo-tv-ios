@@ -33,8 +33,33 @@ class _CategoryTabsState<T> extends State<CategoryTabs<T>> {
   void didUpdateWidget(covariant CategoryTabs<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selected != widget.selected) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _followSelected());
     }
+  }
+
+  void _followSelected() {
+    if (!mounted || !_scroll.hasClients) return;
+    final index = widget.options.indexWhere(
+      (option) => option.value == widget.selected,
+    );
+    if (index < 0) return;
+    final max = _scroll.position.maxScrollExtent;
+    final count = widget.options.length;
+    final target = (max * index / (count > 1 ? count - 1 : 1)).clamp(
+      0.0,
+      max,
+    );
+    if ((_scroll.offset - target).abs() > 1) {
+      _scroll
+          .animateTo(
+            target,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(_reveal);
+      return;
+    }
+    _reveal();
   }
 
   @override
