@@ -1,0 +1,20 @@
+{
+  "id": "rouvideo",
+  "name": "肉視頻",
+  "version": "1.0.0",
+  "description": "分类视频 · 搜索 · 系列二级页",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "rou.video",
+    "*.rou.video",
+    "*.rn252.xyz",
+    "*.lefw24.xyz",
+    "*.cexd14.xyz"
+  ],
+  "capabilities": ["search"],
+  "aliases": ["rou.video", "www.rou.video"],
+  "baseUrl": "https://rou.video",
+  "allowEmptyCatalog": false
+}

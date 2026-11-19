@@ -86,6 +86,10 @@ func (d *Downloader) fetchMediaPlaylist(ctx context.Context, address, referer st
 	if err != nil || len(body) > 4<<20 {
 		return "", "", errors.New("播放列表过大或读取失败")
 	}
+	// 部分站把 m3u8 包在 PNG 的 roUd chunk 里（rou.video），先解出来再判断。
+	if unwrapped, ok := unwrapPNGPayload(body); ok {
+		body = unwrapped
+	}
 	if response.StatusCode != http.StatusOK || catalogResponseBlockReason(response, body) != "" {
 		return "", "", d.catalogResponseError(request, response, body)
 	}
