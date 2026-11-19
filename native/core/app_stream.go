@@ -143,7 +143,7 @@ func (stream *nativeStreamServer) lanPlaylist(request *http.Request, body string
 }
 
 func (stream *nativeStreamServer) nativeRequest(request *http.Request) (*http.Response, error) {
-	client := *stream.downloader.client
+	client := *stream.downloader.directClient()
 	client.Timeout = 0
 	info, _ := request.Context().Value(nativeStreamDiagnosticKey{}).(nativeStreamDiagnostic)
 	response, err := stream.downloader.doMediaRequestWithClient(request, &client)

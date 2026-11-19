@@ -25,7 +25,7 @@ func mediaRequestHeaders(request *http.Request, referer string) {
 }
 
 func (d *Downloader) doMediaRequest(request *http.Request) (*http.Response, error) {
-	return d.doMediaRequestWithClient(request, d.client)
+	return d.doMediaRequestWithClient(request, d.directClient())
 }
 
 func (d *Downloader) doMediaRequestWithClient(request *http.Request, client *http.Client) (*http.Response, error) {
