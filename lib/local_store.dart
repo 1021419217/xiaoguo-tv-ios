@@ -381,19 +381,6 @@ class LocalStore extends ChangeNotifier {
     for (final id in _list(_settings['sourceOrder'])) '$id',
   ];
 
-  List<SourceSite> get _orderedSites {
-    final order = sourceOrder;
-    if (order.isEmpty) return SourceSite.values;
-    final byId = {for (final site in SourceSite.values) site.id: site};
-    final result = <SourceSite>[];
-    for (final id in order) {
-      final site = byId.remove(id);
-      if (site != null) result.add(site);
-    }
-    result.addAll(byId.values);
-    return result;
-  }
-
   /// 被用户从站源管理里删掉的源：只是本机隐藏，不改变内置清单，
   /// 重新安装模块或清空偏好后仍可恢复。
   Set<String> get deletedSources => {
