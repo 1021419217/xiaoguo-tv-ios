@@ -351,7 +351,8 @@ class _LivePageState extends State<LivePage> {
         .findRenderObject();
     if (box is! RenderBox || viewport is! RenderBox) return false;
     final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
-    return left >= 0 && left + box.size.width <= viewport.size.width;
+    final width = _categoryScroll.position.viewportDimension;
+    return left >= -16 && left + box.size.width <= width + 16;
   }
 
   @override
@@ -386,49 +387,73 @@ class _LivePageState extends State<LivePage> {
   /// 合并成一个「全部频道」。
   Widget _platformBar() {
     final favourites = widget.store.favourites.length;
+    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 62,
       child: Row(
         children: [
           Expanded(
-            child: ListView.separated(
-              controller: _categoryScroll,
-              scrollDirection: Axis.horizontal,
-              cacheExtent: 12000,
-              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-              itemCount: _visiblePlatforms.length + 1,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return KeyedSubtree(
-                    key: _categoryKeys.putIfAbsent(
-                      _favouritesId,
-                      GlobalKey.new,
+            child: Stack(
+              children: [
+                ListView.separated(
+                  controller: _categoryScroll,
+                  scrollDirection: Axis.horizontal,
+                  cacheExtent: 12000,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                  itemCount: _visiblePlatforms.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return KeyedSubtree(
+                        key: _categoryKeys.putIfAbsent(
+                          _favouritesId,
+                          GlobalKey.new,
+                        ),
+                        child: GlassChip(
+                          label: favourites == 0 ? '收藏' : '收藏 $favourites',
+                          selected: _platform == _favouritesId,
+                          height: 42,
+                          onTap: () => _selectPlatform(_favouritesId),
+                        ),
+                      );
+                    }
+                    final platform = _visiblePlatforms[index - 1];
+                    return KeyedSubtree(
+                      key: _categoryKeys.putIfAbsent(
+                        platform.id,
+                        GlobalKey.new,
+                      ),
+                      child: GlassChip(
+                        label: platform.name,
+                        selected: _platform == platform.id,
+                        height: 42,
+                        onTap: () => _selectPlatform(platform.id),
+                      ),
+                    );
+                  },
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: 24,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            colors.surface.withValues(alpha: 0),
+                            colors.surface,
+                          ],
+                        ),
+                      ),
                     ),
-                    child: GlassChip(
-                      label: favourites == 0 ? '收藏' : '收藏 $favourites',
-                      selected: _platform == _favouritesId,
-                      height: 42,
-                      onTap: () => _selectPlatform(_favouritesId),
-                    ),
-                  );
-                }
-                final platform = _visiblePlatforms[index - 1];
-                return KeyedSubtree(
-                  key: _categoryKeys.putIfAbsent(
-                    platform.id,
-                    GlobalKey.new,
                   ),
-                  child: GlassChip(
-                    label: platform.name,
-                    selected: _platform == platform.id,
-                    height: 42,
-                    onTap: () => _selectPlatform(platform.id),
-                  ),
-                );
-              },
+                ),
+              ],
             ),
           ),
+          const SizedBox(width: 8),
           GlassChip(
             label: '全部分类',
             selected: false,

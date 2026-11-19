@@ -60,7 +60,8 @@ class _CategoryTabsState<T> extends State<CategoryTabs<T>> {
     final viewport = _scroll.position.context.storageContext.findRenderObject();
     if (box is! RenderBox || viewport is! RenderBox) return false;
     final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
-    return left >= 0 && left + box.size.width <= viewport.size.width;
+    final width = _scroll.position.viewportDimension;
+    return left >= -16 && left + box.size.width <= width + 16;
   }
 
   bool _metricsChanged(ScrollMetricsNotification notification) {
