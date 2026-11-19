@@ -6,7 +6,9 @@ const slugPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
 const genrePattern = /\/(?:dm[0-9]+\/)?cn\/genres\/([^/?#]+)\/?$/;
 const pagePattern = /[?&]page=([0-9]{1,7})/;
-const mediaPattern = /https?:\/\/surrit\.com\/[0-9a-f-]{36}\/playlist\.m3u8/;
+// 播放地址挂在 surrit.<CDN 域>/<uuid>/ 下：CDN 域名会变（surrit.com 已被拦），
+// 只认其中一段会直接失效，所以按「surrit.任意域 + UUID」匹配，再拼 playlist.m3u8。
+const surritPattern = /https?:\/\/surrit\.[a-z0-9.]+\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?/i;
 const packedPattern = /eval\(function\(p,a,c,k,e,d\)\{.*?\}\('((?:[^'\\]|\\.)*)',([0-9]+),([0-9]+),'((?:[^'\\]|\\.)*)'\.split\('\|'\)/gs;
 
 function truncate(text, limit) {
@@ -362,14 +364,20 @@ function unpack(match) {
 }
 
 function mediaAddress(body) {
+  const fromText = (text) => {
+    const found = text.match(surritPattern);
+    if (!found) {
+      return "";
+    }
+    return found[0].replace(/\/?$/, "/") + "playlist.m3u8";
+  };
   for (const match of body.matchAll(packedPattern)) {
-    const found = unpack(match).match(mediaPattern);
-    if (found) {
-      return found[0];
+    const address = fromText(unpack(match));
+    if (address !== "") {
+      return address;
     }
   }
-  const direct = body.match(mediaPattern);
-  return direct ? direct[0] : "";
+  return fromText(body);
 }
 
 function fetchDocument(address) {
