@@ -17,6 +17,7 @@ import 'shell/app_shell.dart';
 import 'terms_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/motion.dart';
+import 'theme/rex.dart';
 import 'theme/system_color.dart';
 import 'users/unlock_page.dart';
 import 'widgets/focus_ring.dart';
@@ -321,7 +322,9 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
                           policy: ReadingOrderTraversalPolicy(
                             requestFocusCallback: revealFocus,
                           ),
-                          child: child!,
+                          child: store?.pureBlack == true
+                              ? child!
+                              : RexBackdrop(child: child!),
                         ),
                       ),
                     );
