@@ -17,7 +17,6 @@ import '../widgets/group_card.dart';
 import 'appearance_settings.dart';
 import 'settings_rows.dart';
 import 'settings_sections.dart';
-import 'sources_view.dart';
 
 typedef _Subpage = ({String title, WidgetBuilder body});
 
@@ -402,14 +401,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   SettingsTile(
-                    icon: SettingsGroup.modules.icon,
-                    iconColor: _tileColors[1],
-                    title: SettingsGroup.modules.label,
-                    subtitle: _summary(SettingsGroup.modules),
-                    // 站源这一项直接进站源管理，不再先落一个只有一行入口的空页。
-                    onTap: _openSources,
-                  ),
-                  SettingsTile(
                     icon: SettingsGroup.diagnostics.icon,
                     iconColor: _tileColors[2],
                     title: SettingsGroup.diagnostics.label,
@@ -447,32 +438,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           );
         },
-      ),
-    ),
-  );
-
-  /// 站源入口：直接进站源管理。
-  void _openSources() => openPage<void>(
-    context,
-    (pageContext) => Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        surfaceTintColor: Colors.transparent,
-        flexibleSpace: const FrostedHeader(fill: true),
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 12),
-          child: BarButton(
-            icon: Icons.arrow_back_rounded,
-            tooltip: '返回',
-            onPressed: () => Navigator.pop(pageContext),
-          ),
-        ),
-        title: const GlassTitle(title: '站源管理'),
-      ),
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: SourcesView(store: widget.store),
       ),
     ),
   );

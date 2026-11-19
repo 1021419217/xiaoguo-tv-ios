@@ -25,7 +25,6 @@ import 'appearance_settings.dart';
 import 'backup_actions.dart';
 import 'diary_view.dart';
 import 'settings_rows.dart';
-import 'sources_view.dart';
 import 'storage_view.dart';
 
 enum SettingsGroup {
@@ -101,7 +100,6 @@ class SettingsSection extends StatelessWidget {
               SettingsGroup.proxy => _proxy(context),
               SettingsGroup.users => [UsersView(store: store, open: open)],
               SettingsGroup.about => _about(context),
-              SettingsGroup.modules => _sources(context),
               SettingsGroup.diagnostics => _diagnostics(),
               _ => const [],
             },
@@ -559,24 +557,6 @@ class SettingsSection extends StatelessWidget {
       );
     }
   }
-
-  List<Widget> _sources(BuildContext context) => [
-    SettingsCard(
-      children: [
-        SettingsTile(
-          title: '站源管理',
-          subtitle: '排序、测速、开关与恢复已删除的站源',
-          onTap: () => openPage<void>(
-            context,
-            (_) => Scaffold(
-              appBar: AppBar(title: const Text('站源管理')),
-              body: SourcesView(store: store),
-            ),
-          ),
-        ),
-      ],
-    ),
-  ];
 
   List<Widget> _diagnostics() => [
     SettingsCard(
