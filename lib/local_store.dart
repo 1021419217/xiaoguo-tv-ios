@@ -108,6 +108,7 @@ class LocalStore extends ChangeNotifier {
       return;
     }
     _settings = await _readMap(_settingsFile);
+    SourceSite.arrange(sourceOrder);
     try {
       final users = await files.read(_usersFile);
       if (users is! Map) throw const FormatException('用户配置无效');
@@ -648,6 +649,7 @@ class LocalStore extends ChangeNotifier {
   Future<void> _saveSettings(Map<String, Object?> settings) async {
     await _write(_settingsFile, settings);
     _settings = settings;
+    SourceSite.arrange(sourceOrder);
     _notify();
   }
 

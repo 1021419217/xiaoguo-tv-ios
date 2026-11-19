@@ -38,6 +38,15 @@ ModuleIndexEntry? _updateFor(SourceModule module, ModuleIndexEntry? entry) =>
     ? entry
     : null;
 
+List<SourceModule> _arranged(List<SourceModule> modules, List<String> order) {
+  final byId = {for (final module in modules) module.id: module};
+  return [
+    for (final id in order)
+      if (byId.remove(id) case final module?) module,
+    ...byId.values,
+  ];
+}
+
 Map<String, String> _missingSources(
   LocalStore store,
   AppRepository repository,
@@ -62,6 +71,7 @@ class _ModulesPageState extends State<ModulesPage>
   late final _tabs = TabController(length: 4, vsync: this)
     ..addListener(_tabChanged);
   List<SourceModule>? _modules;
+  List<String>? _moving;
   String? _error;
   ModuleStore? _index;
   String? _indexError;
@@ -276,7 +286,10 @@ class _ModulesPageState extends State<ModulesPage>
   );
 
   Widget _installedTab() {
-    final modules = _modules;
+    final loaded = _modules;
+    final modules = loaded == null
+        ? null
+        : _arranged(loaded, _moving ?? _store.sourceOrder);
     final enabled = _canInstall;
     final latest = <String, ModuleIndexEntry>{};
     for (final entry in _index?.entries ?? const <ModuleIndexEntry>[]) {
@@ -286,9 +299,25 @@ class _ModulesPageState extends State<ModulesPage>
         latest[entry.id] = entry;
       }
     }
-    return _list([
+    Widget card(SourceModule module) => _InstalledCard(
+      module: module,
+      update: _updateFor(module, latest[module.id]),
+      enabled: _store.sourceEnabled(module.id),
+      onToggle:
+          _store.profile.admin &&
+              module.error.isEmpty &&
+              SourceSite.isAvailable(module.id)
+          ? (value) => _toggle(module, value)
+          : null,
+      admin: _store.profile.admin,
+      onDetails: () => _details(module),
+      onUpdate: enabled ? () => _installIndexed(latest[module.id]!) : null,
+      onUninstall: enabled ? () => _uninstall(module) : null,
+      onExport: _busy ? null : () => _export([module]),
+    );
+    final header = <Widget>[
       if (_error case final error?) _Note(error),
-      if (modules != null && modules.isNotEmpty)
+      if (modules != null && modules.isNotEmpty && !_store.locked)
         SettingsCard(
           children: [
             SettingsTile(
@@ -300,31 +329,65 @@ class _ModulesPageState extends State<ModulesPage>
             ),
           ],
         ),
-      if (modules == null && _error == null)
-        const _Loading()
-      else if (modules != null && modules.isEmpty)
-        const _Note('还没有安装模块。站源以模块的形式提供，可以从在线仓库、内置或手动安装。')
-      else if (modules != null)
-        for (final module in modules)
-          _InstalledCard(
-            module: module,
-            update: _updateFor(module, latest[module.id]),
-            enabled: _store.sourceEnabled(module.id),
-            onToggle:
-                _store.profile.admin &&
-                    module.error.isEmpty &&
-                    SourceSite.isAvailable(module.id)
-                ? (value) => _toggle(module, value)
-                : null,
-            admin: _store.profile.admin,
-            onDetails: () => _details(module),
-            onUpdate: enabled
-                ? () => _installIndexed(latest[module.id]!)
-                : null,
-            onUninstall: enabled ? () => _uninstall(module) : null,
-            onExport: _busy ? null : () => _export([module]),
+    ];
+    if (modules == null || modules.isEmpty) {
+      return _list([
+        ...header,
+        if (modules == null && _error == null)
+          const _Loading()
+        else
+          const _Note('还没有安装模块。站源以模块的形式提供，可以从在线仓库、内置或手动安装。'),
+      ]);
+    }
+    if (!_store.profile.admin || _store.locked) {
+      return _list([...header, for (final module in modules) card(module)]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (header.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(spacing: 10, children: header),
           ),
-    ]);
+        Expanded(
+          child: ReorderableListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            buildDefaultDragHandles: false,
+            itemCount: modules.length,
+            onReorder: _reorder,
+            proxyDecorator: (child, _, animation) => ScaleTransition(
+              scale: Tween(begin: 1.0, end: 1.03).animate(animation),
+              child: Material(type: MaterialType.transparency, child: child),
+            ),
+            itemBuilder: (context, index) {
+              final module = modules[index];
+              return ReorderableDelayedDragStartListener(
+                key: ValueKey(module.id),
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: card(module),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _reorder(int oldIndex, int newIndex) async {
+    final loaded = _modules;
+    if (loaded == null) return;
+    final modules = _arranged(loaded, _moving ?? _store.sourceOrder);
+    if (oldIndex < 0 || oldIndex >= modules.length) return;
+    if (newIndex > oldIndex) newIndex--;
+    final ids = [for (final module in modules) module.id];
+    ids.insert(newIndex.clamp(0, ids.length), ids.removeAt(oldIndex));
+    setState(() => _moving = ids);
+    await saveSetting(context, () => _store.setSourceOrder(ids));
+    if (mounted) setState(() => _moving = null);
   }
 
   Widget _catalogTab({required bool bundled}) {
