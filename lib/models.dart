@@ -7,12 +7,13 @@ bool validSourceId(String id) => RegExp(r'^[a-z0-9_-]{1,64}$').hasMatch(id);
 /// 「去验证」的目标地址：优先站源主页；后装模块没配 BaseURL 时，从错误
 /// 文案里提取域名兜底，否则按钮会静默失效。
 String verifyBaseUrl(SourceSite? site, String error) {
-  final base = site?.baseUrl ?? '';
-  if (base.isNotEmpty) return base;
+  // 多镜像站（如 HSCK）baseUrl 可能不是这次真正失败的域名；优先用报错
+  // 里的实际 host，验证页和随后请求才会落在同一个域名上。
   final match = RegExp(
     r'([a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,})',
   ).firstMatch(error);
-  return match == null ? '' : 'https://${match.group(1)}';
+  if (match != null) return 'https://${match.group(1)}';
+  return site?.baseUrl ?? '';
 }
 
 /// 不同模块/网关对「要人机验证」的文案不完全一致，统一判断一次。

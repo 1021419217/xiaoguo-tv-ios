@@ -440,12 +440,21 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     let host = self.host
     WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
       guard let self else { return }
+      let hosts = Set(
+        [host, web.url?.host ?? ""]
+          .map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+          .filter { !$0.isEmpty }
+      )
       let mine = cookies.filter { cookie in
         let domain = cookie.domain.lowercased().trimmingCharacters(
           in: CharacterSet(charactersIn: ".")
         )
         guard !domain.isEmpty else { return false }
-        return host == domain || host.hasSuffix("." + domain) || domain.hasSuffix("." + host)
+        return hosts.contains { candidate in
+          candidate == domain
+            || candidate.hasSuffix("." + domain)
+            || domain.hasSuffix("." + candidate)
+        }
       }
       let hasClearance = mine.contains { $0.name == "cf_clearance" }
       // 自动收尾只认 Cloudflare 的通行 cookie；手动点「完成」时放宽，
