@@ -553,10 +553,48 @@ func (p *jsProvider) fetchPlaylist(ctx context.Context, request jsPlaylistReques
 	return jsPlaylist{Playlist: playlist, URL: address, DurationMS: M3u8Duration(playlist).Milliseconds()}, err
 }
 
+// applyChallengeText 把该主机验证过的通行 cookie / 真实 UA 自动补进文本请求。
+// 模块自己不必拼：任何站源在 App 里完成人机验证后，后续请求都会直接复用。
+func applyChallengeText(request *jsTextRequest) {
+	host := hostOfURL(request.URL)
+	if host == "" {
+		return
+	}
+	if request.Cookie == "" {
+		request.Cookie = ChallengeCookie(host)
+	}
+	if request.UserAgent == "" {
+		request.UserAgent = ChallengeUserAgent(host)
+	}
+}
+
+// applyChallengeFetch 对普通 fetch 补同样的 cookie / UA，模块显式设置的优先。
+func applyChallengeFetch(request *jsFetchRequest) {
+	host := hostOfURL(request.URL)
+	if host == "" {
+		return
+	}
+	cookie := ChallengeCookie(host)
+	agent := ChallengeUserAgent(host)
+	if cookie == "" && agent == "" {
+		return
+	}
+	if request.Headers == nil {
+		request.Headers = map[string]string{}
+	}
+	if cookie != "" && request.Headers["Cookie"] == "" && request.Headers["cookie"] == "" {
+		request.Headers["Cookie"] = cookie
+	}
+	if agent != "" && request.Headers["User-Agent"] == "" && request.Headers["user-agent"] == "" {
+		request.Headers["User-Agent"] = agent
+	}
+}
+
 func (p *jsProvider) fetchText(ctx context.Context, request jsTextRequest) (jsTextResponse, error) {
 	if err := p.allowedAddress(request.URL); err != nil {
 		return jsTextResponse{}, err
 	}
+	applyChallengeText(&request)
 	// 验证过的站点：优先用 App 那台真 WebView 抓回的页面。
 	// tls-client 的 Safari 指纹和真 WebKit 对不上，Cloudflare 会二次拦截，
 	// 缓存命中就等于复用了「过验证那次」的指纹会话。
@@ -585,6 +623,7 @@ func (p *jsProvider) fetch(ctx context.Context, request jsFetchRequest) (jsFetch
 	if err := p.allowedAddress(request.URL); err != nil {
 		return jsFetchResponse{}, err
 	}
+	applyChallengeFetch(&request)
 	// 同 fetchText：验证过的站点先查 WebView 抓回的页面缓存。
 	if hostOfURL(request.URL) != "" && ChallengeCookie(hostOfURL(request.URL)) != "" {
 		if body, ok := WebPage(request.URL); ok {
