@@ -59,6 +59,7 @@ class _LivePageState extends State<LivePage> {
   int _generation = 0;
   final _pager = PageController(initialPage: 1);
   final _categoryScroll = ScrollController();
+  final _categoryKeys = <String, GlobalKey>{};
   final _channelOwners = <String, String>{};
   final _emptyPlatforms = <String>{};
 
@@ -318,14 +319,25 @@ class _LivePageState extends State<LivePage> {
       if (!mounted || !_categoryScroll.hasClients || _visiblePlatforms.isEmpty) {
         return;
       }
+      final key = _categoryKeys[id];
+      final target = key?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+        return;
+      }
       final index = id == _favouritesId
           ? 0
           : _visiblePlatforms.indexWhere((platform) => platform.id == id) + 1;
       if (index <= 0) return;
       final max = _categoryScroll.position.maxScrollExtent;
-      final target = (max * index / _visiblePlatforms.length).clamp(0.0, max);
+      final fallback = (max * index / _visiblePlatforms.length).clamp(0.0, max);
       _categoryScroll.animateTo(
-        target,
+        fallback,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
@@ -372,24 +384,37 @@ class _LivePageState extends State<LivePage> {
             child: ListView.separated(
               controller: _categoryScroll,
               scrollDirection: Axis.horizontal,
+              cacheExtent: 12000,
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
               itemCount: _visiblePlatforms.length + 1,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return GlassChip(
-                    label: favourites == 0 ? '收藏' : '收藏 $favourites',
-                    selected: _platform == _favouritesId,
-                    height: 42,
-                    onTap: () => _selectPlatform(_favouritesId),
+                  return KeyedSubtree(
+                    key: _categoryKeys.putIfAbsent(
+                      _favouritesId,
+                      GlobalKey.new,
+                    ),
+                    child: GlassChip(
+                      label: favourites == 0 ? '收藏' : '收藏 $favourites',
+                      selected: _platform == _favouritesId,
+                      height: 42,
+                      onTap: () => _selectPlatform(_favouritesId),
+                    ),
                   );
                 }
                 final platform = _visiblePlatforms[index - 1];
-                return GlassChip(
-                  label: platform.name,
-                  selected: _platform == platform.id,
-                  height: 42,
-                  onTap: () => _selectPlatform(platform.id),
+                return KeyedSubtree(
+                  key: _categoryKeys.putIfAbsent(
+                    platform.id,
+                    GlobalKey.new,
+                  ),
+                  child: GlassChip(
+                    label: platform.name,
+                    selected: _platform == platform.id,
+                    height: 42,
+                    onTap: () => _selectPlatform(platform.id),
+                  ),
                 );
               },
             ),

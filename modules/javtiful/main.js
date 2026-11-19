@@ -117,6 +117,11 @@ function videoPage(sourceId) {
 }
 
 module.exports = {
+  validCategory(category) {
+    category = String(category || '').trim();
+    return category === '' || (!category.includes('/') && !category.includes('\\') && category.length <= 128);
+  },
+
   categories() {
     const html = fetchText(BASE + '/zh/categories');
     const result = [];
