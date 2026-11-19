@@ -60,12 +60,18 @@ class _LivePageState extends State<LivePage> {
   final _pager = PageController(initialPage: 1);
   final _categoryScroll = ScrollController();
   final _channelOwners = <String, String>{};
+  final _emptyPlatforms = <String>{};
 
   String _liveKey(String name) => name
       .replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '')
       .toLowerCase();
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
+
+  List<LivePlatform> get _availableCategories => [
+    for (final platform in _platforms)
+      if (!_emptyPlatforms.contains(platform.id)) platform,
+  ];
 
   @override
   void initState() {
@@ -108,6 +114,7 @@ class _LivePageState extends State<LivePage> {
     final source = _source;
     if (source == null) return;
     _channelOwners.clear();
+    _emptyPlatforms.clear();
     final token = ++_generation;
     setState(() {
       _loading = true;
@@ -182,6 +189,7 @@ class _LivePageState extends State<LivePage> {
           visible.add(channel);
         }
       }
+      _emptyPlatforms.remove(platform.id);
       setState(() {
         _channels = visible;
         _lastGood = visible;
@@ -189,6 +197,7 @@ class _LivePageState extends State<LivePage> {
         _loading = false;
         _failed = visible.isEmpty;
       });
+      if (visible.isEmpty) unawaited(_removeEmptyCategory(platform));
       final at = _visiblePlatforms.indexWhere(
         (item) => item.id == platform.id,
       );
@@ -203,6 +212,24 @@ class _LivePageState extends State<LivePage> {
         _failed = _channels.isEmpty;
         _error = '$error';
       });
+    }
+  }
+
+  Future<void> _removeEmptyCategory(LivePlatform platform) async {
+    _emptyPlatforms.add(platform.id);
+    final at = _visiblePlatforms.indexWhere((item) => item.id == platform.id);
+    if (at < 0 || _visiblePlatforms.length <= 1) return;
+    final next = [..._visiblePlatforms]..removeAt(at);
+    final current = _platform == platform.id;
+    if (!mounted) return;
+    setState(() => _visiblePlatforms = next);
+    if (current) {
+      final target = next[at < next.length ? at : next.length - 1];
+      _selectPlatform(target.id, fromSwipe: true);
+      return;
+    }
+    if (_pager.hasClients && (_pager.page ?? 1).round() > next.length) {
+      _pager.jumpToPage(next.length);
     }
   }
 
@@ -222,6 +249,7 @@ class _LivePageState extends State<LivePage> {
       _source = source;
       _platform = '';
       _channelOwners.clear();
+      _emptyPlatforms.clear();
       _platforms = const [];
       _visiblePlatforms = const [];
       _channels = const [];
@@ -406,9 +434,9 @@ class _LivePageState extends State<LivePage> {
               ),
               Expanded(
                 child: ListView.builder(
-                  itemCount: _platforms.length,
+                  itemCount: _availableCategories.length,
                   itemBuilder: (context, index) {
-                    final platform = _platforms[index];
+                    final platform = _availableCategories[index];
                     return ListTile(
                       title: Text(platform.name),
                       subtitle: Text('${platform.count} 个频道'),
