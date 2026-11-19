@@ -183,6 +183,17 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         web = WKWebView(frame: .zero, configuration: config)
+        // 新建的 WebView 也要进窗口层级（放在屏幕外）：不在窗口里的
+        // WKWebView 同样会被系统挂起 JS，fetch 永远拿不到结果。
+        if let window = Self.keyWindow() {
+          web.frame = CGRect(
+            x: -window.bounds.width - 40,
+            y: 0,
+            width: window.bounds.width,
+            height: window.bounds.height
+          )
+          window.insertSubview(web, at: 0)
+        }
         self.retain(web, for: key)
       }
       // 用页面上下文里的 fetch 取原始 HTML：和验证同 origin、同 cookie、同指纹。
@@ -500,8 +511,15 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       // 同一 host 若已有旧的常驻 WebView，先移除，避免叠加。
       solved[key]?.removeFromSuperview()
       if let window = Self.keyWindow() {
-        web.frame = window.bounds
-        web.alpha = 0.01
+        // 放到屏幕外而不是用 alpha 0.01：iOS 会对几乎透明的 WebView 暂停
+        // 或节流 JS，导致之后 callAsyncJavaScript 取不到任何内容。
+        web.frame = CGRect(
+          x: -window.bounds.width - 40,
+          y: 0,
+          width: window.bounds.width,
+          height: window.bounds.height
+        )
+        web.alpha = 1
         web.isUserInteractionEnabled = false
         window.insertSubview(web, at: 0)
       }
