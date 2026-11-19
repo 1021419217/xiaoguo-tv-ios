@@ -23,3 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 个人上传站：`author` / `authorId` / `authorUrl` 填上传者，保证作者页能列出他的全部作品。
   - AV 站：`author` / `authorId` / `authorUrl` 优先填上传者或片商/频道；`actors` 填女优数组；`maker` 填片商；系列、厂牌、频道等信息能取到就一并抓取，模型暂无独立 `series` 字段时并入 `tags`，不要丢。
   - 不能只抓标题和封面；详情页能取到的作者、女优、片商、系列/标签必须全部映射。
+- 新模块交付前逐项自查，缺一项都算没做完（这是长期要求，不再逐次请示）：
+  1. `detail()` 必须返回非空的 `author`、`authorId`、`authorUrl`；
+  2. AV 站同时返回 `actors`（女优数组）与 `maker`（片商），系列/厂牌/频道并入 `tags`；
+  3. 必须导出 `author(authorId, authorName, page)`，直接请求该站作者页并翻页，返回 `{ items, hasMore }`；
+  4. `author()` 返回的条目带 `author` / `authorId`，二级页里还能继续点进去；
+  5. `catalogPage()` / `search()` 的条目在列表页能取到作者时也一并带上，不要让用户必须先点进详情。
