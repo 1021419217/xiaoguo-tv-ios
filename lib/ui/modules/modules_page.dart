@@ -336,40 +336,6 @@ class _ModulesPageState extends State<ModulesPage>
     );
     final header = <Widget>[
       if (_error case final error?) _Note(error),
-      if (modules != null && modules.isNotEmpty)
-        SettingsCard(
-          children: [
-            SettingsTile(
-              icon: Icons.speed_rounded,
-              title: _testing ? '正在测源…' : '站源测速',
-              subtitle: _testing
-                  ? '正在逐个请求分类接口，最多 8 秒'
-                  : _latency.isEmpty
-                  ? '测一遍各站源的连接速度'
-                  : '已测 ${_latency.length} 个站源，点一下重测',
-              enabled: !_testing && !_store.locked,
-              trailing: _testing
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : null,
-              onTap: _testing || _store.locked ? null : _runSpeedTest,
-            ),
-          ],
-        ),
-      if (modules != null && modules.isNotEmpty && !_store.locked)
-        SettingsCard(
-          children: [
-            SettingsTile(
-              icon: Icons.save_alt_rounded,
-              title: '导出全部模块',
-              subtitle: '把已安装的 ${modules.length} 个模块打包成一个 zip',
-              enabled: !_busy,
-              onTap: _busy ? null : () => _export(modules),
-            ),
-          ],
-        ),
     ];
     if (modules == null || modules.isEmpty) {
       return _list([
@@ -489,7 +455,42 @@ class _ModulesPageState extends State<ModulesPage>
             missing.containsKey(b.id) ? 0 : 1,
           ),
         );
+    final modules = _modules;
     return _list([
+      if (!bundled && modules != null && modules.isNotEmpty)
+        SettingsCard(
+          children: [
+            SettingsTile(
+              icon: Icons.speed_rounded,
+              title: _testing ? '正在测源…' : '站源测速',
+              subtitle: _testing
+                  ? '正在逐个请求分类接口，最多 8 秒'
+                  : _latency.isEmpty
+                  ? '测一遍各站源的连接速度'
+                  : '已测 ${_latency.length} 个站源，点一下重测',
+              enabled: !_testing && !_store.locked,
+              trailing: _testing
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : null,
+              onTap: _testing || _store.locked ? null : _runSpeedTest,
+            ),
+          ],
+        ),
+      if (!bundled && modules != null && modules.isNotEmpty && !_store.locked)
+        SettingsCard(
+          children: [
+            SettingsTile(
+              icon: Icons.save_alt_rounded,
+              title: '导出全部模块',
+              subtitle: '把已安装的 ${modules.length} 个模块打包成一个 zip',
+              enabled: !_busy,
+              onTap: _busy ? null : () => _export(modules),
+            ),
+          ],
+        ),
       if (warning.isNotEmpty) _Note(warning),
       if (!bundled && entries.isNotEmpty)
         SettingsCard(
