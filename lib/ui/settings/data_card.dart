@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../cover_loader.dart';
 import '../../local_store.dart';
 import '../app_scope.dart';
 import '../users/password_dialog.dart';
@@ -44,6 +45,7 @@ class _DataCardState extends State<DataCard> {
     final messenger = ScaffoldMessenger.of(context);
     await saveSetting(context, () async {
       await AppScope.of(context).repository.clearCache();
+      CoverLoader.invalidate();
       messenger.showSnackBar(const SnackBar(content: Text('缓存已清理')));
     });
     if (!mounted) return;

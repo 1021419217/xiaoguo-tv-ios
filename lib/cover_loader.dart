@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
+
 import 'core_bridge.dart';
 import 'models.dart';
 
@@ -31,6 +33,11 @@ class CoverRequest {
 }
 
 abstract final class CoverLoader {
+  /// 清理缓存后递增，通知已挂载的封面重新查本地文件/重新下载。
+  static final revision = ValueNotifier<int>(0);
+
+  static void invalidate() => revision.value++;
+
   static const _limit = 6;
   static const _delay = Duration(milliseconds: 150);
   static final _waiting = <CoverRequest>[];

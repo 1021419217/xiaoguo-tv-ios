@@ -280,6 +280,7 @@ class _CoverImageState extends State<CoverImage> {
     super.initState();
     _revision = widget.repository.catalogUpdates.coverRevision(widget.drama.id);
     widget.repository.catalogUpdates.addListener(_metadataChanged);
+    CoverLoader.revision.addListener(_cacheInvalidated);
     _load();
   }
 
@@ -305,7 +306,14 @@ class _CoverImageState extends State<CoverImage> {
   void dispose() {
     _request?.cancel();
     widget.repository.catalogUpdates.removeListener(_metadataChanged);
+    CoverLoader.revision.removeListener(_cacheInvalidated);
     super.dispose();
+  }
+
+  void _cacheInvalidated() {
+    if (!mounted) return;
+    _load();
+    setState(() {});
   }
 
   void _load() {
