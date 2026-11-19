@@ -41,7 +41,7 @@ class ExplorePageState extends State<ExplorePage> {
   ExploreFeed? _explore;
   final _scroll = ScrollController();
   final _search = TextEditingController();
-  final _tabsKey = GlobalKey();
+  final _tabsKey = GlobalKey<CategoryTabsState<String>>();
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
@@ -127,6 +127,9 @@ class ExplorePageState extends State<ExplorePage> {
     if (value != null) {
       unawaited(HapticFeedback.selectionClick());
       explore.select(value);
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _tabsKey.currentState?.revealSelected(),
+      );
     }
   }
 
@@ -198,6 +201,7 @@ class ExplorePageState extends State<ExplorePage> {
             for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
           ],
           selected: explore.tab.id,
+          autoReveal: false,
           onSelected: _selectTab,
           onShowAll: _pickCategory,
         ),

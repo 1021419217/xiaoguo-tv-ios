@@ -279,7 +279,7 @@ class _LivePageState extends State<LivePage> {
         _failed = false;
         _error = null;
       });
-      _revealCategory(_favouritesId);
+      if (!fromSwipe) _revealCategory(_favouritesId);
       return;
     }
     final platform = _platforms
@@ -310,7 +310,7 @@ class _LivePageState extends State<LivePage> {
         );
       });
     }
-    _revealCategory(id);
+    if (!fromSwipe) _revealCategory(id);
     unawaited(_loadPlatform(platform));
   }
 

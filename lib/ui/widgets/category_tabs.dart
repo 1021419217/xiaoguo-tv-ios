@@ -14,17 +14,19 @@ class CategoryTabs<T> extends StatefulWidget {
     required this.selected,
     required this.onSelected,
     this.onShowAll,
+    this.autoReveal = true,
   });
   final List<ChoiceOption<T>> options;
   final T selected;
   final ValueChanged<T> onSelected;
   final void Function(BuildContext anchor)? onShowAll;
+  final bool autoReveal;
 
   @override
-  State<CategoryTabs<T>> createState() => _CategoryTabsState<T>();
+  State<CategoryTabs<T>> createState() => CategoryTabsState<T>();
 }
 
-class _CategoryTabsState<T> extends State<CategoryTabs<T>> {
+class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   final _scroll = ScrollController();
   final _keys = <T, GlobalKey>{};
   bool _overflows = false;
@@ -32,10 +34,12 @@ class _CategoryTabsState<T> extends State<CategoryTabs<T>> {
   @override
   void didUpdateWidget(covariant CategoryTabs<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selected != widget.selected) {
+    if (widget.autoReveal && oldWidget.selected != widget.selected) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
     }
   }
+
+  void revealSelected() => _reveal();
 
   @override
   void dispose() {
