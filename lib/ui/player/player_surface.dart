@@ -1316,9 +1316,28 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
     final source = SourceSite.byId(
       drama.source.isNotEmpty ? drama.source : drama.sourceId,
     );
-    // 在线站源且有主页可验证时，才给「去验证」入口；本地播放不显示。
+    // 只有真正的人机验证错误才给「去验证」入口：必须与详情页/发现页一致，
+    // 先用 needsBrowserVerify 判断文案。否则像「视频源失效 HTTP 403」这种
+    // 带 CDN 域名的失败也会被误判成要验证，把用户带进验证死循环。
+    // 本地播放、非验证类错误一律不显示。
     final canVerify =
-        !session.localFailure && verifyBaseUrl(source, widget.error).isNotEmpty;
+        !session.localFailure &&
+        verifyBaseUrl(source, widget.error).isNotEmpty &&
+        needsBrowserVerify(widget.error);
+    // CDN 视频源失效（如 BunnyCDN「Domain suspended」/HTTP 403）不是验证问题，
+    // 给一句能看懂的提示，别再让人去点没用的「去验证」。
+    final errorText = widget.error;
+    final sourceDead =
+        errorText.contains('播放列表失败') ||
+        errorText.contains('HTTP 403') ||
+        errorText.contains('HTTP 404') ||
+        errorText.toLowerCase().contains('domain suspended') ||
+        errorText.contains('视频源');
+    final message = canVerify
+        ? '$errorText\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+        : sourceDead
+        ? '$errorText\n这个视频源暂时不可用，换个片子或稍后再试。'
+        : errorText;
     return ColoredBox(
       color: Colors.black.withValues(alpha: .9),
       child: Center(
@@ -1345,9 +1364,7 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: Text(
-                  canVerify
-                      ? '${widget.error}\n若站点要求人机验证，点「去验证」后再重试。'
-                      : widget.error,
+                  message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .78),
