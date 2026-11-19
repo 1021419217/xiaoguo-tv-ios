@@ -108,6 +108,18 @@ func (limiter *requestLimiter) notifyLocked() {
 	limiter.changed = make(chan struct{})
 }
 
+// clearBackoffs 在站点验证成功后清掉 403/429 冷却。否则 WebView 已经拿到
+// 通行 cookie，Go 侧仍会按旧的 Retry-After 继续拒绝，表现就是「验证完还是
+// 52 秒后重试、怎么点都没内容」。
+func (limiter *requestLimiter) clearBackoffs() {
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	limiter.backoffs = map[string]*RequestBackoff{}
+	limiter.backgroundBackoffs = map[string]*RequestBackoff{}
+	limiter.forbiddenStreaks = map[string]int{}
+	limiter.notifyLocked()
+}
+
 func (limiter *requestLimiter) acquire(ctx context.Context, request *http.Request) (func(), error) {
 	background, _ := ctx.Value(BackgroundCatalogKey{}).(bool)
 	host := strings.ToLower(request.URL.Hostname())

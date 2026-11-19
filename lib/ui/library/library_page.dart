@@ -48,7 +48,7 @@ class _LibraryPageState extends State<LibraryPage> {
     labels: const ['追剧', '最近观看', '下载'],
     index: _index,
     fontSize: 14,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
+    padding: const EdgeInsets.symmetric(horizontal: 10),
     onChanged: (index) {
       if (index == _index) return;
       unawaited(HapticFeedback.selectionClick());

@@ -427,12 +427,21 @@ class ExplorePageState extends State<ExplorePage> {
       final needsVerify =
           verifyBaseUrl(site, feed.error).isNotEmpty &&
           needsBrowserVerify(feed.error);
+      final message = needsVerify
+          ? '${feed.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+          : feed.error;
+      final theme = Theme.of(context);
       return StatusView(
         key: const ValueKey('error'),
         title: '暂时无法加载',
-        message: needsVerify
-            ? '${feed.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
-            : feed.error,
+        message: message,
+        messageChild: RetryCountdown(
+          text: message,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          onExpired: () => feed.reload(force: true),
+        ),
         icon: Icons.cloud_off_rounded,
         action: needsVerify ? '去验证' : '重试',
         onAction: needsVerify

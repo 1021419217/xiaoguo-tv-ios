@@ -336,7 +336,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: glassAppBar(
-        titleSpacing: 4,
+        titleSpacing: 16,
         leading: !root
             ? null
             : selection == null

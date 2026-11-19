@@ -417,7 +417,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       extendBodyBehindAppBar: true,
       appBar: selection == null
           ? glassAppBar(
-              titleSpacing: 4,
+              titleSpacing: 16,
               title: widget.headerChild == null ? '下载' : null,
               titleWidget: widget.headerChild,
               actions: [
@@ -426,18 +426,18 @@ class _DownloadsPageState extends State<DownloadsPage>
                 if (_pendingTab && view.pending.isNotEmpty) ...[
                   if (view.pending.any((job) => job.active)) ...[
                     _pauseAll(view),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                   ],
                   if (view.pending.any((job) => job.resumable)) ...[
                     _resumeAll(view),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                   ],
                   _editButton(view),
                 ],
                 if (_downloadedTab && view.downloaded.isNotEmpty)
                   _editButton(view),
                 if (_mergeTab) _clearMerges(),
-                const SizedBox(width: 20),
+                const SizedBox(width: 16),
               ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(50),

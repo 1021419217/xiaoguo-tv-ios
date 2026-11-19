@@ -449,6 +449,9 @@ func nativeDispatch(input nativeInput) (any, error) {
 		}
 		// 验证凭据变了，旧的缓存页清掉，避免继续喂上一轮抓的旧 HTML。
 		ClearWebPages()
+		if limiter := engine.downloader.limiter; limiter != nil {
+			limiter.clearBackoffs()
+		}
 		_ = engine.downloader.SaveState(challengeCookieState, dumpChallengeCookies())
 		return map[string]any{"saved": true}, nil
 	case "challenge":
