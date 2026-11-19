@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../app_device.dart';
+import '../../diary_service.dart';
 import '../../models.dart';
 import '../../playback_preferences.dart';
 import '../../playback_session.dart';
@@ -1176,6 +1177,43 @@ class PlaybackFailure extends StatefulWidget {
 
 class _PlaybackFailureState extends State<PlaybackFailure> {
   bool _verifying = false;
+  bool _repairing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_autoRepair());
+    });
+  }
+
+  /// 已有通行 cookie 时，把登记过的失败页面用验证过的 WebView 重抓一次再重试。
+  /// 解决「验证后换了别的片/集，新 URL 没进过缓存」的情况：这类 URL 会被
+  /// host 层自动登记，这里负责消费掉，用户不必再点一次「去验证」。
+  Future<void> _autoRepair() async {
+    if (_repairing) return;
+    final repository = AppScope.of(context).repository;
+    final pending = await repository.pendingWebPages();
+    if (pending.isEmpty) return;
+    DiaryService.add('[Play] 自动重抓 ${pending.length} 个页面');
+    _repairing = true;
+    try {
+      var primed = 0;
+      for (final url in pending) {
+        final pageHost = Uri.tryParse(url)?.host ?? '';
+        final html = await AppDevice.webFetch(url, pageHost);
+        if (html == null || html.isEmpty) {
+          DiaryService.add('[Play] 重抓失败：$url');
+          continue;
+        }
+        if (await repository.setWebPage(url, html)) primed++;
+      }
+      DiaryService.add('[Play] 自动重抓完成 $primed/${pending.length}');
+      if (primed > 0 && mounted) await widget.session.retry();
+    } finally {
+      _repairing = false;
+    }
+  }
 
   /// 播放环节的站点验证入口，逻辑与「发现」页的验证同源。
   ///
