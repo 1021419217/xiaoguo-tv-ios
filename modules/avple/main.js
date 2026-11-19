@@ -3,8 +3,9 @@
 // 的「前缀 + 1」域名上（前端用 u.map(e => e.split(".")[0] + "1.cdnedge.live") 生成）。
 // 站点没有独立的模特/上传者页，片商和女优都用 /search?key= 或 /tags/{id}/ 当二级页。
 
-const SITE = 'https://avple.tv';
-const HOST = 'avple.tv';
+const SITE = 'https://avple.app';
+const MIRRORS = ['https://avple.tv'];
+const HOST = 'avple.app';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const PAGE_LIMIT = 100;
 const MEDIA_PREFIX = '/file/avple-asserts/';
@@ -63,38 +64,30 @@ function truncate(text, limit) {
 
 function fetchPage(path) {
   const url = path.indexOf('http') === 0 ? path : SITE + path;
-  const headers = {
-    'User-Agent': agent(),
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    'Referer': SITE + '/',
-    'Upgrade-Insecure-Requests': '1',
-  };
-  const cookie = cookieHeader();
-  if (cookie !== '') {
-    headers.Cookie = cookie;
+  const suffix = url.indexOf(SITE) === 0 ? url.slice(SITE.length) : '';
+  const mirrors = [];
+  if (suffix !== '') {
+    for (const base of MIRRORS) {
+      mirrors.push(base + suffix);
+    }
   }
   let response = null;
   try {
-    response = host.fetch({
+    response = host.fetchText({
       url,
-      headers,
-      anyStatus: true,
-      followRedirects: true,
-      timeoutMs: 25000,
+      referer: SITE + '/',
+      userAgent: agent(),
+      cookie: cookieHeader(),
+      mirrors,
     });
   } catch (error) {
-    throw new Error('AVPLE 连接失败：' + String((error && error.message) || error));
+    const message = String((error && error.message) || error);
+    if (/403|429|503|challenge|验证|限流/i.test(message)) {
+      throw new Error('AVPLE 被站点拦截（' + message + '），请稍后重试，或在站源页完成人机验证');
+    }
+    throw new Error('AVPLE 连接失败：' + message);
   }
-  const status = (response && response.status) || 0;
-  const body = (response && response.body) || '';
-  if (status === 403 || status === 429 || status === 503) {
-    throw new Error('AVPLE 需要人机验证，请在站源页完成验证后重试');
-  }
-  if (status < 200 || status >= 300) {
-    throw new Error('AVPLE 返回 HTTP ' + status);
-  }
-  return body;
+  return (response && response.body) || '';
 }
 
 function nextData(html) {
@@ -260,10 +253,7 @@ module.exports = {
 
   catalogPage(page, category) {
     const number = Math.max(1, Math.min(PAGE_LIMIT, Number(page) || 1));
-    const id = String(category || '').trim();
-    if (id === '') {
-      throw new Error('AVPLE 需要选择分类');
-    }
+    const id = String(category || '').trim() || '139';
     if (!CATEGORIES.some((entry) => entry.id === id)) {
       throw new Error('AVPLE 分类无效');
     }
