@@ -43,6 +43,7 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
     super.initState();
     _playback = LivePlaybackController(repository: widget.repository)
       ..addListener(_changed);
+    widget.store.addListener(_changed);
     unawaited(
       _playback.load(widget.source, widget.channels, index: widget.index),
     );
@@ -53,6 +54,7 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
   void dispose() {
     _hide?.cancel();
     _playback.removeListener(_changed);
+    widget.store.removeListener(_changed);
     _playback.dispose();
     super.dispose();
   }
@@ -172,6 +174,18 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
     );
   }
 
+  void _toggleFavourite(LiveChannel channel) {
+    final wasFavourite = widget.store.isFavourite(channel.key);
+    unawaited(widget.store.toggleFavourite(channel));
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1200),
+        content: Text(wasFavourite ? '已取消收藏' : '已收藏'),
+      ),
+    );
+    _scheduleHide();
+  }
+
   Widget _controls(LiveChannel? channel) {
     final favourite = channel != null && widget.store.isFavourite(channel.key);
     final multi = _playback.routeCount > 1;
@@ -218,7 +232,7 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
                 favourite ? '取消收藏' : '收藏',
                 channel == null
                     ? null
-                    : () => unawaited(widget.store.toggleFavourite(channel)),
+                    : () => _toggleFavourite(channel),
               ),
             ],
           ),
