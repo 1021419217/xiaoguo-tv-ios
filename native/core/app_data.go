@@ -51,6 +51,29 @@ func (engine *nativeEngine) cacheBytes() int64 {
 	return nativeTreeSize(engine.cacheDirectory)
 }
 
+func nativeClearCacheDirectory(directory string) []string {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return []string{directory + "：" + err.Error()}
+	}
+	var leftover []string
+	for _, entry := range entries {
+		switch entry.Name() {
+		case "catalogs.json", "rankings.json":
+			// 分类/榜单很小，保留下来避免清缓存后所有站源重新拉目录。
+			continue
+		}
+		path := filepath.Join(directory, entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			leftover = append(leftover, path+"："+err.Error())
+		}
+	}
+	return leftover
+}
+
 func (engine *nativeEngine) clearCache() error {
 	engine.downloads.mu.Lock()
 	root := engine.downloads.root
@@ -59,7 +82,7 @@ func (engine *nativeEngine) clearCache() error {
 		return errors.New("缓存目录包含应用数据，无法清理")
 	}
 	engine.covers.clear()
-	if leftover := nativeClearDirectory(engine.cacheDirectory); len(leftover) > 0 {
+	if leftover := nativeClearCacheDirectory(engine.cacheDirectory); len(leftover) > 0 {
 		return errors.New("部分缓存正在使用，未能全部清理")
 	}
 	return nil

@@ -312,7 +312,6 @@ class _CoverImageState extends State<CoverImage> {
 
   void _cacheInvalidated() {
     if (!mounted) return;
-    _load();
     setState(() {});
   }
 
@@ -408,7 +407,12 @@ class _CoverImageState extends State<CoverImage> {
 
   @override
   Widget build(BuildContext context) {
-    final path = _path;
+    var path = _path;
+    if (path != null && !File(path).existsSync()) {
+      _path = null;
+      path = null;
+      _load();
+    }
     if (path != null) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
