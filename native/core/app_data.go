@@ -62,8 +62,8 @@ func nativeClearCacheDirectory(directory string) []string {
 	var leftover []string
 	for _, entry := range entries {
 		switch entry.Name() {
-		case "catalogs.json", "rankings.json":
-			// 分类/榜单很小，保留下来避免清缓存后所有站源重新拉目录。
+		case "catalogs.json", "rankings.json", "covers-v1":
+			// 分类/榜单很小，封面重下又会挤占播放网络；清缓存只清临时文件。
 			continue
 		}
 		path := filepath.Join(directory, entry.Name())
@@ -81,7 +81,9 @@ func (engine *nativeEngine) clearCache() error {
 	if nativePathInside(engine.cacheDirectory, engine.directory) || nativePathInside(engine.cacheDirectory, root) {
 		return errors.New("缓存目录包含应用数据，无法清理")
 	}
-	engine.covers.clear()
+	if limiter := engine.downloader.limiter; limiter != nil {
+		limiter.clearBackoffs()
+	}
 	if leftover := nativeClearCacheDirectory(engine.cacheDirectory); len(leftover) > 0 {
 		return errors.New("部分缓存正在使用，未能全部清理")
 	}
