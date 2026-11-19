@@ -492,6 +492,8 @@ func (p *jsProvider) hostObject(instance *jsInstance) *goja.Object {
 		// 站点验证拿到的 cookie / UA：模块直接拼进 fetchText 即可。
 		"challengeCookie": ChallengeCookie,
 		"challengeUA":     ChallengeUserAgent,
+		// 模块解析失败时上报该 URL，App 会用验证过的 WebView 重抓并塞进页缓存。
+		"noteChallenge": func(url string) { NoteChallenged(url) },
 		"log": func(message string) {
 			if downloader, ok := p.host.(*Downloader); ok {
 				downloader.recordDiagnostic(diagnosticEvent{Time: time.Now(), Level: "info", Event: "module", Source: id, Message: message})

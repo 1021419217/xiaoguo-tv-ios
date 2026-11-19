@@ -506,7 +506,10 @@ module.exports = {
     }).body;
     const address = mediaAddress(body);
     if (address === "") {
-      throw new Error("MissAV 页面里未解析到播放地址");
+      // 上报这个 URL：App 会用验证过的 WebView 重抓它并写进页缓存，
+      // 下次解析就能命中缓存、绕开 TLS 指纹这一关。
+      host.noteChallenge(pageUrl);
+      throw new Error("MissAV 页面里未解析到播放地址，请点「去验证」后再重试");
     }
     return host.prepareWebMedia({ url: address, referer: pageUrl }, channel);
   },

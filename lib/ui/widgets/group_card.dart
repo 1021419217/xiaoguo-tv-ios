@@ -2,17 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'focus_ring.dart';
 
-/// 由单色生成「亮面 → 暗面」的两段渐变，用于彩色图标。
-List<Color> tintGradient(Color? base) {
-  final hsl = HSLColor.fromColor(base ?? const Color(0xFF5B8DEF));
-  Color at(double delta) => hsl
-      .withLightness((hsl.lightness + delta).clamp(0.0, 1.0))
-      .withSaturation((hsl.saturation * 1.06).clamp(0.0, 1.0))
-      .toColor();
-  return [at(.12), at(-.06)];
-}
-
-/// 半透明浅色分组卡：浮在氛围背景上，卡片后面能透出底色。
+/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带半透明磨砂底色与细描边。
 class GroupCard extends StatelessWidget {
   const GroupCard({super.key, required this.children});
   final List<Widget> children;
@@ -21,7 +11,8 @@ class GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
-    // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面。
+    // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
+    // 设置页所有条目点下去都没有任何反馈，就是这个原因。
     return Material(
       color: colors.surfaceContainer.withValues(alpha: 0.72),
       shape: RoundedRectangleBorder(
@@ -80,18 +71,14 @@ class SettingsTile extends StatelessWidget {
         horizontalTitleGap: 14,
         leading: icon == null
             ? null
-            : SizedBox(
-                width: 24,
-                height: 24,
-                child: ShaderMask(
-                  blendMode: BlendMode.srcIn,
-                  shaderCallback: (bounds) => LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: tintGradient(iconColor),
-                  ).createShader(bounds),
-                  child: Icon(icon, size: 22, color: Colors.white),
+            : Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor ?? colors.primary.withValues(alpha: 0.85),
+                  shape: BoxShape.circle,
                 ),
+                child: Icon(icon, size: 19, color: Colors.white),
               ),
         title: Text(
           title,

@@ -352,9 +352,6 @@ class _AppShellState extends State<AppShell>
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                     child: NavigationBar(
-                      backgroundColor: Colors.transparent,
-                      surfaceTintColor: Colors.transparent,
-                      elevation: 0,
                       selectedIndex: tabs.indexOf(_tab),
                       onDestinationSelected: (index) {
                         unawaited(HapticFeedback.selectionClick());

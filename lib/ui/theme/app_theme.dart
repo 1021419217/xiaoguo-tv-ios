@@ -103,7 +103,7 @@ abstract final class AppTheme {
     final theme = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: background,
       canvasColor: background,
       // 小果 2.0 的页面转场（电视端禁用动画）保持不变。
       pageTransitionsTheme: pageTransitions(television: television),
