@@ -389,13 +389,13 @@ class _LivePageState extends State<LivePage> {
         icon: Icons.live_tv_outlined,
       );
     }
-    if (_failed && _channels.isEmpty) {
+    if (_platforms.isEmpty && _failed) {
       return StatusView(
         title: '直播源暂时不可用',
         message: _error,
         icon: Icons.cloud_off_rounded,
         action: '重试',
-        onAction: () => unawaited(_refreshCurrent()),
+        onAction: () => unawaited(_loadPlatforms(force: true)),
       );
     }
     return Column(
@@ -409,26 +409,34 @@ class _LivePageState extends State<LivePage> {
     );
   }
 
-  Widget _channelBody(BuildContext context) {
-    if (_loading && _channels.isEmpty) {
-      return const StatusView.loading(title: '正在加载分类');
-    }
-    if (_channels.isEmpty) {
-      final favourite = _platform == _favouritesId;
-      final current = _platforms
-          .where((platform) => platform.id == _platform)
-          .firstOrNull;
-      return StatusView(
-        title: favourite ? '还没有收藏频道' : '这个分类暂时没有频道',
-        message: favourite ? '在播放页点收藏，之后可以在这里快速找到。' : '下拉刷新或点下面按钮重新抓取。',
-        icon: favourite ? Icons.star_border_rounded : Icons.tv_off_rounded,
-        action: favourite ? null : '刷新',
-        onAction: favourite
-            ? null
-            : () => current != null
-            ? _loadPlatform(current, force: true)
-            : _loadPlatforms(force: true),
+  Widget _categoryStatus() {
+    final favourite = _platform == _favouritesId;
+    final current = _platforms
+        .where((platform) => platform.id == _platform)
+        .firstOrNull;
+    if (favourite) {
+      return const StatusView(
+        title: '还没有收藏频道',
+        message: '在播放页点收藏，之后可以在这里快速找到。',
+        icon: Icons.star_border_rounded,
       );
+    }
+    return StatusView(
+      title: _error == null ? '这个分类暂时没有频道' : '这个分类暂时不可用',
+      message: _error ?? '下拉刷新或点下面按钮重新抓取。',
+      icon: Icons.tv_off_rounded,
+      action: '重试',
+      onAction: current != null
+          ? () => _loadPlatform(current, force: true)
+          : () => _loadPlatforms(force: true),
+    );
+  }
+
+  Widget _channelBody(BuildContext context) {
+    if (_platforms.isEmpty) {
+      return _loading
+          ? const StatusView.loading(title: '正在加载分类')
+          : _categoryStatus();
     }
     // 电视与桌面窗口沿用纵向网格（遥控器 / 滚轮），手机与平板改成横向分页：
     // 全部频道有上千个，一直往下滑太累，横滑一屏一页更省力。
@@ -437,6 +445,7 @@ class _LivePageState extends State<LivePage> {
       _ => false,
     };
     if (wide) {
+      if (_channels.isEmpty) return _categoryStatus();
       return RefreshIndicator(
         onRefresh: _refreshCurrent,
         child: _grid(_channels, bottom: 24 + widget.bottomInset),
@@ -450,14 +459,24 @@ class _LivePageState extends State<LivePage> {
         final id = page == 0 ? _favouritesId : _platforms[page - 1].id;
         _selectPlatform(id, fromSwipe: true);
       },
-      itemBuilder: (context, page) => RefreshIndicator(
-        onRefresh: _refreshCurrent,
-        child: _grid(
-          _channels,
-          top: 12,
-          bottom: 12 + widget.bottomInset,
-        ),
-      ),
+      itemBuilder: (context, page) {
+        final id = page == 0 ? _favouritesId : _platforms[page - 1].id;
+        if (id != _platform) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (_loading && _channels.isEmpty) {
+          return const StatusView.loading(title: '正在加载分类');
+        }
+        if (_channels.isEmpty) return _categoryStatus();
+        return RefreshIndicator(
+          onRefresh: _refreshCurrent,
+          child: _grid(
+            _channels,
+            top: 12,
+            bottom: 12 + widget.bottomInset,
+          ),
+        );
+      },
     );
   }
 
