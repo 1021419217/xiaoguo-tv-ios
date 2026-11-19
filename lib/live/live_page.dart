@@ -59,6 +59,11 @@ class _LivePageState extends State<LivePage> {
   final _pager = PageController(initialPage: 1);
   final _categoryScroll = ScrollController();
   final _categoryKeys = <String, GlobalKey>{};
+  final _channelOwners = <String, String>{};
+
+  String _liveKey(String name) => name
+      .replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '')
+      .toLowerCase();
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
 
@@ -102,6 +107,7 @@ class _LivePageState extends State<LivePage> {
   Future<void> _loadPlatforms({bool force = false}) async {
     final source = _source;
     if (source == null) return;
+    _channelOwners.clear();
     final token = ++_generation;
     setState(() {
       _loading = true;
@@ -159,12 +165,23 @@ class _LivePageState extends State<LivePage> {
         force: force,
       );
       if (!mounted || token != _generation) return;
+      final visible = <LiveChannel>[];
+      for (final channel in channels) {
+        final key = _liveKey(channel.name);
+        final owner = _channelOwners[key];
+        if (owner == null) {
+          _channelOwners[key] = platform.id;
+          visible.add(channel);
+        } else if (owner == platform.id) {
+          visible.add(channel);
+        }
+      }
       setState(() {
-        _channels = channels;
-        _lastGood = channels;
+        _channels = visible;
+        _lastGood = visible;
         _lastGoodPlatform = platform.id;
         _loading = false;
-        _failed = channels.isEmpty;
+        _failed = visible.isEmpty;
       });
       final at = _platforms.indexWhere((item) => item.id == platform.id);
       if (mounted && at >= 0 && _pager.hasClients) {
@@ -196,6 +213,7 @@ class _LivePageState extends State<LivePage> {
     setState(() {
       _source = source;
       _platform = '';
+      _channelOwners.clear();
       _platforms = const [];
       _channels = const [];
       _lastGood = const [];
