@@ -1,0 +1,24 @@
+{
+  "id": "xgroovy",
+  "name": "XGroovy",
+  "version": "1.0.3",
+  "description": "XGroovy：最新、分类、搜索、模特/频道信息与多清晰度 MP4 播放。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "xgroovy.com",
+    "*.xgroovy.com"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "baseUrl": "https://cn.xgroovy.com",
+  "aliases": [
+    "cn.xgroovy.com",
+    "xgroovy.com"
+  ],
+  "allowEmptyCatalog": false,
+  "noHostRotation": true,
+  "browserFingerprint": true
+}
