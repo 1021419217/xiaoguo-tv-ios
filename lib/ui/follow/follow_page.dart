@@ -521,7 +521,9 @@ class _FollowPageState extends State<FollowPage> {
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
-      final masonry = AppScope.formFactorOf(context) == FormFactor.phone;
+      final masonry =
+          AppScope.formFactorOf(context) == FormFactor.phone &&
+          view.shown.any((drama) => CoverShapes.isMixed(drama.source));
       final (columns, gap, runGap) = _grid(context, width);
       final tile = (width - gap * (columns - 1)) / columns;
       final updated = [

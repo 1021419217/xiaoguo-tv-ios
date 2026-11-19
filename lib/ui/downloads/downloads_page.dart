@@ -766,7 +766,11 @@ class _DownloadsPageState extends State<DownloadsPage>
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth - inset * 2;
-        final masonry = AppScope.formFactorOf(context) == FormFactor.phone;
+        final masonry =
+            AppScope.formFactorOf(context) == FormFactor.phone &&
+            view.downloaded.any(
+              (item) => CoverShapes.isMixed(item.drama.source),
+            );
         final (columns, gap, runGap) = _grid(context, width);
         final tile = (width - gap * (columns - 1)) / columns;
         DateTime? dateOf(DownloadedDrama item) {

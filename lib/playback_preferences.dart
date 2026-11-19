@@ -91,6 +91,7 @@ class PlaybackPreferences {
     this.danmakuShadow = 3,
     this.danmakuCoverage = DanmakuCoverage.half,
     this.danmakuSpeed = 1,
+    this.danmakuMerge = false,
     this.danmakuWords = const [],
     this.preload = true,
     this.televisionDecoder = TelevisionDecoder.optimized,
@@ -120,6 +121,7 @@ class PlaybackPreferences {
   final double danmakuShadow;
   final DanmakuCoverage danmakuCoverage;
   final double danmakuSpeed;
+  final bool danmakuMerge;
   final double boostSpeed;
 
   String get boostLabel =>
@@ -155,6 +157,7 @@ class PlaybackPreferences {
     double? danmakuShadow,
     DanmakuCoverage? danmakuCoverage,
     double? danmakuSpeed,
+    bool? danmakuMerge,
     double? boostSpeed,
     List<String>? danmakuWords,
     bool? preload,
@@ -184,6 +187,7 @@ class PlaybackPreferences {
     danmakuShadow: danmakuShadow ?? this.danmakuShadow,
     danmakuCoverage: danmakuCoverage ?? this.danmakuCoverage,
     danmakuSpeed: danmakuSpeed ?? this.danmakuSpeed,
+    danmakuMerge: danmakuMerge ?? this.danmakuMerge,
     boostSpeed: boostSpeed ?? this.boostSpeed,
     danmakuWords: danmakuWords ?? this.danmakuWords,
     preload: preload ?? this.preload,
@@ -215,6 +219,7 @@ class PlaybackPreferences {
     'danmakuShadow': danmakuShadow,
     'danmakuCoverage': danmakuCoverage.name,
     'danmakuSpeed': danmakuSpeed,
+    'danmakuMerge': danmakuMerge,
     'boostSpeed': boostSpeed,
     'danmakuWords': danmakuWords,
     'preload': preload,
@@ -275,6 +280,7 @@ class PlaybackPreferences {
         danmakuSpeedMin,
         danmakuSpeedMax,
       ),
+      danmakuMerge: value['danmakuMerge'] as bool? ?? false,
       danmakuWords: normalizeDanmakuWords(value['danmakuWords']),
       preload: preload,
       televisionDecoder:

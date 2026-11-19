@@ -20,6 +20,7 @@ class DanmakuController extends ChangeNotifier {
   int? _pendingStart;
   bool _closed = false;
   bool _enabled = true;
+  bool _merge = false;
   bool _available = false;
   bool _foreground = true;
   bool _playing = false;
@@ -82,6 +83,13 @@ class DanmakuController extends ChangeNotifier {
     _available = false;
     positionMs = durationMs = 0;
     _resetMotion();
+    notifyListeners();
+  }
+
+  void setMerge(bool merge) {
+    if (_closed || _merge == merge) return;
+    _merge = merge;
+    _rebuildItems();
     notifyListeners();
   }
 
@@ -310,7 +318,27 @@ class DanmakuController extends ChangeNotifier {
       }
     }
     _blocked = blocked;
-    items = List.unmodifiable(kept);
+    if (!_merge) {
+      items = List.unmodifiable(kept);
+      dataRevision++;
+      return;
+    }
+    // 同一时段（5 秒）文字完全相同的弹幕并成一条，末尾标次数。
+    final grouped = <String, List<DanmakuItem>>{};
+    for (final item in kept) {
+      final key = '${item.text}\u0000${item.timeMs ~/ 5000}';
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+    items = List.unmodifiable([
+      for (final group in grouped.values)
+        group.length == 1
+            ? group.first
+            : DanmakuItem(
+                id: group.first.id,
+                text: '${group.first.text} ×${group.length}',
+                timeMs: group.first.timeMs,
+              ),
+    ]..sort((a, b) => a.timeMs.compareTo(b.timeMs)));
     dataRevision++;
   }
 

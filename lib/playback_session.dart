@@ -58,6 +58,7 @@ class PlaybackSession extends ChangeNotifier {
     _preloader = PlaybackPreloader(repository)..addListener(_prime);
     danmaku = DanmakuController(repository)
       ..setEnabled(_danmakuEnabled)
+      ..setMerge(preferences.danmakuMerge)
       ..setBlockedWords(preferences.danmakuWords);
     store.addListener(_accessChanged);
     store.addListener(_syncBlockedWords);
@@ -426,6 +427,57 @@ class PlaybackSession extends ChangeNotifier {
       warning: detail.warning,
       seasons: seasons,
     );
+  }
+
+  Future<bool> playSeason(DramaSeason season) async {
+    if (season.drama.id == detail.drama.id) return true;
+    if (_advancingSeason || !_usable) return false;
+    _advancingSeason = true;
+    final ticket = _generation;
+    _dropStandby();
+    _preloader.clear();
+    _notify();
+    try {
+      await saveProgress();
+      final next = await repository.detail(season.drama);
+      if (!_current(ticket) || !_foreground) return false;
+      if (next.episodes.isEmpty) {
+        throw AppFailure('${season.label}暂时没有可播放的分集');
+      }
+      final watch = store.watched(season.drama.id);
+      var index = 0;
+      if (watch != null) {
+        final at = next.episodes.indexWhere(
+          (episode) => episode.number == watch.episode,
+        );
+        if (at >= 0) index = at;
+      }
+      final position =
+          watch != null &&
+              !watch.finished &&
+              watch.episode == next.episodes[index].number
+          ? watch.position
+          : 0.0;
+      detail = DramaDetail(
+        repository.catalogUpdates.current(season.drama).merge(next.drama),
+        next.episodes,
+        warning: next.warning,
+        seasons: detail.seasons,
+      );
+      _openedIndex = -1;
+      _index = index;
+      _online = false;
+      _notify();
+      await play(index, position: position);
+      return true;
+    } catch (error) {
+      DiaryService.add('[Play] 手动切换到${season.label}失败：${_diagnostic(error)}');
+      if (_current(ticket)) _stop();
+      _notify();
+      return false;
+    } finally {
+      _advancingSeason = false;
+    }
   }
 
   Future<void> _playNextSeason() async {
@@ -1100,6 +1152,12 @@ class PlaybackSession extends ChangeNotifier {
       position: currentPosition,
       playWhenReady: _error != null || player.state.playing,
     );
+  }
+
+  Future<void> setDanmakuMerge(bool merge) async {
+    if (_preferences.danmakuMerge == merge) return;
+    await _savePreferences(_preferences.copyWith(danmakuMerge: merge));
+    danmaku.setMerge(merge);
   }
 
   Future<void> toggleDanmaku() async {

@@ -1146,6 +1146,30 @@ class _EpisodeSheetState extends State<_EpisodeSheet> {
                     ),
                   ],
           ),
+          if (!_selecting && _session.detail.seasons.length > 1)
+            SizedBox(
+              height: 48,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                itemCount: _session.detail.seasons.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final season = _session.detail.seasons[index];
+                  final selected =
+                      season.drama.id == _session.detail.drama.id;
+                  return ChoiceChip(
+                    label: Text(season.label),
+                    selected: selected,
+                    onSelected: (_) {
+                      if (selected) return;
+                      Navigator.pop(context);
+                      unawaited(_session.playSeason(season));
+                    },
+                  );
+                },
+              ),
+            ),
           Expanded(
             child: ListenableBuilder(
               listenable: _session,

@@ -179,6 +179,7 @@ class DramaTile extends StatelessWidget {
     cover: DramaCover(
       drama: drama,
       radius: _coverRadius,
+      crop: true,
       rank: rank,
       showScore: showScore,
       exploreBlur: exploreBlur,
@@ -264,6 +265,7 @@ class ProgressPoster extends StatelessWidget {
             DramaCover(
               drama: drama,
               radius: _coverRadius,
+              crop: true,
               details: false,
               heroScope:
                   television || selected != null || !Visibility.of(context)

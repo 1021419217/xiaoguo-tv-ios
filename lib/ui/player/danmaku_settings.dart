@@ -121,6 +121,7 @@ class DanmakuSettings extends StatelessWidget {
     bool? bold,
     DanmakuCoverage? coverage,
     double? speed,
+    bool? merge,
     List<String>? words,
   }) async {
     _save(
@@ -133,6 +134,7 @@ class DanmakuSettings extends StatelessWidget {
         danmakuBold: bold,
         danmakuCoverage: coverage,
         danmakuSpeed: speed,
+        danmakuMerge: merge,
         danmakuWords: words,
       ),
     );
@@ -195,6 +197,17 @@ class DanmakuSettings extends StatelessWidget {
         _shadowTile(),
         _section(context, '滚动'),
         _speedTile(),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('合并重复'),
+          subtitle: const Text('同一时段的相同弹幕并成一条，并标出次数'),
+          value: preferences.danmakuMerge,
+          onChanged: (value) => _apply(
+            () =>
+                session?.setDanmakuMerge(value) ??
+                _asyncSave(merge: value),
+          ),
+        ),
         _section(context, '显示区域'),
         Padding(
           padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
