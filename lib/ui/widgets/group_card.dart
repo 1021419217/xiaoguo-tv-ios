@@ -19,13 +19,14 @@ class GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面。
     return Material(
-      color: Colors.white.withValues(alpha: .078),
+      color: colors.surfaceContainer.withValues(alpha: 0.72),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: Colors.white.withValues(alpha: .06)),
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: colors.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -34,12 +35,8 @@ class GroupCard extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[
             if (i > 0)
               Padding(
-                padding: const EdgeInsets.only(left: 57),
-                child: Divider(
-                  height: .5,
-                  thickness: .5,
-                  color: Colors.white.withValues(alpha: .075),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Divider(height: 1, color: colors.outlineVariant),
               ),
             children[i],
           ],
@@ -98,11 +95,11 @@ class SettingsTile extends StatelessWidget {
               ),
         title: Text(
           title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0,
-            color: Colors.white,
+          style: TextStyle(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.2,
+            color: colors.onSurface,
           ),
         ),
         subtitle: subtitle == null

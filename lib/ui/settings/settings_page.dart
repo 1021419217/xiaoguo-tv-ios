@@ -14,7 +14,6 @@ import '../widgets/bar_button.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/frosted_header.dart';
 import '../widgets/group_card.dart';
-import '../theme/rex.dart';
 import 'appearance_settings.dart';
 import 'settings_rows.dart';
 import 'settings_sections.dart';
@@ -329,21 +328,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _phone(BuildContext context) => Scaffold(
-    // Rex：氛围背景 + 居中标题，内容从顶栏背后透出。
+    // 与首页同款：内容从磨砂顶栏背后透出，标题文字换成玻璃胶囊。
     extendBodyBehindAppBar: true,
     appBar: AppBar(
       surfaceTintColor: Colors.transparent,
-      backgroundColor: Colors.transparent,
-      centerTitle: true,
-      title: const Text(
-        '设置',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-      ),
+      flexibleSpace: const FrostedHeader(fill: true),
+      title: const GlassTitle(title: '设置'),
     ),
-    body: RexBackdrop(
-      child: SafeArea(
-        top: true,
-        bottom: false,
+    body: SafeArea(
+      top: true,
+      bottom: false,
       child: ListenableBuilder(
         listenable: widget.store,
         builder: (context, _) {
@@ -445,7 +439,6 @@ class _SettingsPageState extends State<SettingsPage> {
           );
         },
       ),
-    ),
     ),
   );
 
