@@ -1190,10 +1190,19 @@ class _PlaybackFailureState extends State<PlaybackFailure> {
   /// 已有通行 cookie 时，把登记过的失败页面用验证过的 WebView 重抓一次再重试。
   /// 解决「验证后换了别的片/集，新 URL 没进过缓存」的情况：这类 URL 会被
   /// host 层自动登记，这里负责消费掉，用户不必再点一次「去验证」。
+  static DateTime? _lastRepair;
+
   Future<void> _autoRepair() async {
     if (_repairing) return;
+    final now = DateTime.now();
+    if (_lastRepair != null &&
+        now.difference(_lastRepair!) < const Duration(seconds: 8)) {
+      return;
+    }
+    _lastRepair = now;
     final repository = AppScope.of(context).repository;
-    final pending = await repository.pendingWebPages();
+    // 只读队列：不能把「去验证」要用的 URL 取走，否则人工验证后无页可抓。
+    final pending = await repository.peekPendingWebPages();
     if (pending.isEmpty) return;
     DiaryService.add('[Play] 自动重抓 ${pending.length} 个页面');
     _repairing = true;

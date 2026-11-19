@@ -88,6 +88,20 @@ func TakePendingWebPages() []string {
 	return out
 }
 
+// PeekPendingWebPages 只读地看待抓 URL，不清空队列。
+// 供播放页自动重抓使用：它比人工验证更早触发，不能把验证要用的队列抢走。
+func PeekPendingWebPages() []string {
+	webPageCache.RLock()
+	defer webPageCache.RUnlock()
+	var out []string
+	for key, at := range webPageCache.pending {
+		if time.Since(at) <= webPageTTL {
+			out = append(out, key)
+		}
+	}
+	return out
+}
+
 // ClearWebPages 清空缓存与待抓队列（验证信息变化、切换用户时调用）。
 func ClearWebPages() {
 	webPageCache.Lock()

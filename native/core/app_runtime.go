@@ -464,6 +464,9 @@ func nativeDispatch(input nativeInput) (any, error) {
 	case "pendingWebPages":
 		// 取出本轮被 Cloudflare 挑战、待 WebView 重抓的 URL（取完即清空）。
 		return map[string]any{"urls": TakePendingWebPages()}, nil
+	case "peekPendingWebPages":
+		// 只读查看待抓 URL，不清空：播放页自动重抓用，避免抢走人工验证的队列。
+		return map[string]any{"urls": PeekPendingWebPages()}, nil
 	case "blockedUrl":
 		url := ""
 		if limiter := engine.downloader.limiter; limiter != nil {
