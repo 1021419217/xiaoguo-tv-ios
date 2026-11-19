@@ -18,8 +18,12 @@
 // 主域名会换（111 → 222 …）。旧域名收到任何路径的请求都会 301 到「根路径」，
 // 把 /vodsearch/…?wd=、/vodtype/…、/v5/… 整段丢掉 —— 于是搜索不管输什么
 // 都返回首页那批视频，分类和详情也一样。所以这里放域名池，谁能用就用谁。
-let SITE = 'https://111.ajlck.cc';
+let SITE = 'https://222.ajmck.cc';
 const MIRRORS = [
+  'https://222.ajmck.cc',
+  'https://333.9983hsck.cc',
+  'https://444.9930hsck.cc',
+  'https://hsccck.cc',
   'https://111.ajlck.cc',
   'https://222.9981hsck.cc',
   'https://222.ajjck.cc',
