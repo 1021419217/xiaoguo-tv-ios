@@ -558,6 +558,7 @@ func (p *jsProvider) fetchPlaylist(ctx context.Context, request jsPlaylistReques
 
 // applyChallengeText 把该主机验证过的通行 cookie / 真实 UA 自动补进文本请求。
 // 模块自己不必拼：任何站源在 App 里完成人机验证后，后续请求都会直接复用。
+// UA 必须优先覆盖模块里的固定值——cf_clearance 是绑 UA 签发的，用别的 UA 会被直接拦。
 func applyChallengeText(request *jsTextRequest) {
 	host := hostOfURL(request.URL)
 	if host == "" {
@@ -566,12 +567,13 @@ func applyChallengeText(request *jsTextRequest) {
 	if request.Cookie == "" {
 		request.Cookie = ChallengeCookie(host)
 	}
-	if request.UserAgent == "" {
-		request.UserAgent = ChallengeUserAgent(host)
+	if agent := ChallengeUserAgent(host); agent != "" {
+		request.UserAgent = agent
 	}
 }
 
-// applyChallengeFetch 对普通 fetch 补同样的 cookie / UA，模块显式设置的优先。
+// applyChallengeFetch 对普通 fetch 补同样的 cookie / UA：cookie 模块显式设置的优先，
+// UA 始终用验证时那串（cf_clearance 绑 UA，换 UA 必被拦）。
 func applyChallengeFetch(request *jsFetchRequest) {
 	host := hostOfURL(request.URL)
 	if host == "" {
@@ -588,7 +590,9 @@ func applyChallengeFetch(request *jsFetchRequest) {
 	if cookie != "" && request.Headers["Cookie"] == "" && request.Headers["cookie"] == "" {
 		request.Headers["Cookie"] = cookie
 	}
-	if agent != "" && request.Headers["User-Agent"] == "" && request.Headers["user-agent"] == "" {
+	// 验证过的 UA 优先：cf_clearance 绑 UA，模块固定写死的 UA 会被 Cloudflare 判为不匹配。
+	if agent != "" {
+		delete(request.Headers, "user-agent")
 		request.Headers["User-Agent"] = agent
 	}
 }
