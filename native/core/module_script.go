@@ -556,9 +556,9 @@ func (p *jsProvider) fetchPlaylist(ctx context.Context, request jsPlaylistReques
 	return jsPlaylist{Playlist: playlist, URL: address, DurationMS: M3u8Duration(playlist).Milliseconds()}, err
 }
 
-// applyChallengeText 把该主机验证过的通行 cookie / 真实 UA 自动补进文本请求。
-// 模块自己不必拼：任何站源在 App 里完成人机验证后，后续请求都会直接复用。
-// UA 必须优先覆盖模块里的固定值——cf_clearance 是绑 UA 签发的，用别的 UA 会被直接拦。
+// applyChallengeText 把该主机验证过的通行 cookie / 真实 UA 补进文本请求。
+// UA 只在模块没指定时补：模块与 browserFingerprint 的指纹要配套（都用桌面 Chrome），
+// 强行换成验证 WebView 的 Safari UA 会和指纹冲突，反而被 Cloudflare 拦。
 func applyChallengeText(request *jsTextRequest) {
 	host := hostOfURL(request.URL)
 	if host == "" {
@@ -567,8 +567,8 @@ func applyChallengeText(request *jsTextRequest) {
 	if request.Cookie == "" {
 		request.Cookie = ChallengeCookie(host)
 	}
-	if agent := ChallengeUserAgent(host); agent != "" {
-		request.UserAgent = agent
+	if request.UserAgent == "" {
+		request.UserAgent = ChallengeUserAgent(host)
 	}
 }
 
@@ -590,9 +590,7 @@ func applyChallengeFetch(request *jsFetchRequest) {
 	if cookie != "" && request.Headers["Cookie"] == "" && request.Headers["cookie"] == "" {
 		request.Headers["Cookie"] = cookie
 	}
-	// 验证过的 UA 优先：cf_clearance 绑 UA，模块固定写死的 UA 会被 Cloudflare 判为不匹配。
-	if agent != "" {
-		delete(request.Headers, "user-agent")
+	if agent != "" && request.Headers["User-Agent"] == "" && request.Headers["user-agent"] == "" {
 		request.Headers["User-Agent"] = agent
 	}
 }
