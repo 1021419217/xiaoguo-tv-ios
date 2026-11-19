@@ -414,10 +414,15 @@ class _CoverImageState extends State<CoverImage> {
       _load();
     }
     if (path != null) {
+      final imagePath = path;
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => CoverShapes.learn(widget.drama.source, widget.drama.id, path),
+        (_) => CoverShapes.learn(
+          widget.drama.source,
+          widget.drama.id,
+          imagePath,
+        ),
       );
-      return _image(path);
+      return _image(imagePath);
     }
     return FutureBuilder<String>(
       future: _file,

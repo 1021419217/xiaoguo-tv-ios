@@ -14,7 +14,6 @@ import '../../resource_settings.dart';
 import '../../resource_settings_editor.dart';
 import '../../window_on_top.dart';
 import '../app_scope.dart';
-import '../shell/app_shell.dart';
 import '../player/danmaku_settings.dart';
 import '../update_prompt.dart';
 import '../users/users_view.dart';
