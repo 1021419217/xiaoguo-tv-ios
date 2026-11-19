@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../cover_shape.dart';
 import '../../models.dart';
 import '../widgets/cover_image.dart';
 
@@ -79,8 +80,10 @@ class _HeroCarouselState extends State<HeroCarousel> {
     final items = widget.items;
     if (items.isEmpty) return const SizedBox.shrink();
     final item = items[_index.clamp(0, items.length - 1)];
-    return SizedBox(
-      height: widget.height,
+    return ValueListenableBuilder<int>(
+      valueListenable: CoverShapes.revision,
+      builder: (context, _, _) => SizedBox(
+        height: widget.height,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: Stack(
@@ -117,7 +120,19 @@ class _HeroCarouselState extends State<HeroCarousel> {
           ],
         ),
       ),
+      ),
     );
+  }
+
+  Size _coverSize(Drama item) {
+    final measured = CoverShapes.ratioOf(item.source, item.id);
+    final wide =
+        measured > 1.1 ||
+        (measured <= 0 && CoverShapes.isLandscape(item.source));
+    if (wide) return const Size(156, 88);
+    final ratio = measured > 0 ? measured.clamp(0.45, 1.1) : 2 / 3;
+    const height = 164.0;
+    return Size((height * ratio).clamp(78, 132), height);
   }
 
   Widget _backdrop(Drama item) => Stack(
@@ -159,8 +174,8 @@ class _HeroCarouselState extends State<HeroCarousel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 156,
-          height: 88,
+          width: _coverSize(item).width,
+          height: _coverSize(item).height,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: DramaCover(
