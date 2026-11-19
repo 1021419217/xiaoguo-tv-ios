@@ -279,7 +279,7 @@ class _LivePageState extends State<LivePage> {
         _failed = false;
         _error = null;
       });
-      if (!fromSwipe) _revealCategory(_favouritesId);
+      _revealCategory(_favouritesId);
       return;
     }
     final platform = _platforms
@@ -310,7 +310,7 @@ class _LivePageState extends State<LivePage> {
         );
       });
     }
-    if (!fromSwipe) _revealCategory(id);
+    _revealCategory(id);
     unawaited(_loadPlatform(platform));
   }
 
@@ -322,11 +322,22 @@ class _LivePageState extends State<LivePage> {
       final key = _categoryKeys[id];
       final target = key?.currentContext;
       if (target != null) {
-        if (_categoryVisible(target)) return;
+        final box = target.findRenderObject();
+        final viewport = _categoryScroll.position.context.storageContext
+            .findRenderObject();
+        if (box is! RenderBox || viewport is! RenderBox) return;
+        final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+        final width = _categoryScroll.position.viewportDimension;
+        final right = left + box.size.width;
+        if (left >= -16 && right <= width + 16) return;
+        final atStart = left < 0;
         Scrollable.ensureVisible(
           target,
-          alignment: 0.5,
-          duration: const Duration(milliseconds: 220),
+          alignment: atStart ? 0 : 1,
+          alignmentPolicy: atStart
+              ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+              : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
         );
         return;
@@ -343,16 +354,6 @@ class _LivePageState extends State<LivePage> {
         curve: Curves.easeOutCubic,
       );
     });
-  }
-
-  bool _categoryVisible(BuildContext child) {
-    final box = child.findRenderObject();
-    final viewport = _categoryScroll.position.context.storageContext
-        .findRenderObject();
-    if (box is! RenderBox || viewport is! RenderBox) return false;
-    final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
-    final width = _categoryScroll.position.viewportDimension;
-    return left >= -16 && left + box.size.width <= width + 16;
   }
 
   @override

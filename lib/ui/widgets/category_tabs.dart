@@ -50,22 +50,23 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   void _reveal() {
     final context = _keys[widget.selected]?.currentContext;
     if (context == null || !mounted) return;
-    if (_isVisible(context)) return;
-    Scrollable.ensureVisible(
-      context,
-      alignment: 0.5,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  bool _isVisible(BuildContext child) {
-    final box = child.findRenderObject();
+    final box = context.findRenderObject();
     final viewport = _scroll.position.context.storageContext.findRenderObject();
-    if (box is! RenderBox || viewport is! RenderBox) return false;
+    if (box is! RenderBox || viewport is! RenderBox) return;
     final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
     final width = _scroll.position.viewportDimension;
-    return left >= -16 && left + box.size.width <= width + 16;
+    final right = left + box.size.width;
+    if (left >= -16 && right <= width + 16) return;
+    final atStart = left < 0;
+    Scrollable.ensureVisible(
+      context,
+      alignment: atStart ? 0 : 1,
+      alignmentPolicy: atStart
+          ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   bool _metricsChanged(ScrollMetricsNotification notification) {

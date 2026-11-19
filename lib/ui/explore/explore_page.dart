@@ -201,7 +201,6 @@ class ExplorePageState extends State<ExplorePage> {
             for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
           ],
           selected: explore.tab.id,
-          autoReveal: false,
           onSelected: _selectTab,
           onShowAll: _pickCategory,
         ),
