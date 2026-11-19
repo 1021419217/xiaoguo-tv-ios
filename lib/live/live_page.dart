@@ -141,11 +141,12 @@ class _LivePageState extends State<LivePage> {
     final source = _source;
     if (source == null) return;
     final token = ++_generation;
+    // 切分类时保留当前页，避免整块 PageView 被 loading 状态替换掉，
+    // 导致刚滑到的分类又跳回第一页；新数据回来再原地替换。
     setState(() {
       _loading = true;
       _failed = false;
       _error = null;
-      _channels = _lastGoodPlatform == platform.id ? _lastGood : const [];
     });
     try {
       final channels = await widget.repository.channels(
