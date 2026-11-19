@@ -1,7 +1,7 @@
 {
   "id": "javtiful",
   "name": "Javtiful",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Javtiful：最新、分类、频道、女优与搜索；详情页取 ticket，POST playback 返回 MP4/HLS 线路，播放走宿主媒体代理。",
   "runtime": "js",
   "api": 1,

@@ -322,6 +322,7 @@ class _LivePageState extends State<LivePage> {
       final key = _categoryKeys[id];
       final target = key?.currentContext;
       if (target != null) {
+        if (_categoryVisible(target)) return;
         Scrollable.ensureVisible(
           target,
           alignment: 0.5,
@@ -342,6 +343,15 @@ class _LivePageState extends State<LivePage> {
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  bool _categoryVisible(BuildContext child) {
+    final box = child.findRenderObject();
+    final viewport = _categoryScroll.position.context.storageContext
+        .findRenderObject();
+    if (box is! RenderBox || viewport is! RenderBox) return false;
+    final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+    return left >= 0 && left + box.size.width <= viewport.size.width;
   }
 
   @override
