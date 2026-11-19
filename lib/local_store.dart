@@ -368,11 +368,11 @@ class LocalStore extends ChangeNotifier {
       profile.allows(source) &&
       sourceEnabled(source);
   List<SourceSite> get sources => [
-    for (final site in _orderedSites)
+    for (final site in SourceSite.values)
       if (allowsSource(site.id) && !isSourceDeleted(site.id)) site,
   ];
   List<SourceSite> get permittedSources => [
-    for (final site in _orderedSites)
+    for (final site in SourceSite.values)
       if (!locked && profile.allows(site.id) && !isSourceDeleted(site.id)) site,
   ];
 
