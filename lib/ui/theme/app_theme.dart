@@ -45,18 +45,18 @@ abstract final class AppTheme {
     // 模拟毛玻璃的分层通透感（真 BackdropFilter 用在有背景图的页面）。
     final glassScheme = dark
         ? base.copyWith(
-            surface: const Color(0xFF0B0B0E),
+            surface: const Color(0xFF131418),
             onSurface: Colors.white,
             onSurfaceVariant: const Color(0xFF8E8E93),
             outline: Colors.white.withValues(alpha: 0.14),
             outlineVariant: Colors.white.withValues(alpha: 0.09),
-            surfaceContainerLowest: const Color(0xFF0A0A0C),
-            surfaceContainerLow: const Color(0xFF141416),
-            surfaceContainer: const Color(0xFF1C1C1E),
-            surfaceContainerHigh: const Color(0xFF232326),
-            surfaceContainerHighest: const Color(0xFF2A2A2E),
+            surfaceContainerLowest: const Color(0xFF131418),
+            surfaceContainerLow: const Color(0xFF18191D),
+            surfaceContainer: const Color(0xFF3B3028),
+            surfaceContainerHigh: const Color(0xFF453A31),
+            surfaceContainerHighest: const Color(0xFF4F433A),
             surfaceDim: const Color(0xFF000000),
-            surfaceBright: const Color(0xFF303036),
+            surfaceBright: const Color(0xFF5A4D43),
           )
         : base.copyWith(
             surface: Colors.white,
@@ -81,9 +81,9 @@ abstract final class AppTheme {
           )
         : glassScheme;
 
-    const radius = 18.0;
+    const radius = 22.0;
     final background = dark
-        ? (pureBlack ? Colors.black : const Color(0xFF0A0A0C))
+        ? (pureBlack ? Colors.black : const Color(0xFF131418))
         : scheme.surfaceContainerLowest;
     // 卡片用半透明磨砂：低不透明度 + 细描边，让下层内容与模糊透出来。
     final glass = CardThemeData(
