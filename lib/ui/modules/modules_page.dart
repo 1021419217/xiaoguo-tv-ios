@@ -150,7 +150,12 @@ class _ModulesPageState extends State<ModulesPage>
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(milliseconds: 800),
+        ),
+      );
     }
   }
 
