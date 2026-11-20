@@ -3,8 +3,13 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import 'focus_ring.dart';
+import 'frosted_glass.dart';
 
-/// 首页同款磨砂顶栏：内容从背后透出并被模糊，底部一道极细亮线收边。
+/// 首页同款磨砂顶栏：内容从背后透出并被模糊，不铺色、不收边。
+///
+/// 早期这里铺了一层 0.66→0.34 的 surface 渐变并加了一道底边线，真机上
+/// 顶栏区域变成一块偏蓝的色板、下缘一条硬线，和下面的深色背景割裂成
+/// 「上半蓝、下半黑」。现在只保留极淡的均匀色，页面背景从上到下连续。
 ///
 /// [child] 是顶栏内容（标题、按钮等）；作为 AppBar.flexibleSpace 使用时要
 /// 传 [fill] = true，此时只铺一层模糊玻璃，文字与图标由 AppBar 自己绘制。
@@ -26,12 +31,9 @@ class FrostedHeader extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                colors.surface.withValues(alpha: 0.66),
-                colors.surface.withValues(alpha: 0.34),
+                colors.surface.withValues(alpha: 0.09),
+                colors.surface.withValues(alpha: 0.09),
               ],
-            ),
-            border: Border(
-              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
             ),
           ),
           child: fill ? const SizedBox.expand() : child,
@@ -41,8 +43,9 @@ class FrostedHeader extends StatelessWidget {
   }
 }
 
-/// 玻璃标题胶囊：与首页「站源 / 搜索」胶囊同一套低对比磨砂语言，
-/// 只加一层均匀玻璃 + 一圈极细描边，不加渐变高光、外发光。
+/// 玻璃标题胶囊：与顶栏「编辑 / 清空」等 ActionPill 完全同一套玻璃件
+/// （同 42 高、同 999 圆角、同模糊、同受光、同细亮边），只是内容换成文字。
+/// 之前这里自己手搓了一层平涂渐变，和旁边两枚按钮明显不是一个风格。
 /// 外层 Row + Spacer 保证在 AppBar / Expanded 的紧约束下仍按文字宽度收缩。
 class GlassTitle extends StatelessWidget {
   const GlassTitle({
@@ -68,57 +71,40 @@ class GlassTitle extends StatelessWidget {
       children: [
         Semantics(
           header: true,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(19),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      ink.withValues(alpha: dark ? 0.11 : 0.07),
-                      ink.withValues(alpha: dark ? 0.05 : 0.025),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(19),
-                  border: Border.all(
-                    color: ink.withValues(alpha: dark ? 0.15 : 0.10),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                          color: ink,
-                        ),
-                      ),
+          child: FrostedGlass(
+            radius: 999,
+            height: 42,
+            blur: 12,
+            elevated: false,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                      color: ink,
                     ),
-                    if (count case final value?) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        '· $value',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: ink.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
+                if (count case final value?) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '· $value',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: ink.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),

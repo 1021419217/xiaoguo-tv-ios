@@ -300,9 +300,9 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
                   ]
                 : Theme.of(context).brightness == Brightness.dark
                 ? const [
-                    Color(0xFF252C3E),
-                    Color(0xFF1B1D23),
-                    Color(0xFF101114),
+                    Color(0xFF1B2029),
+                    Color(0xFF17191E),
+                    Color(0xFF121316),
                   ]
                 : const [
                     Color(0xFFF4F5F9),
@@ -323,8 +323,8 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
                   (!pureBlack &&
                       Theme.of(context).brightness == Brightness.dark)
                   ? const [
-                      Color(0x2A6C86D6),
-                      Color(0x126C86D6),
+                      Color(0x166C86D6),
+                      Color(0x0A6C86D6),
                       Color(0x006C86D6),
                     ]
                   : const [
@@ -344,8 +344,8 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
                     (!pureBlack &&
                         Theme.of(context).brightness == Brightness.dark)
                     ? const [
-                        Color(0x1E9A7BC4),
-                        Color(0x0C9A7BC4),
+                        Color(0x109A7BC4),
+                        Color(0x089A7BC4),
                         Color(0x009A7BC4),
                       ]
                     : const [

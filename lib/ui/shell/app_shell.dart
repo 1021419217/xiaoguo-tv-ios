@@ -355,21 +355,41 @@ class _AppShellState extends State<AppShell>
         FormFactor.phone => Scaffold(
           body: pages,
           extendBody: true,
-          // 悬浮底栏要贴近小白条：去掉 SafeArea 强加的 34pt 底部安全区，
-          // 只留 8pt 呼吸位（参照用户给的 Telegram 底栏）。底栏本身恢复
-          // 原来的 66 高度，不再靠压扁它来"变矮"。
+          // 悬浮底栏位置按用户给的 Telegram 参考图逐像素量过：底栏下缘
+          // 距屏幕底约 22pt、距小白条约 10pt，下方留一条纯黑呼吸带。
+          // 这里取 26pt（比参考再松 4pt，拇指更好按），既不叠加 SafeArea
+          // 的 34pt（那是「离太远」的原因），也不像上一版 12pt 直接压在
+          // 小白条上。底栏本身恢复原来的 66 高度，不靠压扁它来「变矮」。
           bottomNavigationBar: covered
               ? null
               : MediaQuery.removePadding(
                   context: context,
                   removeBottom: true,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                    child: _FloatingCapsuleBar(
-                      tabs: tabs,
-                      selected: _tab,
-                      badged: _badged,
-                      onSelect: _tap,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      // 只把「底栏下方那 26pt 条带」压成纯背景色，底栏所在
+                      // 的上方区域保持全透明，玻璃仍能透出并模糊后面的内容。
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.transparent,
+                          Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF121316)
+                              : const Color(0xFFFFFFFF),
+                        ],
+                        stops: const [0.0, 0.70, 1.0],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 26),
+                      child: _FloatingCapsuleBar(
+                        tabs: tabs,
+                        selected: _tab,
+                        badged: _badged,
+                        onSelect: _tap,
+                      ),
                     ),
                   ),
                 ),

@@ -391,8 +391,10 @@ class _HistoryPageState extends State<HistoryPage> {
               swipe: true,
               header: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
-                  child: _search(),
+                  // 搜索框原先顶部 0 间距、紧贴顶栏三枚胶囊，挤成一坨。
+                  // 拉出 18pt 呼吸位、高度抬到 46，让它和顶栏明显分层。
+                  padding: EdgeInsets.fromLTRB(16, root ? 18 : 22, 16, 12),
+                  child: _search(height: 46),
                 ),
                 ?_sources(view, inset: 16, scroll: true),
               ],

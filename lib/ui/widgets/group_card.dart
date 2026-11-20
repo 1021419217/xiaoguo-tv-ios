@@ -15,7 +15,6 @@ class GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
     // 设置页所有条目点下去都没有任何反馈，就是这个原因。
@@ -35,7 +34,11 @@ class GroupCard extends StatelessWidget {
               if (i > 0)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Divider(height: 1, color: colors.outlineVariant),
+                  child: Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Colors.white.withValues(alpha: 0.07),
+                  ),
                 ),
               children[i],
             ],

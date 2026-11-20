@@ -110,7 +110,7 @@ class FrostedGlass extends StatelessWidget {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: dark
-            ? const [Color(0x7AFFFFFF), Color(0x2EFFFFFF), Color(0x12FFFFFF)]
+            ? const [Color(0x30FFFFFF), Color(0x14FFFFFF), Color(0x0AFFFFFF)]
             : const [Color(0xE6FFFFFF), Color(0x80FFFFFF), Color(0x26000000)],
         stops: const [0.0, 0.45, 1.0],
       );
@@ -120,10 +120,10 @@ class FrostedGlass extends StatelessWidget {
       end: Alignment.bottomRight,
       colors: dark
           ? const [
-              Color(0x9EFFFFFF),
-              Color(0x50FFFFFF),
-              Color(0x30FFFFFF),
-              Color(0x46FFFFFF),
+              Color(0x38FFFFFF),
+              Color(0x1CFFFFFF),
+              Color(0x10FFFFFF),
+              Color(0x20FFFFFF),
             ]
           : const [
               Color(0xE6FFFFFF),
@@ -150,9 +150,9 @@ class FrostedGlass extends StatelessWidget {
                       Color(0xD6DCDCE0),
                     ]
                   : const [
-                      Color(0x8E3A3B42),
-                      Color(0x90282A2F),
-                      Color(0x9C18191D),
+                      Color(0x52282A30),
+                      Color(0x561C1E22),
+                      Color(0x5E141518),
                     ])
             : const [
                 Color(0xD9FFFFFF),
@@ -170,20 +170,20 @@ class FrostedGlass extends StatelessWidget {
       colors: dark
           ? (selected
                 ? const [
-                    Color(0x5AA0A5B2),
-                    Color(0x4E727680),
-                    Color(0x56474A54),
+                    Color(0x3A7A8090),
+                    Color(0x32565B66),
+                    Color(0x38383C46),
                   ]
                 : accent
                 ? const [
-                    Color(0x468C919E),
-                    Color(0x3A5F636E),
-                    Color(0x42393C46),
+                    Color(0x2E6E7480),
+                    Color(0x284A4E58),
+                    Color(0x302C2F38),
                   ]
                 : const [
-                    Color(0x329AA0AE),
-                    Color(0x266E737E),
-                    Color(0x2E454A55),
+                    Color(0x1E5A626E),
+                    Color(0x183C414A),
+                    Color(0x20282C34),
                   ])
           : const [
               Color(0x8CFFFFFF),
@@ -199,7 +199,7 @@ class FrostedGlass extends StatelessWidget {
   RadialGradient _topGlow(bool circle) => RadialGradient(
     center: circle ? const Alignment(0, -0.5) : const Alignment(0, -1.05),
     radius: circle ? 1.1 : 1.45,
-    colors: const [Color(0x3AFFFFFF), Color(0x00FFFFFF)],
+    colors: const [Color(0x16FFFFFF), Color(0x00FFFFFF)],
     stops: [0.0, 1.0],
   );
 
