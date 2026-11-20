@@ -266,9 +266,22 @@ module.exports = {
   search(page, query) {
     const keyword = String(query || '').trim();
     if (keyword === '') return { items: [], hasMore: false };
-    const path = '/videos?keyword=' + encodeURIComponent(keyword);
-    const response = get(path);
-    return { items: parseCards(response.text).map(toDrama), hasMore: false };
+    const current = page && page > 1 ? page : 1;
+    // 站点的真实搜索入口是首页表单 action="/result"?search=，参数名 search。
+    // 用 /videos?keyword= 会被忽略，返回默认列表（表现为永远同样十几条）。
+    const search = '?search=' + encodeURIComponent(keyword);
+    const paths =
+      current === 1
+        ? ['/result' + search]
+        : ['/result/page-' + current + search, '/result' + search + '&page=' + current];
+    for (const path of paths) {
+      const response = get(path);
+      const items = parseCards(response.text).map(toDrama);
+      if (items.length > 0) {
+        return { items: items, hasMore: items.length >= 10 };
+      }
+    }
+    return { items: [], hasMore: false };
   },
 
   detail: detail,
