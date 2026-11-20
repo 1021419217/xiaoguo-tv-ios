@@ -4,6 +4,7 @@ import '../../download_collections.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import '../player/episode_grid.dart';
 import '../theme/motion.dart';
 import '../widgets/focus_ring.dart';
@@ -187,6 +188,8 @@ class _DownloadPickerPageState extends State<DownloadPickerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 下载选集页跟随当前剧封面色，避免停留在下载管理页的旧色。
+    PosterPalette.syncDrama(context, widget.detail.drama);
     final form = AppScope.formFactorOf(context);
     if (form == FormFactor.phone) {
       return Scaffold(

@@ -116,12 +116,35 @@ abstract final class AppTheme {
             ),
           )
         : base.copyWith(
-            surface: Colors.white,
-            surfaceContainerLowest: const Color(0xFFF7F5F8),
-            surfaceContainerLow: const Color(0xFFF1EFF4),
-            surfaceContainer: const Color(0xFFECEAEF),
-            surfaceContainerHigh: const Color(0xFFE6E4EA),
-            surfaceContainerHighest: const Color(0xFFE0DEE5),
+            // 浅色主题同样跟随海报色：用高明度 + 低饱和重算，只带上一点
+            // 色相，保持浅色界面通透；关闭跟随时退回原来的中性白/浅灰。
+            // 此前这一支是写死的常量，导致浅色模式下任何页面都不跟随。
+            surface: surfaceColor(0.985, 0.05, Colors.white),
+            surfaceContainerLowest: surfaceColor(
+              0.972,
+              0.06,
+              const Color(0xFFF7F5F8),
+            ),
+            surfaceContainerLow: surfaceColor(
+              0.958,
+              0.07,
+              const Color(0xFFF1EFF4),
+            ),
+            surfaceContainer: surfaceColor(
+              0.944,
+              0.08,
+              const Color(0xFFECEAEF),
+            ),
+            surfaceContainerHigh: surfaceColor(
+              0.930,
+              0.09,
+              const Color(0xFFE6E4EA),
+            ),
+            surfaceContainerHighest: surfaceColor(
+              0.916,
+              0.10,
+              const Color(0xFFE0DEE5),
+            ),
           );
 
     // pureBlack 只把「底」压到纯黑，容器层级继续保留玻璃拟态的冷调深灰，

@@ -15,6 +15,7 @@ import '../../download_overview.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import '../detail/detail_page.dart';
 import '../player/playback_handle.dart';
 import '../player/playback_page.dart';
@@ -232,6 +233,8 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([widget.store, widget.downloads, _updater]),
     builder: (context, _) {
+      // 已下载剧集详情页以本剧封面驱动取色（优先取实时合并后的 item）。
+      PosterPalette.syncDrama(context, widget.drama);
       final item = downloadedDramas(
         widget.downloads.jobs,
       ).where((entry) => entry.drama.id == widget.drama.id).firstOrNull;

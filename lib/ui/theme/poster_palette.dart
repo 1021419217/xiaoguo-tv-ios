@@ -29,12 +29,25 @@ final class PosterPalette extends ChangeNotifier {
   int _generation = 0;
   bool _followEnabled = true;
 
+  /// 首页轮播当前是否处于可见前台。AppShell 每次 build 写入：
+  /// 只有「发现」tab 激活时才为 true。切到别的 tab / 打开二级页后，
+  /// 轮播定时器仍在后台跑，但不再改全局取色，避免把当前页的主色劫持走。
+  /// 默认 true，保证任何未接入 AppShell 的调用方行为不变。
+  bool carouselActive = true;
+
   Color? get color => _color;
   String? get dramaId => _dramaId;
 
   /// 播放器当前视频帧的主色。独立于海报色，只用于播放器控件局部染色，
   /// 避免每几秒就重建整个 App 主题。关闭「跟随海报色」时同步骤退。
   Color? get videoTint => _followEnabled ? _videoTint : null;
+
+  /// 「当前应染到界面上的色」：播放中优先用实时视频色，退出播放后回退到
+  /// 最近一张海报色。供播放器弹层/投屏页这类三级页面重建局部主题时使用，
+  /// 保证一/二/三级页面跟随的是同一个色系；关闭跟随时统一返回 null。
+  Color? get effectiveTint => _followEnabled
+      ? (_videoTint ?? _color)
+      : null;
 
   /// 是否启用「跟随海报色」。由 DuanjuApp 在每次重建时同步，关闭后按钮
   /// 与表面层一起退回中性白玻璃，不再残留上一次取到的海报色。
@@ -61,6 +74,10 @@ final class PosterPalette extends ChangeNotifier {
   /// 借 CoverShapes.revision 触发的重建再补一次即可。sync 幂等，不会重复解码。
   static void syncDrama(BuildContext context, Drama? drama) {
     if (drama == null || drama.id.isEmpty || drama.cover.isEmpty) return;
+    // 被二级页盖住的页面仍在树里、仍可能 rebuild；只允许最上层可见页
+    // 声明主色，避免后台旧页把当前页的取色抢回去。null 表示没有路由包裹
+    // （如根级 widget），照常放行。
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     final path = CoverLoader.cachedPath(
       AppScope.of(context).repository,
       drama,

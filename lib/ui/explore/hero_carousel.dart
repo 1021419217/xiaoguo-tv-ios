@@ -48,6 +48,11 @@ class _HeroCarouselState extends State<HeroCarousel> {
   /// 因此翻页、封面落地、分类切换反复调用都不会重复开销。
   void _syncTint() {
     if (!mounted || widget.items.isEmpty) return;
+    // 只有「发现」tab 处于前台、且没有二级页盖在轮播上时才允许改全局取色。
+    // IndexedStack 让所有 tab 常驻，后台轮播定时器仍会翻页；若不拦住，
+    // 详情页/追剧页的主色会被后台海报反复劫持，出现底色来回跳。
+    if (!PosterPalette.instance.carouselActive) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     final item = widget.items[_index.clamp(0, widget.items.length - 1)];
     if (item.id.isEmpty || item.cover.isEmpty) return;
     final path = CoverLoader.cachedPath(

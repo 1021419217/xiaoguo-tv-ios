@@ -335,6 +335,13 @@ class _AppShellState extends State<AppShell>
     final television = AppScope.of(context).television;
     final tabs = _tabs;
     if (!tabs.contains(_tab)) _tab = AppTab.explore;
+    // 只有「发现」tab 激活、且整个 shell 没被二级页盖住时，首页轮播才允许
+    // 改全局取色。IndexedStack 让所有 tab 常驻、定时器继续翻页；手机端
+    // openPage 走根 Navigator，只有这里的 ModalRoute.isCurrent 能感知到
+    // 二级页覆盖。两条件合一，避免后台轮播把当前页主色反复劫持走。
+    PosterPalette.instance.carouselActive =
+        _tab == AppTab.explore &&
+        (ModalRoute.of(context)?.isCurrent ?? true);
     final covered = _navigator?.canPop() ?? false;
     return PopScope(
       canPop:

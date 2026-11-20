@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import '../shell/app_shell.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/glass_app_bar.dart';
@@ -115,6 +116,9 @@ class _AuthorPageState extends State<AuthorPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 作者作品列表的首张封面驱动全局取色：进入作者页即跟随该作者剧的
+    // 色系，不残留上一级详情页的旧色。
+    PosterPalette.syncDrama(context, _items.firstOrNull);
     final theme = Theme.of(context);
     final inset = MediaQuery.sizeOf(context).width >= 720 ? 24.0 : 16.0;
     final top = MediaQuery.paddingOf(context).top + kToolbarHeight;

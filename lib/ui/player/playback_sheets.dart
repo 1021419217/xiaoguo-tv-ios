@@ -5,20 +5,30 @@ import 'package:flutter/material.dart';
 import '../../playback_preferences.dart';
 import '../../playback_session.dart';
 import '../theme/app_theme.dart';
+import '../theme/poster_palette.dart';
 import 'cast_page.dart';
 import 'danmaku_settings.dart';
 
-(Color, ThemeData)? _darkPlayerTheme;
+// 缓存键带上当前取色值：海报/视频一换色，播放器弹层与投屏页的局部主题
+// 必须跟着重建，否则会一直停留在第一次打开时的旧色（跟随失效）。
+(Color, Color?, ThemeData)? _darkPlayerTheme;
 
 ThemeData playerTheme(BuildContext context) {
   final theme = Theme.of(context);
   if (theme.brightness == Brightness.dark) return theme;
   final seed = theme.colorScheme.primary;
-  if (_darkPlayerTheme case (final cached, final dark) when cached == seed) {
+  final tint = PosterPalette.instance.effectiveTint;
+  if (_darkPlayerTheme case (final cachedSeed, final cachedTint, final dark)
+      when cachedSeed == seed && cachedTint == tint) {
     return dark;
   }
-  final dark = AppTheme.build(seed, Brightness.dark, television: false);
-  _darkPlayerTheme = (seed, dark);
+  final dark = AppTheme.build(
+    seed,
+    Brightness.dark,
+    television: false,
+    surfaceTint: tint,
+  );
+  _darkPlayerTheme = (seed, tint, dark);
   return dark;
 }
 
