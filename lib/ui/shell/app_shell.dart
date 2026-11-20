@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -856,48 +855,25 @@ class _FloatingCapsuleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final tint = GlassTones.hairline;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          // 参考图实测约 60pt，之前 66pt 明显偏高；连同圆角一起收一档。
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: dark
-                  ? const [Color(0xCC2A2B2F), Color(0xDD161618)]
-                  : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
-            ),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: GlassTones.hairline.withValues(
-                alpha: dark ? 0.72 : 0.18,
+    // 整条底栏就是一块磨砂玻璃：背景模糊透出冷灰蓝渐变，左上受光、
+    // 上缘一道细亮白线，底下垫柔和外阴影，高度按参考图收到 56。
+    return FrostedGlass(
+      radius: 28,
+      height: 56,
+      blur: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Row(
+        children: [
+          for (final tab in tabs)
+            Expanded(
+              child: _CapsuleDestination(
+                tab: tab,
+                active: tab == selected,
+                badged: badged,
+                onTap: () => _select(tab),
               ),
-              width: 1,
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(
-            children: [
-              for (final tab in tabs)
-                Expanded(
-                  child: _CapsuleDestination(
-                    tab: tab,
-                    active: tab == selected,
-                    tint: tint,
-                    badged: badged,
-                    onTap: () => _select(tab),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -907,13 +883,11 @@ class _CapsuleDestination extends StatelessWidget {
   const _CapsuleDestination({
     required this.tab,
     required this.active,
-    required this.tint,
     required this.badged,
     required this.onTap,
   });
   final AppTab tab;
   final bool active;
-  final Color tint;
   final Widget Function(AppTab tab, Widget icon) badged;
   final VoidCallback onTap;
 
@@ -923,6 +897,31 @@ class _CapsuleDestination extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     final color = active ? ink : ink.withValues(alpha: dark ? 0.62 : 0.68);
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      spacing: 2,
+      children: [
+        badged(
+          tab,
+          Icon(
+            active ? tab.selectedIcon : tab.icon,
+            size: 22,
+            weight: 700,
+            color: color,
+          ),
+        ),
+        Text(
+          tab.label,
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            letterSpacing: -0.1,
+            color: color,
+          ),
+        ),
+      ],
+    );
     return Semantics(
       selected: active,
       button: true,
@@ -930,49 +929,28 @@ class _CapsuleDestination extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedContainer(
+        // 选中项是一颗「鼓起来的玻璃豆」：比底栏亮一档，自带渐变亮边、
+        // 顶部弧光与磨砂颗粒；未选中项保持透明，直接露出底栏玻璃。
+        child: AnimatedSwitcher(
           duration: Motion.of(context, Motion.short),
-          curve: Motion.standard,
-          height: 48,
-          decoration: BoxDecoration(
-            gradient: active
-                ? const RadialGradient(
-                    center: Alignment(0, -0.4),
-                    radius: 1.0,
-                    colors: [Color(0xFF4B4B4D), Color(0xFF333437)],
-                  )
-                : null,
-            color: active ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-            border: active
-                ? Border.all(color: tint.withValues(alpha: 0.80), width: 1)
-                : null,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 2,
-            children: [
-              badged(
-                tab,
-                Icon(
-                  active ? tab.selectedIcon : tab.icon,
-                  size: 22,
-                  weight: 700,
-                  color: color,
+          switchInCurve: Motion.standard,
+          switchOutCurve: Motion.standard,
+          child: active
+              ? FrostedGlass(
+                  key: const ValueKey('selected'),
+                  radius: 24,
+                  height: 48,
+                  expand: true,
+                  blur: 12,
+                  selected: true,
+                  child: content,
+                )
+              : SizedBox(
+                  key: const ValueKey('idle'),
+                  height: 48,
+                  width: double.infinity,
+                  child: content,
                 ),
-              ),
-              Text(
-                tab.label,
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  letterSpacing: -0.1,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

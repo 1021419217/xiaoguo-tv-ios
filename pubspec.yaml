@@ -53,3 +53,7 @@ flutter:
   config:
     enable-swift-package-manager: false
   uses-material-design: true
+  # 磨砂玻璃的可无缝平铺噪点纹理（深/浅各一张，极淡，只做雾面颗粒）。
+  assets:
+    - assets/textures/frost_dark.png
+    - assets/textures/frost_light.png

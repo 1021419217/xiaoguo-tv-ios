@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1433,100 +1432,57 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   /// 作者入口：站源拿到作者信息就显示，点进去看同一作者在本源的其它作品。
-  /// 取数由原生 authorCatalog 统一兜底，不挑源。
-  ///
-  /// 位置与跳转逻辑保持不动，只把外观换成短剧之家那套玻璃语言：
-  /// 圆形人像徽标 + 毛玻璃胶囊，玻璃底 / 描边 / 徽标跟随当前海报取色，
-  /// 与顶部换源、搜索胶囊同款；没取到色时退回中性玻璃，文字仍清晰。
+  /// 取数由原生 authorCatalog 统一兜底，不挑源；位置与跳转逻辑不动，
+  /// 外观换成与顶部换源/搜索胶囊同款的磨砂玻璃胶囊。
   Widget _authorEntry(Drama drama, _Metrics m) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : colors.onSurface;
-    final glass = GlassTones.hairline;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     final name = drama.author.trim().isEmpty ? '作者' : drama.author.trim();
     return Align(
       alignment: Alignment.centerLeft,
-      child: FocusRing(
+      child: FrostedGlass(
         radius: 999,
-        child: Material(
-          color: Colors.transparent,
-          shape: const StadiumBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () {
-              unawaited(HapticFeedback.selectionClick());
-              _openAuthor(drama);
-            },
-            splashColor: glass.withValues(alpha: 0.10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(6, 5, 11, 5),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: dark
-                          ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
-                          : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: GlassTones.hairline.withValues(
-                        alpha: dark ? 0.72 : 0.18,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 7,
-                    children: [
-                      Container(
-                        width: 26,
-                        height: 26,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            center: Alignment(0, -0.4),
-                            radius: 0.95,
-                            colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
-                          ),
-                          border: Border.all(
-                            color: GlassTones.hairline.withValues(alpha: 0.80),
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.person_outline_rounded,
-                          size: 15,
-                          weight: 700,
-                          color: ink,
-                        ),
-                      ),
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: m.tag,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                          height: 1.2,
-                          color: ink.withValues(alpha: 0.92),
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 15,
-                        color: ink.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
+        blur: 16,
+        padding: const EdgeInsets.fromLTRB(6, 5, 11, 5),
+        semanticLabel: '查看作者 $name 的全部作品',
+        onTap: () => _openAuthor(drama),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 7,
+          children: [
+            FrostedGlass(
+              circle: true,
+              width: 26,
+              height: 26,
+              selected: true,
+              frosted: false,
+              elevated: false,
+              child: Center(
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  size: 15,
+                  weight: 700,
+                  color: ink,
                 ),
               ),
             ),
-          ),
+            Text(
+              name,
+              style: TextStyle(
+                fontSize: m.tag,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+                height: 1.2,
+                color: ink.withValues(alpha: 0.92),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 15,
+              color: ink.withValues(alpha: 0.5),
+            ),
+          ],
         ),
       ),
     );
@@ -1756,55 +1712,39 @@ class _DetailPageState extends State<DetailPage> {
     final colors = Theme.of(context).colorScheme;
     const radius = 16.0;
     const selectedInk = Color(0xFF14161A);
-    return FocusRing(
+    return FrostedGlass(
       radius: radius,
-      child: Material(
-        color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
-        borderRadius: BorderRadius.circular(radius),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () {
-            unawaited(HapticFeedback.selectionClick());
-            _selectQuality(value);
-          },
-          child: Container(
-            width: 96,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: selected
-                    ? const Color(0xFFF2F2F4)
-                    : GlassTones.hairline.withValues(alpha: 0.45),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              spacing: 1,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: m.note,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected ? selectedInk : Colors.white,
-                  ),
-                ),
-                if (trailing.isNotEmpty)
-                  Text(
-                    trailing,
-                    style: TextStyle(
-                      fontSize: m.tag - 1,
-                      color: selected
-                          ? selectedInk.withValues(alpha: 0.6)
-                          : colors.onSurfaceVariant,
-                    ),
-                  ),
-              ],
+      width: 96,
+      variant: GlassVariant.cell,
+      frosted: false,
+      elevated: false,
+      selected: selected,
+      semanticLabel: label,
+      onTap: () => _selectQuality(value),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 1,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: m.note,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              color: selected ? selectedInk : Colors.white,
             ),
           ),
-        ),
+          if (trailing.isNotEmpty)
+            Text(
+              trailing,
+              style: TextStyle(
+                fontSize: m.tag - 1,
+                color: selected
+                    ? selectedInk.withValues(alpha: 0.6)
+                    : colors.onSurfaceVariant,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -2550,46 +2490,27 @@ class _GroupChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = metrics;
-    final radius = m.chipRadius;
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(radius),
-    );
-    return FocusRing(
-      radius: radius,
-      child: Semantics(
-        button: true,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: FrostedGlass(
+        radius: m.chipRadius,
+        height: m.chip,
+        variant: GlassVariant.cell,
+        frosted: false,
+        elevated: false,
         selected: selected,
-        child: Material(
-          color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
-          shape: shape,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            focusNode: focusNode,
-            onTap: () {
-              unawaited(HapticFeedback.selectionClick());
-              onPressed();
-            },
-            child: Container(
-              height: m.chip,
-              padding: EdgeInsets.symmetric(horizontal: m.chipPadding),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius),
-                border: Border.all(
-                  color: selected
-                      ? const Color(0xFFF2F2F4)
-                      : GlassTones.hairline.withValues(alpha: 0.45),
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: m.chipText,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  color: selected ? const Color(0xFF14161A) : Colors.white,
-                ),
-              ),
+        focusNode: focusNode,
+        semanticLabel: label,
+        onTap: onPressed,
+        padding: EdgeInsets.symmetric(horizontal: m.chipPadding),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: m.chipText,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+              color: selected ? const Color(0xFF14161A) : Colors.white,
             ),
           ),
         ),
@@ -2620,91 +2541,81 @@ class _EpisodeCell extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final radius = BorderRadius.circular(metrics.cellRadius);
-    return FocusRing(
-      radius: metrics.cellRadius,
-      child: Semantics(
-        button: true,
-        label: '第 ${episode.number} 集${episode.vip ? '，VIP' : ''}',
-        excludeSemantics: true,
-        child: Material(
-          color: current ? const Color(0xFFF2F2F4) : GlassTones.cell,
-          shape: RoundedRectangleBorder(
-            borderRadius: radius,
-            side: GlassTones.edge(current ? 0.9 : 0.35),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            focusNode: focusNode,
-            onTap: () {
-              unawaited(HapticFeedback.selectionClick());
-              onPressed();
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Center(
-                  child: Text(
-                    '${episode.number}',
-                    style: TextStyle(
-                      fontSize: metrics.cellText,
-                      fontWeight: current
-                          ? FontWeight.w800
-                          : watched
-                          ? FontWeight.w400
-                          : FontWeight.w600,
-                      color: current
-                          ? const Color(0xFF14161A)
-                          : watched
-                          ? colors.onSurfaceVariant
-                          : colors.onSurface,
+    final label = '第 ${episode.number} 集${episode.vip ? '，VIP' : ''}';
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: FrostedGlass(
+        radius: metrics.cellRadius,
+        expand: true,
+        variant: GlassVariant.cell,
+        frosted: false,
+        elevated: false,
+        selected: current,
+        focusNode: focusNode,
+        semanticLabel: label,
+        onTap: onPressed,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
+              child: Text(
+                '${episode.number}',
+                style: TextStyle(
+                  fontSize: metrics.cellText,
+                  fontWeight: current
+                      ? FontWeight.w800
+                      : watched
+                      ? FontWeight.w400
+                      : FontWeight.w600,
+                  color: current
+                      ? const Color(0xFF14161A)
+                      : watched
+                      ? colors.onSurfaceVariant
+                      : colors.onSurface,
+                ),
+              ),
+            ),
+            if (episode.vip && metrics.vipBadge)
+              const Positioned(
+                right: 0,
+                top: 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF2C14E),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(6),
                     ),
                   ),
-                ),
-                if (episode.vip && metrics.vipBadge)
-                  const Positioned(
-                    right: 0,
-                    top: 0,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF2C14E),
-                        borderRadius: BorderRadius.only(
-                          bottomLeft: Radius.circular(6),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        child: Text(
-                          'VIP',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            height: 1.4,
-                            color: Color(0xFF3A2A00),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                else if (episode.vip)
-                  Positioned(
-                    right: 5,
-                    top: 4,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     child: Text(
                       'VIP',
                       style: TextStyle(
-                        fontSize: metrics.cellText - 7,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: dark ? vipGold : const Color(0xFFB08200),
+                        height: 1.4,
+                        color: Color(0xFF3A2A00),
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              )
+            else if (episode.vip)
+              Positioned(
+                right: 5,
+                top: 4,
+                child: Text(
+                  'VIP',
+                  style: TextStyle(
+                    fontSize: metrics.cellText - 7,
+                    fontWeight: FontWeight.w800,
+                    color: dark ? vipGold : const Color(0xFFB08200),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

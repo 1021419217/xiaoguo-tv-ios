@@ -3,7 +3,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
-import '../theme/poster_palette.dart';
 import 'bar_button.dart';
 import 'choice_panel.dart';
 import 'focus_ring.dart';
@@ -204,8 +203,8 @@ class _Tab extends StatelessWidget {
     // 选中时把外层留白等量让给胶囊内边距，标签总宽度不变，切换不跳动。
     // 文字颜色跟随主题（onSurface），浅色顶栏下不会再出现白字消失。
     final ink = colors.onSurface;
-    // 选中胶囊跟随海报色，文字仍用 onSurface，避免彩色底上字看不清。
-    final accent = PosterPalette.instance.buttonTint ?? colors.primary;
+    // 选中胶囊固定中性冷灰磨砂玻璃，文字仍用 onSurface。
+    final accent = GlassTones.hairline;
     final labelColor = selected
         ? ink
         : ink.withValues(alpha: dark ? 0.66 : 0.72);
@@ -230,10 +229,26 @@ class _Tab extends StatelessWidget {
                   : EdgeInsets.zero,
               decoration: selected
                   ? BoxDecoration(
-                      color: accent.withValues(alpha: dark ? 0.16 : 0.09),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: dark
+                            ? const [Color(0xB84E4F55), Color(0xCC17181B)]
+                            : const [Color(0xCCFFFFFF), Color(0xB8E9EAEF)],
+                      ),
+                      image: DecorationImage(
+                        image: AssetImage(
+                          dark
+                              ? GlassTones.frostDark
+                              : GlassTones.frostLight,
+                        ),
+                        repeat: ImageRepeat.repeat,
+                        fit: BoxFit.none,
+                        alignment: Alignment.topLeft,
+                      ),
                       borderRadius: BorderRadius.circular(17),
                       border: Border.all(
-                        color: accent.withValues(alpha: dark ? 0.30 : 0.20),
+                        color: accent.withValues(alpha: dark ? 0.55 : 0.20),
                       ),
                     )
                   : null,
@@ -265,8 +280,6 @@ class _AllCategoriesChip extends StatelessWidget {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    // 玻璃底/描边跟随海报色，图标与文字继续用反色。
-    final tint = PosterPalette.instance.buttonTint ?? ink;
     return Builder(
       builder: (anchor) => Padding(
         padding: const EdgeInsets.only(left: 8, right: 12),
@@ -300,10 +313,34 @@ class _AllCategoriesChip extends StatelessWidget {
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 13),
                           decoration: BoxDecoration(
-                            color: tint.withValues(alpha: dark ? 0.13 : 0.08),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: dark
+                                  ? const [
+                                      Color(0xB84E4F55),
+                                      Color(0xCC17181B),
+                                    ]
+                                  : const [
+                                      Color(0xCCFFFFFF),
+                                      Color(0xB8E9EAEF),
+                                    ],
+                            ),
+                            image: DecorationImage(
+                              image: AssetImage(
+                                dark
+                                    ? GlassTones.frostDark
+                                    : GlassTones.frostLight,
+                              ),
+                              repeat: ImageRepeat.repeat,
+                              fit: BoxFit.none,
+                              alignment: Alignment.topLeft,
+                            ),
                             borderRadius: BorderRadius.circular(19),
                             border: Border.all(
-                              color: tint.withValues(alpha: dark ? 0.22 : 0.14),
+                              color: GlassTones.hairline.withValues(
+                                alpha: dark ? 0.55 : 0.20,
+                              ),
                             ),
                           ),
                           child: Row(

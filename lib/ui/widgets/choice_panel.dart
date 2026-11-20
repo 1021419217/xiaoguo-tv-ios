@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import 'bar_button.dart';
@@ -267,39 +266,29 @@ class _ChoiceCell<T> extends StatelessWidget {
       FormFactor.pad || FormFactor.window => 10.0,
       FormFactor.television => 14.0,
     };
-    return FocusRing(
+    return FrostedGlass(
       radius: radius,
-      child: Material(
-        color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius),
-          side: GlassTones.edge(selected ? 0.90 : 0.35),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          autofocus: selected,
-          focusColor: Colors.transparent,
-          onTap: () {
-            unawaited(HapticFeedback.selectionClick());
-            Navigator.pop(context, option.value);
-          },
-          child: Semantics(
-            selected: selected,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Text(
-                  option.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: form == FormFactor.television ? 15 : 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected
-                        ? const Color(0xFF14161A)
-                        : colors.onSurface,
-                  ),
-                ),
+      expand: true,
+      variant: GlassVariant.cell,
+      frosted: false,
+      elevated: false,
+      selected: selected,
+      autofocus: selected,
+      semanticLabel: option.label,
+      onTap: () => Navigator.pop(context, option.value),
+      child: Semantics(
+        selected: selected,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+              option.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: form == FormFactor.television ? 15 : 14,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                color: selected ? const Color(0xFF14161A) : colors.onSurface,
               ),
             ),
           ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/poster_palette.dart';
+import 'frosted_glass.dart';
 
 /// 统一的胶囊分段控件：模块页、下载页、追剧页共用同一套外观与手感。
 ///
@@ -88,8 +88,18 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
       alpha: dark ? 0.86 : 0.92,
     );
     final selected = weight > 0.5;
-    // 分段高亮跟随海报色：底色/描边带色相，文字仍走反色保证可读。
-    final tint = PosterPalette.instance.buttonTint ?? ink;
+    // 高亮段固定中性冷灰玻璃：斜向受光 + 雾面噪点 + 细亮边，
+    // 强度按 weight 淡入（分页滑动时交叉淡入淡出），不再跟随海报。
+    final glassA = Color.lerp(
+      Colors.transparent,
+      const Color(0xB84E4F55),
+      weight,
+    )!;
+    final glassB = Color.lerp(
+      Colors.transparent,
+      const Color(0xCC17181B),
+      weight,
+    )!;
     return Semantics(
       selected: selected,
       button: true,
@@ -108,9 +118,25 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: tint.withValues(alpha: 0.14 * weight),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [glassA, glassB],
+            ),
+            image: weight > 0.01
+                ? DecorationImage(
+                    image: AssetImage(
+                      dark ? GlassTones.frostDark : GlassTones.frostLight,
+                    ),
+                    repeat: ImageRepeat.repeat,
+                    fit: BoxFit.none,
+                    alignment: Alignment.topLeft,
+                  )
+                : null,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: tint.withValues(alpha: 0.26 * weight)),
+            border: Border.all(
+              color: GlassTones.hairline.withValues(alpha: 0.55 * weight),
+            ),
           ),
           child: Text(
             widget.labels[i],
@@ -132,8 +158,6 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
   Widget _layout(BuildContext context, double position) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    final tint = PosterPalette.instance.buttonTint ?? ink;
     final segments = [
       for (var i = 0; i < widget.labels.length; i++)
         KeyedSubtree(
@@ -170,9 +194,25 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
       padding: widget.margin,
       child: Container(
         decoration: BoxDecoration(
-          color: tint.withValues(alpha: 0.07),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: dark
+                ? const [Color(0xB8303136), Color(0xC81A1B1E)]
+                : const [Color(0xCCFFFFFF), Color(0xB8E9EAEF)],
+          ),
+          image: DecorationImage(
+            image: AssetImage(
+              dark ? GlassTones.frostDark : GlassTones.frostLight,
+            ),
+            repeat: ImageRepeat.repeat,
+            fit: BoxFit.none,
+            alignment: Alignment.topLeft,
+          ),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: tint.withValues(alpha: 0.12)),
+          border: Border.all(
+            color: GlassTones.hairline.withValues(alpha: dark ? 0.42 : 0.16),
+          ),
         ),
         child: content,
       ),

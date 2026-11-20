@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../theme/motion.dart';
-import '../theme/poster_palette.dart';
+import 'frosted_glass.dart';
 import 'focus_ring.dart';
 import 'motion/motion_widgets.dart';
 
@@ -86,9 +86,8 @@ class FollowPill extends StatelessWidget {
     builder: (context, _) {
       final followed = store.isFavorite(drama.id);
       final corner = radius ?? height / 2;
-      // 追剧胶囊跟随海报色：已追剧用更实的填充区分状态，未追剧是淡玻璃。
-      // 没取到色 / 关闭跟随时传 null，退回原来的 FilledButton.tonal 外观。
-      final tint = PosterPalette.instance.buttonTint;
+      // 固定中性冷灰：已追剧用更实的填充区分状态，未追剧是淡玻璃。
+      final ink = Theme.of(context).colorScheme.onSurface;
       return FocusRing(
         radius: corner,
         child: FilledButton.tonalIcon(
@@ -101,16 +100,18 @@ class FollowPill extends StatelessWidget {
           style: FilledButton.styleFrom(
             minimumSize: Size(0, height),
             padding: EdgeInsets.fromLTRB(height / 4, 0, height * 0.35, 0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(corner),
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: GlassTones.hairline.withValues(alpha: 0.50),
+              ),
             ),
             iconSize: height * 0.45,
             textStyle: TextStyle(
               fontSize: height >= 44 ? 15 : 14,
               fontWeight: FontWeight.w600,
             ),
-            backgroundColor: tint?.withValues(alpha: followed ? 0.34 : 0.12),
-            foregroundColor: tint,
+            backgroundColor: ink.withValues(alpha: followed ? 0.18 : 0.08),
+            foregroundColor: ink,
           ),
           icon: ToggleIconSwitcher(
             child: Icon(

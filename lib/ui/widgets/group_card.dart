@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/type_scale.dart';
-import 'bar_button.dart';
 import 'focus_ring.dart';
+import 'frosted_glass.dart';
 
 /// 深灰分组圆角卡：项目之间用极细分隔线，卡片带真磨砂玻璃底色与细亮描边。
 /// 色板固定为中性冷灰，不随海报或视频帧变化。
@@ -21,30 +20,26 @@ class GroupCard extends StatelessWidget {
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
     // 设置页所有条目点下去都没有任何反馈，就是这个原因。
     // 模糊层放在 Material 外侧，只作用于卡片背后的内容，不影响水波纹。
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Material(
-          color: GlassTones.card.withValues(alpha: 0.78),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-            side: GlassTones.edge(0.55),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Divider(height: 1, color: colors.outlineVariant),
-                  ),
-                children[i],
-              ],
+    // 统一磨砂玻璃：真背景模糊 + 斜向受光 + 顶部弧光 + 噪点 + 渐变亮边。
+    // Material 放在最内层，让 ListTile / InkWell 的水波纹画在卡片内部而不是
+    // 被玻璃层盖住；外层玻璃负责裁剪与质感。
+    return FrostedGlass(
+      radius: 22,
+      blur: 18,
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Divider(height: 1, color: colors.outlineVariant),
+                ),
+              children[i],
             ],
-          ),
+          ],
         ),
       ),
     );

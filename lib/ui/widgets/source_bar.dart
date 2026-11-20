@@ -1,8 +1,4 @@
-import 'dart:async';
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import 'bar_button.dart';
@@ -130,109 +126,73 @@ class _SourceSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    // 形状保持胶囊不动；配色锁死为中性冷灰玻璃，不再跟随海报取色。
-    final ink = dark ? Colors.white : colors.onSurface;
-    final glass = GlassTones.hairline;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    // 形状仍是胶囊，但整块换成统一磨砂玻璃：背景模糊透色、左上受光、
+    // 上亮下暗渐变亮边、顶部弧光与雾面颗粒，跟底栏/圆钮同一套质感。
     return Builder(
-      builder: (anchor) => Tooltip(
-        message: '切换站源',
-        child: Semantics(
-          button: true,
-          label: '当前站源 $source，点击切换',
-          child: Material(
-            color: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () {
-                unawaited(HapticFeedback.selectionClick());
-                onSwitchSource(anchor);
-              },
-              borderRadius: BorderRadius.circular(22),
-              splashColor: glass.withValues(alpha: 0.10),
-              child: Container(
-                height: 42,
-                padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: dark
-                        ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
-                        : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: GlassTones.hairline.withValues(
-                      alpha: dark ? 0.72 : 0.18,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const RadialGradient(
-                          center: Alignment(0, -0.4),
-                          radius: 0.95,
-                          colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
-                        ),
-                        border: Border.all(
-                          color: GlassTones.hairline.withValues(alpha: 0.80),
-                          width: 1,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.public_rounded,
-                        size: 17,
-                        weight: 700,
-                        color: ink,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 132),
-                      child: Text(
-                        source,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                          color: ink,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 18,
-                      color: ink.withValues(alpha: 0.55),
-                    ),
-                  ],
+      builder: (anchor) => FrostedGlass(
+        radius: 22,
+        height: 42,
+        blur: 16,
+        padding: const EdgeInsets.fromLTRB(8, 0, 12, 0),
+        tooltip: '切换站源',
+        semanticLabel: '当前站源 $source，点击切换',
+        onTap: () => onSwitchSource(anchor),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _GlassBadge(icon: Icons.public_rounded, ink: ink),
+            const SizedBox(width: 9),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 132),
+              child: Text(
+                source,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  color: ink,
                 ),
               ),
             ),
-          ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: ink.withValues(alpha: 0.55),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// 顶栏搜索胶囊：保留「搜索」二字，与左侧换源胶囊左右同款呼应。
-///
-/// 左端一枚圆形放大镜徽标，径向渐变 + 细亮边 + 粗图标，玻璃底固定为
-/// 中性冷灰。搜索功能 [onPressed] 原样透传，形状与交互都不变。
+/// 胶囊左端的圆形玻璃徽标：与整块胶囊同款磨砂质感，
+/// 但关掉背景模糊（避免胶囊内再嵌一层 BackdropFilter 的双重开销）。
+class _GlassBadge extends StatelessWidget {
+  const _GlassBadge({required this.icon, required this.ink});
+  final IconData icon;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) => FrostedGlass(
+    circle: true,
+    width: 28,
+    height: 28,
+    selected: true,
+    frosted: false,
+    child: Center(
+      child: Icon(icon, size: 17, weight: 700, color: ink),
+    ),
+  );
+}
+
+/// 顶栏搜索胶囊：保留「搜索」二字，与左侧换源胶囊左右同款磨砂玻璃。
+/// 搜索功能 [onPressed] 原样透传，形状与交互都不变。
 class _SearchPill extends StatelessWidget {
   const _SearchPill({required this.tooltip, required this.onPressed});
   final String tooltip;
@@ -241,96 +201,37 @@ class _SearchPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : colors.onSurface;
-    final glass = GlassTones.hairline;
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(21),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () {
-              unawaited(HapticFeedback.selectionClick());
-              onPressed();
-            },
-            borderRadius: BorderRadius.circular(21),
-            splashColor: glass.withValues(alpha: 0.10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(21),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.fromLTRB(6, 0, 11, 0),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: dark
-                          ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
-                          : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
-                    ),
-                    borderRadius: BorderRadius.circular(21),
-                    border: Border.all(
-                      color: GlassTones.hairline.withValues(
-                        alpha: dark ? 0.72 : 0.18,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            center: Alignment(0, -0.4),
-                            radius: 0.95,
-                            colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
-                          ),
-                          border: Border.all(
-                            color: GlassTones.hairline.withValues(alpha: 0.80),
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.search_rounded,
-                          size: 17,
-                          weight: 700,
-                          color: ink,
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        '搜索',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                          color: ink.withValues(alpha: 0.92),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 17,
-                        color: ink.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    return FrostedGlass(
+      radius: 21,
+      height: 42,
+      blur: 16,
+      padding: const EdgeInsets.fromLTRB(6, 0, 11, 0),
+      tooltip: tooltip,
+      semanticLabel: tooltip,
+      onTap: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _GlassBadge(icon: Icons.search_rounded, ink: ink),
+          const SizedBox(width: 7),
+          Text(
+            '搜索',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+              color: ink.withValues(alpha: 0.92),
             ),
           ),
-        ),
+          const SizedBox(width: 2),
+          Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 17,
+            color: ink.withValues(alpha: 0.5),
+          ),
+        ],
       ),
     );
   }
