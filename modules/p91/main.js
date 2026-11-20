@@ -344,7 +344,9 @@ function composeAuthor(html) {
       return { author: name, authorId: uid, authorUrl: SITE + '/uvideos.php?UID=' + uid };
     }
   }
-  return null;
+  // 名字被字体加密（data-* + 自定义字体），服务端拿不到明文：用「用户+UID前6位」
+  // 占位，保住「点作者看作品」的能力。
+  return { author: authorDisplayName('', uid), authorId: uid, authorUrl: SITE + '/uprofile.php?UID=' + uid };
 }
 
 // 极短诊断，塞进简介里让人一眼看到（App 的模块日志要靠新版才显示）
