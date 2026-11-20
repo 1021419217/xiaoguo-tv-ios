@@ -266,9 +266,20 @@ module.exports = {
   search(page, query) {
     const keyword = String(query || '').trim();
     if (keyword === '') return { items: [], hasMore: false };
-    const path = '/videos?keyword=' + encodeURIComponent(keyword);
-    const response = get(path);
-    return { items: parseCards(response.text).map(toDrama), hasMore: false };
+    const current = page && page > 1 ? page : 1;
+    const query_ = '?keyword=' + encodeURIComponent(keyword);
+    const paths =
+      current === 1
+        ? ['/videos' + query_]
+        : ['/videos/page-' + current + query_, '/videos' + query_ + '&page=' + current];
+    for (const path of paths) {
+      const response = get(path);
+      const items = parseCards(response.text).map(toDrama);
+      if (items.length > 0) {
+        return { items: items, hasMore: items.length >= 10 };
+      }
+    }
+    return { items: [], hasMore: false };
   },
 
   detail: detail,
