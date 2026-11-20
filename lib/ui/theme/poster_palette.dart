@@ -135,7 +135,7 @@ Future<Color?> extractCoverColor(String path) async {
 /// 保证「视频色」和「海报色」用完全同一套算法，观感一致。
 Future<Color?> extractColorFromImageBytes(Uint8List bytes) async {
   ui.Image? image;
-  ui.ImageCodec? codec;
+  ui.Codec? codec;
   try {
     if (bytes.isEmpty) return null;
     codec = await ui.instantiateImageCodec(
@@ -145,7 +145,7 @@ Future<Color?> extractColorFromImageBytes(Uint8List bytes) async {
     );
     final frame = await codec.getNextFrame();
     image = frame.image;
-    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final data = await image!.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (data == null) return null;
     final pixels = data.buffer.asUint8List();
     return _dominantHue(pixels);
