@@ -640,6 +640,9 @@ module.exports = {
     } catch (e) { host.log('91porn 取播放地址失败: ' + e.message); }
 
     const drama = toDrama({ sourceId: key, title: meta.title || key, cover: meta.poster, duration: meta.duration });
+    // 详情页「添加时间: 2026-11-19」→ onlineDate，UI 显示在发行/时间一栏。
+    const added = String(html || '').match(/添加时间\s*:?\s*(?:<[^>]*>\s*)*([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+    if (added) drama.onlineDate = added[1];
     const author = authorOf(html, key);
     if (author) {
       drama.author = author.author;
