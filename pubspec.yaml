@@ -1,7 +1,12 @@
 ﻿name: duanju_app
 description: 独立运行的多端短剧应用
 publish_to: none
-version: 2.6.5+60
+# 版本号规则（每出一个可安装包必须递增，禁止只动构件号或忘记 bump）：
+# 1) 版本末位 +1，构件号（+N）同步无条件 +1；
+# 2) 末位累计到 10 时向前进 1 位、末位归 0（3.0.10 -> 3.1.0；2.1.10 -> 2.2.0）；
+#    中位累计到 10 时同理向首位进 1。
+# 例：2.6.9+64 -> 2.6.10+65 -> 2.7.0+66
+version: 2.6.6+61
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -53,7 +58,7 @@ flutter:
   config:
     enable-swift-package-manager: false
   uses-material-design: true
-  # 磨砂玻璃的可无缝平铺噪点纹理（深/浅各一张，极淡，只做雾面颗粒）。
+  # 噪点纹理资源（现已停用：质感改为高斯模糊 + 通透玻璃，不再铺雾面颗粒）。
   assets:
     - assets/textures/frost_dark.png
     - assets/textures/frost_light.png

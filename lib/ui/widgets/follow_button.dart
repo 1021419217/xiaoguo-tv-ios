@@ -167,16 +167,21 @@ class FollowIcon extends StatelessWidget {
         label: followed ? '已追剧，轻点取消' : '追剧',
         button: true,
         excludeSemantics: true,
-        child: IconButton(
-          key: const ValueKey('follow-toggle'),
-          onPressed: () => _toggle(context, store, drama),
-          style: IconButton.styleFrom(fixedSize: Size.square(extent)),
-          icon: ToggleIconSwitcher(
-            child: Icon(
-              followed ? Icons.bookmark_rounded : Icons.bookmark_add_outlined,
-              key: ValueKey(followed),
-              size: size,
-              color: followed ? activeColor : color,
+        child: FrostedGlass(
+          circle: true,
+          width: extent,
+          height: extent,
+          blur: 10,
+          elevated: false,
+          onTap: () => _toggle(context, store, drama),
+          child: Center(
+            child: ToggleIconSwitcher(
+              child: Icon(
+                followed ? Icons.bookmark_rounded : Icons.bookmark_add_outlined,
+                key: ValueKey(followed),
+                size: size,
+                color: followed ? activeColor : color,
+              ),
             ),
           ),
         ),

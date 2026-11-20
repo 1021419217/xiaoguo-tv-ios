@@ -7,7 +7,7 @@ import '../theme/type_scale.dart';
 import 'focus_ring.dart';
 import 'frosted_glass.dart';
 
-/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带真磨砂玻璃底色与细亮描边。
+/// 深灰分组圆角卡：项目之间用极细分隔线，卡片是高斯模糊玻璃底色 + 细亮描边。
 /// 色板固定为中性冷灰，不随海报或视频帧变化。
 class GroupCard extends StatelessWidget {
   const GroupCard({super.key, required this.children});
@@ -20,7 +20,7 @@ class GroupCard extends StatelessWidget {
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
     // 设置页所有条目点下去都没有任何反馈，就是这个原因。
     // 模糊层放在 Material 外侧，只作用于卡片背后的内容，不影响水波纹。
-    // 统一磨砂玻璃：真背景模糊 + 斜向受光 + 顶部弧光 + 噪点 + 渐变亮边。
+    // 统一高斯玻璃：真背景模糊 + 极淡斜向受光 + 顶部反光 + 渐变亮边。
     // Material 放在最内层，让 ListTile / InkWell 的水波纹画在卡片内部而不是
     // 被玻璃层盖住；外层玻璃负责裁剪与质感。
     return FrostedGlass(
@@ -72,7 +72,11 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final badge = iconColor ?? colors.primary;
+    // 短剧之家的图标底是亮饱和的实色圆，不是压暗的半透明径向渐变。
+    // 统一往白提一档，紫色/橙色才不会在深色玻璃上发灰。
+    final raw = iconColor ?? colors.primary;
+    final badge = Color.lerp(raw, Colors.white, 0.14) ?? raw;
+    final badgeEdge = Color.lerp(badge, Colors.black, 0.08) ?? badge;
     return TileFocus(
       builder: (focusNode) => ListTile(
         focusNode: focusNode,
@@ -88,10 +92,7 @@ class SettingsTile extends StatelessWidget {
                   gradient: RadialGradient(
                     center: const Alignment(0, -0.4),
                     radius: 0.95,
-                    colors: [
-                      badge.withValues(alpha: 0.95),
-                      badge.withValues(alpha: 0.62),
-                    ],
+                    colors: [badge, badgeEdge],
                   ),
                   shape: BoxShape.circle,
                   border: Border.all(

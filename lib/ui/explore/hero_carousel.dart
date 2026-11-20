@@ -192,7 +192,7 @@ class _HeroCarouselState extends State<HeroCarousel> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0x33000000), Color(0xCC000000)],
+            colors: [Color(0x33202A3C), Color(0xCC12161E)],
           ),
         ),
       ),

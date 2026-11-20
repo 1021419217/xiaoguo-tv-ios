@@ -355,14 +355,16 @@ class _AppShellState extends State<AppShell>
         FormFactor.phone => Scaffold(
           body: pages,
           extendBody: true,
-          // 短剧之家式居中悬浮胶囊底栏：不占满宽度、浮在内容之上，
-          // 搜索仍在顶部，不放独立搜索球。玻璃底色跟随当前海报色相。
+          // 悬浮底栏要贴近小白条：去掉 SafeArea 强加的 34pt 底部安全区，
+          // 只留 8pt 呼吸位（参照用户给的 Telegram 底栏）。底栏本身恢复
+          // 原来的 66 高度，不再靠压扁它来"变矮"。
           bottomNavigationBar: covered
               ? null
-              : SafeArea(
-                  top: false,
+              : MediaQuery.removePadding(
+                  context: context,
+                  removeBottom: true,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                     child: _FloatingCapsuleBar(
                       tabs: tabs,
                       selected: _tab,
@@ -855,11 +857,11 @@ class _FloatingCapsuleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 整条底栏就是一块磨砂玻璃：背景模糊透出冷灰蓝渐变，左上受光、
+    // 整条底栏就是一块玻璃：背景高斯模糊透出冷灰蓝渐变，左上受光、
     // 上缘一道细亮白线，底下垫柔和外阴影，高度按参考图收到 56。
     return FrostedGlass(
-      radius: 28,
-      height: 56,
+      radius: 32,
+      height: 66,
       blur: 24,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Row(
@@ -929,25 +931,27 @@ class _CapsuleDestination extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        // 选中项是一颗「鼓起来的玻璃豆」：比底栏亮一档，自带渐变亮边、
-        // 顶部弧光与磨砂颗粒；未选中项保持透明，直接露出底栏玻璃。
+        // 选中项是一颗「鼓起来的圆形玻璃豆」：居中、比底栏亮一档，自带
+        // 高斯模糊、渐变亮边与顶部弧光；未选中项保持透明，直接露出底栏玻璃。
         child: AnimatedSwitcher(
           duration: Motion.of(context, Motion.short),
           switchInCurve: Motion.standard,
           switchOutCurve: Motion.standard,
           child: active
-              ? FrostedGlass(
+              ? Center(
                   key: const ValueKey('selected'),
-                  radius: 24,
-                  height: 48,
-                  expand: true,
-                  blur: 12,
-                  selected: true,
-                  child: content,
+                  child: FrostedGlass(
+                    radius: 27,
+                    width: 82,
+                    height: 54,
+                    blur: 14,
+                    selected: true,
+                    child: content,
+                  ),
                 )
               : SizedBox(
                   key: const ValueKey('idle'),
-                  height: 48,
+                  height: 54,
                   width: double.infinity,
                   child: content,
                 ),

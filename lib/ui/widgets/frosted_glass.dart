@@ -19,7 +19,8 @@ abstract final class GlassTones {
   static const Color orbSelected = Color(0xFF4B4B4D);
   static const Color hairline = Color(0xFF4A4A4C);
 
-  /// 可无缝平铺的磨砂颗粒纹理。深色玻璃用白色颗粒，浅色用黑色颗粒。
+  /// 噪点纹理（早期误把「磨砂」理解成雾面颗粒，已停用；保留仅为兼容旧调用）。
+  /// 现在的质感是高斯模糊 + 通透玻璃，不需要任何颗粒层。
   static const String frostDark = 'assets/textures/frost_dark.png';
   static const String frostLight = 'assets/textures/frost_light.png';
 
@@ -32,17 +33,19 @@ abstract final class GlassTones {
 /// 一次渲染几十个的密集控件（更暗、更薄、不投影）。
 enum GlassVariant { surface, cell }
 
-/// 磨砂玻璃表面。
+/// 高斯模糊玻璃表面。
 ///
-/// 参考短剧之家放大图，质感靠五层叠加，缺一层就会退化成「亮面塑料片」：
-///   1. `BackdropFilter` 真模糊 —— 背后的底色/内容被雾化后透出来（玻璃感）；
-///   2. 斜向受光渐变 —— 左上亮、右下暗，不是均匀径向；
-///   3. 顶部弧形高光 + 底部内阴影 —— 球面鼓起与玻璃厚度；
-///   4. 可无缝平铺的噪点纹理 —— 雾面磨砂颗粒；
-///   5. 1px 渐变描边（上/左亮、下/右暗）+ 柔和外阴影 —— 把控件从背景里浮出来。
+/// 参考短剧之家的实际效果：主体是「透过玻璃看到被高斯模糊的背景」，
+/// 不是一层雾面颗粒。质感靠四层叠加：
+///   1. `BackdropFilter` 真高斯模糊 —— 背后的环境光/内容被化开后透出来，
+///      这是玻璃感的来源，玻璃底色必须足够透，否则会被盖成一块灰板；
+///   2. 极淡的斜向受光渐变 —— 左上略亮、右下略暗，只做倾向不做实底；
+///   3. 顶部弧形反光 + 很轻的底部内阴影 —— 玻璃厚度与球面鼓起；
+///   4. 1px 渐变亮边（上/左亮、下/右暗）+ 柔和外阴影 —— 把玻璃从背景浮出来。
 ///
-/// [frosted] 关掉时跳过昂贵的 BackdropFilter，只保留其余四层，
+/// [frosted] 关掉时跳过昂贵的 BackdropFilter，只保留其余层，
 /// 供集数格子 / 分段胶囊这类一次渲染几十个的密集控件复用，视觉仍一致。
+/// [noise] 默认关闭：早期误加的雾面颗粒会把玻璃糊成水泥板。
 class FrostedGlass extends StatelessWidget {
   const FrostedGlass({
     super.key,
@@ -52,9 +55,9 @@ class FrostedGlass extends StatelessWidget {
     this.width,
     this.height,
     this.padding,
-    this.blur = 18,
+    this.blur = 26,
     this.frosted = true,
-    this.noise = true,
+    this.noise = false,
     this.selected = false,
     this.accent = false,
     this.variant = GlassVariant.surface,
@@ -132,7 +135,7 @@ class FrostedGlass extends StatelessWidget {
     );
   }
 
-  /// 第 2 层：斜向受光，左上亮右下暗。
+  /// 第 2 层：极淡的斜向受光倾向，只给方向不铺实底。
   LinearGradient _slant(bool dark) {
     if (variant == GlassVariant.cell) {
       // 集数格子 / 分段：底色更暗更薄，选中态是白底（对齐截图里的选中格）。
@@ -147,9 +150,9 @@ class FrostedGlass extends StatelessWidget {
                       Color(0xD6DCDCE0),
                     ]
                   : const [
-                      Color(0xB836373D),
-                      Color(0xBE242529),
-                      Color(0xD0141416),
+                      Color(0x8E3A3B42),
+                      Color(0x90282A2F),
+                      Color(0x9C18191D),
                     ])
             : const [
                 Color(0xD9FFFFFF),
@@ -159,32 +162,34 @@ class FrostedGlass extends StatelessWidget {
         stops: const [0.0, 0.48, 1.0],
       );
     }
+    // 玻璃本体：alpha 压到 0x20~0x50 区间，让 BackdropFilter 的高斯模糊
+    // 真正透出来。之前 0xA8~0xC4 的实心底把模糊全盖住，才变成灰水泥板。
     return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-        colors: dark
-            ? (selected
-                  ? const [
-                      Color(0xCE828389),
-                      Color(0xCE5A5B61),
-                      Color(0xDC3A3B40),
-                    ]
-                  : accent
-                  ? const [
-                      Color(0xBA6E6F76),
-                      Color(0xBA4A4B51),
-                      Color(0xCC2B2C31),
-                    ]
-                  : const [
-                      Color(0xA864656C),
-                      Color(0xAE3E3F45),
-                      Color(0xC41D1E22),
-                    ])
-            : const [
-                Color(0xCCFFFFFF),
-                Color(0xB8F2F3F7),
-                Color(0xA9E2E4EA),
-              ],
+      colors: dark
+          ? (selected
+                ? const [
+                    Color(0x5AA0A5B2),
+                    Color(0x4E727680),
+                    Color(0x56474A54),
+                  ]
+                : accent
+                ? const [
+                    Color(0x468C919E),
+                    Color(0x3A5F636E),
+                    Color(0x42393C46),
+                  ]
+                : const [
+                    Color(0x329AA0AE),
+                    Color(0x266E737E),
+                    Color(0x2E454A55),
+                  ])
+          : const [
+              Color(0x8CFFFFFF),
+              Color(0x78F2F3F7),
+              Color(0x70E2E4EA),
+            ],
       stops: const [0.0, 0.48, 1.0],
     );
   }
@@ -194,7 +199,7 @@ class FrostedGlass extends StatelessWidget {
   RadialGradient _topGlow(bool circle) => RadialGradient(
     center: circle ? const Alignment(0, -0.5) : const Alignment(0, -1.05),
     radius: circle ? 1.1 : 1.45,
-    colors: const [Color(0x2BFFFFFF), Color(0x00FFFFFF)],
+    colors: const [Color(0x3AFFFFFF), Color(0x00FFFFFF)],
     stops: [0.0, 1.0],
   );
 
@@ -202,7 +207,7 @@ class FrostedGlass extends StatelessWidget {
   LinearGradient get _innerShade => const LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0x00000000), Color(0x00000000), Color(0x33000000)],
+    colors: [Color(0x00000000), Color(0x00000000), Color(0x20000000)],
     stops: [0.0, 0.52, 1.0],
   );
 
@@ -325,7 +330,7 @@ class FrostedGlass extends StatelessWidget {
   }
 }
 
-/// 短剧之家式圆形玻璃钮：五层磨砂玻璃 + 白色粗实心图标。
+/// 短剧之家式圆形玻璃钮：高斯模糊玻璃 + 白色粗实心图标。
 class GlassOrb extends StatelessWidget {
   const GlassOrb({
     super.key,
@@ -356,7 +361,7 @@ class GlassOrb extends StatelessWidget {
       circle: true,
       width: size,
       height: size,
-      blur: 10,
+      blur: 16,
       selected: selected,
       accent: accent,
       onTap: onTap,

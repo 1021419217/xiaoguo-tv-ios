@@ -14,8 +14,8 @@ import '../app_scope.dart';
 import '../downloads/download_actions.dart';
 import '../theme/app_theme.dart';
 import '../theme/motion.dart';
-import '../theme/poster_palette.dart';
 import '../widgets/follow_button.dart';
+import '../widgets/frosted_glass.dart';
 import '../widgets/loading_halo.dart';
 import '../widgets/seek_bar.dart';
 import 'danmaku_overlay.dart';
@@ -333,7 +333,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       _holding = true;
       _heldIndex = _session.index;
     });
-    _say('${_session.store.playbackPreferences.boostLabel}加速中');
   }
 
   void _pointerMove(PointerMoveEvent event) {
@@ -399,7 +398,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     if (!_holding) return;
     _session.endBoost();
     setState(() => _holding = false);
-    _say('恢复 1 倍速');
   }
 
   Future<void> _openSettings() => showPlayerSheet(
@@ -605,19 +603,12 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     width: 92,
                     height: 92,
                     child: Center(
-                      child: AnimatedContainer(
-                        duration: Motion.of(context, Motion.short),
+                      child: FrostedGlass(
+                        circle: true,
                         width: 72,
                         height: 72,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: .38),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: PosterPalette.instance.videoTint
-                                    ?.withValues(alpha: .48) ??
-                                Colors.white.withValues(alpha: .22),
-                          ),
-                        ),
+                        blur: 10,
+                        elevated: false,
                         child: AnimatedSwitcher(
                           duration: Motion.of(context, Motion.short),
                           transitionBuilder: (child, animation) =>
@@ -815,12 +806,12 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     return Row(
       spacing: 2,
       children: [
-        IconButton(
-          onPressed: () => unawaited(Navigator.maybePop(context)),
-          icon: const Icon(Icons.arrow_back_rounded),
-          color: Colors.white,
+        GlassOrb(
+          icon: Icons.arrow_back_rounded,
+          size: 48,
+          iconSize: 24,
+          onTap: () => unawaited(Navigator.maybePop(context)),
           tooltip: '返回',
-          style: IconButton.styleFrom(fixedSize: const Size.square(48)),
         ),
         Expanded(
           child: Column(
@@ -855,17 +846,14 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
           color: Colors.white,
           activeColor: Theme.of(context).colorScheme.primaryFixedDim,
         ),
-        // 播放设置原来靠「长按画面中间」触发，太隐蔽；改成顶栏图标，
-        // 和横屏页的齿轮位置一致。
-        IconButton(
-          onPressed: () {
+        GlassOrb(
+          icon: Icons.settings_rounded,
+          size: 44,
+          onTap: () {
             setState(_wake);
             unawaited(_openSettings());
           },
-          icon: const Icon(Icons.settings_rounded),
-          color: Colors.white,
           tooltip: '播放设置',
-          style: IconButton.styleFrom(fixedSize: const Size.square(44)),
         ),
       ],
     );
@@ -949,15 +937,15 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     final drama = _session.detail.drama;
     final count = _session.detail.episodes.length;
     final status = _status(drama);
-    return Material(
-      color: Colors.white.withValues(alpha: .14),
-      borderRadius: BorderRadius.circular(12),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _openEpisodes,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 12, 0),
-          child: Row(
+    return FrostedGlass(
+      radius: 12,
+      height: 44,
+      blur: 16,
+      elevated: false,
+      onTap: _openEpisodes,
+      semanticLabel: '选集，共 $count 集',
+      padding: const EdgeInsets.fromLTRB(14, 0, 12, 0),
+      child: Row(
             spacing: 8,
             children: [
               const Icon(
@@ -990,8 +978,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                 color: Colors.white,
               ),
             ],
-          ),
-        ),
       ),
     );
   }

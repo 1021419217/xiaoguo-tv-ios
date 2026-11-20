@@ -6,6 +6,7 @@ import '../../playback_preferences.dart';
 import '../../playback_session.dart';
 import '../theme/app_theme.dart';
 import '../theme/poster_palette.dart';
+import '../widgets/frosted_glass.dart';
 import 'cast_page.dart';
 import 'danmaku_settings.dart';
 
@@ -43,13 +44,21 @@ Future<void> showPlayerSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: theme.colorScheme.surfaceContainerLow,
+    // 弹层也用统一高斯玻璃：底色调透明，让 FrostedGlass 去糊后面的画面。
+    backgroundColor: Colors.transparent,
     constraints: BoxConstraints.tightFor(height: height),
     builder: (context) => Theme(
       data: theme,
       child: DefaultTextStyle.merge(
         style: TextStyle(color: theme.colorScheme.onSurface),
-        child: Builder(builder: builder),
+        child: FrostedGlass(
+          radius: 24,
+          width: double.infinity,
+          height: height,
+          blur: 28,
+          elevated: false,
+          child: Builder(builder: builder),
+        ),
       ),
     ),
   );
@@ -89,9 +98,11 @@ class PlaybackSettings extends StatelessWidget {
       SheetHeader(
         children: [
           const Expanded(child: Text('播放设置', style: sheetTitle)),
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close_rounded),
+          GlassOrb(
+            icon: Icons.close_rounded,
+            size: 38,
+            iconSize: 20,
+            onTap: () => Navigator.pop(context),
             tooltip: '关闭',
           ),
         ],
@@ -309,11 +320,21 @@ class _Choice extends StatelessWidget {
   final VoidCallback? onSelected;
 
   @override
-  Widget build(BuildContext context) => ChoiceChip(
-    label: Text(label),
+  Widget build(BuildContext context) => FrostedGlass(
+    radius: 20,
+    frosted: false,
+    elevated: false,
     selected: selected,
-    showCheckmark: false,
-    shape: const StadiumBorder(),
-    onSelected: onSelected == null ? null : (_) => onSelected!(),
+    onTap: onSelected,
+    semanticLabel: label,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        color: Colors.white.withValues(alpha: selected ? 1.0 : 0.92),
+      ),
+    ),
   );
 }

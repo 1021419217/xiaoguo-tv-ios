@@ -233,8 +233,8 @@ class _Tab extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: dark
-                            ? const [Color(0xB84E4F55), Color(0xCC17181B)]
-                            : const [Color(0xCCFFFFFF), Color(0xB8E9EAEF)],
+                            ? const [Color(0x4A4E4F55), Color(0x5617181B)]
+                            : const [Color(0x78FFFFFF), Color(0x70E9EAEF)],
                       ),
                       image: DecorationImage(
                         image: AssetImage(
@@ -318,12 +318,12 @@ class _AllCategoriesChip extends StatelessWidget {
                               end: Alignment.bottomRight,
                               colors: dark
                                   ? const [
-                                      Color(0xB84E4F55),
-                                      Color(0xCC17181B),
+                                      Color(0x4A4E4F55),
+                                      Color(0x5617181B),
                                     ]
                                   : const [
-                                      Color(0xCCFFFFFF),
-                                      Color(0xB8E9EAEF),
+                                      Color(0x78FFFFFF),
+                                      Color(0x70E9EAEF),
                                     ],
                             ),
                             image: DecorationImage(

@@ -312,7 +312,51 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
             stops: const [0.0, 0.45, 1.0],
           ),
         ),
-        child: AnnotatedRegion<SystemUiOverlayStyle>(
+        child: DecoratedBox(
+          // 高斯模糊必须有「可糊的东西」：两团很淡但有边界的环境光斑。
+          // 玻璃控件压在上面时，光斑边缘被化开，才看得出是玻璃而不是灰板。
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(-0.85, -0.92),
+              radius: 0.85,
+              colors:
+                  (!pureBlack &&
+                      Theme.of(context).brightness == Brightness.dark)
+                  ? const [
+                      Color(0x2A6C86D6),
+                      Color(0x126C86D6),
+                      Color(0x006C86D6),
+                    ]
+                  : const [
+                      Color(0x00000000),
+                      Color(0x00000000),
+                      Color(0x00000000),
+                    ],
+              stops: const [0.0, 0.42, 1.0],
+            ),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0.92, 0.30),
+                radius: 0.78,
+                colors:
+                    (!pureBlack &&
+                        Theme.of(context).brightness == Brightness.dark)
+                    ? const [
+                        Color(0x1E9A7BC4),
+                        Color(0x0C9A7BC4),
+                        Color(0x009A7BC4),
+                      ]
+                    : const [
+                        Color(0x00000000),
+                        Color(0x00000000),
+                        Color(0x00000000),
+                      ],
+                stops: const [0.0, 0.40, 1.0],
+              ),
+            ),
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
           value: AppTheme.systemBars(Theme.of(context).brightness),
         child: Focus(
           canRequestFocus: false,
@@ -365,6 +409,8 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
             ),
           ),
         ),
+        ),
+          ),
         ),
       ),
       themeAnimationDuration: Motion.long,

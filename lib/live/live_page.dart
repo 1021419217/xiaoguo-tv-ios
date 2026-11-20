@@ -388,7 +388,6 @@ class _LivePageState extends State<LivePage> {
   /// 合并成一个「全部频道」。
   Widget _platformBar() {
     final favourites = widget.store.favourites.length;
-    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 62,
       child: Row(
@@ -432,24 +431,6 @@ class _LivePageState extends State<LivePage> {
                       ),
                     );
                   },
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  width: 24,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            colors.surface.withValues(alpha: 0),
-                            colors.surface,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
