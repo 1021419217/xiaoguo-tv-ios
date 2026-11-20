@@ -558,9 +558,9 @@ class LocalStore extends ChangeNotifier {
   }
 
   bool get followSystemColor => _flag('followSystemColor', true);
-  /// 跟随首页海报取色：开启后全局表面层按当前轮播海报的色系变化。
-  /// 默认开启（短剧之家的核心视觉），与「跟随系统取色」互斥。
-  bool get followPosterColor => _flag('followPosterColor', true);
+  /// 历史开关：早期用于「跟随海报动态取色」，现已固定风格，恒为 false。
+  /// 保留字段/setter/备份键，避免老用户配置与导入导出格式不兼容。
+  bool get followPosterColor => false;
   ThemeColor get themeColor =>
       ThemeColor.byName(_settings['themeColor']) ?? ThemeColor.orange;
   bool get sideBarExpanded => preferences.getBool('sideBarExpanded') ?? true;

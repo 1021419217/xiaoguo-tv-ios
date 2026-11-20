@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
-import '../theme/poster_palette.dart';
 import 'bar_button.dart';
 import 'page_header.dart';
 import 'search_field.dart';
@@ -131,11 +132,9 @@ class _SourceSwitcher extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    // 形状保持胶囊不动，仅配色接入实时海报取色：玻璃底与地球徽标跟随
-    // 当前海报色相，文字仍用反色保证可读；没取到色 / 关闭跟随时退回白/墨玻璃。
+    // 形状保持胶囊不动；配色锁死为中性冷灰玻璃，不再跟随海报取色。
     final ink = dark ? Colors.white : colors.onSurface;
-    final glass =
-        PosterPalette.instance.buttonTint ?? (dark ? Colors.white : colors.onSurface);
+    final glass = GlassTones.hairline;
     return Builder(
       builder: (anchor) => Tooltip(
         message: '切换站源',
@@ -149,7 +148,10 @@ class _SourceSwitcher extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => onSwitchSource(anchor),
+              onTap: () {
+                unawaited(HapticFeedback.selectionClick());
+                onSwitchSource(anchor);
+              },
               borderRadius: BorderRadius.circular(22),
               splashColor: glass.withValues(alpha: 0.10),
               child: Container(
@@ -159,14 +161,15 @@ class _SourceSwitcher extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      glass.withValues(alpha: dark ? 0.16 : 0.09),
-                      glass.withValues(alpha: dark ? 0.07 : 0.04),
-                    ],
+                    colors: dark
+                        ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
+                        : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
                   ),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: glass.withValues(alpha: dark ? 0.26 : 0.16),
+                    color: GlassTones.hairline.withValues(
+                      alpha: dark ? 0.72 : 0.18,
+                    ),
                   ),
                 ),
                 child: Row(
@@ -177,12 +180,21 @@ class _SourceSwitcher extends StatelessWidget {
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: glass.withValues(alpha: 0.22),
+                        gradient: const RadialGradient(
+                          center: Alignment(0, -0.4),
+                          radius: 0.95,
+                          colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
+                        ),
+                        border: Border.all(
+                          color: GlassTones.hairline.withValues(alpha: 0.80),
+                          width: 1,
+                        ),
                       ),
                       child: Icon(
                         Icons.public_rounded,
                         size: 17,
-                        color: glass,
+                        weight: 700,
+                        color: ink,
                       ),
                     ),
                     const SizedBox(width: 9),
@@ -217,11 +229,10 @@ class _SourceSwitcher extends StatelessWidget {
   }
 }
 
-/// 顶栏搜索胶囊：保留「搜索」二字，同时套用短剧之家的圆形玻璃语言。
+/// 顶栏搜索胶囊：保留「搜索」二字，与左侧换源胶囊左右同款呼应。
 ///
-/// 左端一枚圆形放大镜徽标（与左侧换源胶囊的地球徽标同款呼应），
-/// 玻璃底 / 描边 / 徽标都跟随当前海报取色，没取到色时退回中性白玻璃。
-/// 搜索功能 [onPressed] 原样透传，形状与交互都不变。
+/// 左端一枚圆形放大镜徽标，径向渐变 + 细亮边 + 粗图标，玻璃底固定为
+/// 中性冷灰。搜索功能 [onPressed] 原样透传，形状与交互都不变。
 class _SearchPill extends StatelessWidget {
   const _SearchPill({required this.tooltip, required this.onPressed});
   final String tooltip;
@@ -233,8 +244,7 @@ class _SearchPill extends StatelessWidget {
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : colors.onSurface;
-    final glass = PosterPalette.instance.buttonTint ??
-        (dark ? Colors.white : colors.onSurface);
+    final glass = GlassTones.hairline;
     return Tooltip(
       message: tooltip,
       child: Semantics(
@@ -245,7 +255,10 @@ class _SearchPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(21),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: onPressed,
+            onTap: () {
+              unawaited(HapticFeedback.selectionClick());
+              onPressed();
+            },
             borderRadius: BorderRadius.circular(21),
             splashColor: glass.withValues(alpha: 0.10),
             child: ClipRRect(
@@ -259,14 +272,15 @@ class _SearchPill extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        glass.withValues(alpha: dark ? 0.16 : 0.09),
-                        glass.withValues(alpha: dark ? 0.07 : 0.04),
-                      ],
+                      colors: dark
+                          ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
+                          : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
                     ),
                     borderRadius: BorderRadius.circular(21),
                     border: Border.all(
-                      color: glass.withValues(alpha: dark ? 0.26 : 0.16),
+                      color: GlassTones.hairline.withValues(
+                        alpha: dark ? 0.72 : 0.18,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -277,12 +291,21 @@ class _SearchPill extends StatelessWidget {
                         height: 28,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: glass.withValues(alpha: 0.22),
+                          gradient: const RadialGradient(
+                            center: Alignment(0, -0.4),
+                            radius: 0.95,
+                            colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
+                          ),
+                          border: Border.all(
+                            color: GlassTones.hairline.withValues(alpha: 0.80),
+                            width: 1,
+                          ),
                         ),
                         child: Icon(
                           Icons.search_rounded,
                           size: 17,
-                          color: glass,
+                          weight: 700,
+                          color: ink,
                         ),
                       ),
                       const SizedBox(width: 7),

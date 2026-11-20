@@ -70,8 +70,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
   Timer? _streakTimer;
   Timer? _clockTimer;
   Timer? _seekTimer;
-  Timer? _boostToastTimer;
-  final ValueNotifier<String> _boostToast = ValueNotifier('');
+  // 倍速提示沿用自带的 _boostBadge，不再叠加第二套 toast。
   bool? _full;
   bool _visible = true;
   bool _selecting = false;
@@ -139,8 +138,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _streakTimer?.cancel();
     _clockTimer?.cancel();
     _seekTimer?.cancel();
-    _boostToastTimer?.cancel();
-    _boostToast.dispose();
     _tabs.dispose();
     if (_holding) _session.endBoost();
     if (widget.onFullscreen == null) {
@@ -311,16 +308,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     _session.holdBoost();
     unawaited(HapticFeedback.mediumImpact());
     setState(() => _holding = true);
-    _sayBoost('${_session.store.playbackPreferences.boostLabel}加速中');
-  }
-
-  /// 倍速切换的白色小胶囊提示（短剧之家同款），1.2 秒自动消失。
-  void _sayBoost(String text) {
-    _boostToastTimer?.cancel();
-    _boostToast.value = text;
-    _boostToastTimer = Timer(const Duration(milliseconds: 1200), () {
-      if (mounted) _boostToast.value = '';
-    });
   }
 
   // 默认长按 500ms 才触发倍速，太钝；240ms 就给上，手指一按住立刻加速。
@@ -350,7 +337,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     if (!_holding) return;
     _session.endBoost();
     setState(() => _holding = false);
-    _sayBoost('恢复 1 倍速');
   }
 
   void _rotate(bool full) => unawaited(
@@ -556,23 +542,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
               child: session.boosting
                   ? IgnorePointer(child: Center(child: _boostBadge()))
                   : null,
-            ),
-          ),
-          // 倍速切换 toast：白色小胶囊，跟随视频色微微染色。
-          Positioned(
-            left: 0,
-            right: 0,
-            top: full ? 76 : 60,
-            child: ValueListenableBuilder<String>(
-              valueListenable: _boostToast,
-              builder: (_, text, _) => IgnorePointer(
-                child: AnimatedSwitcher(
-                  duration: Motion.of(context, Motion.short),
-                  child: text.isEmpty
-                      ? const SizedBox.shrink()
-                      : Center(child: _boostToastPill(text)),
-                ),
-              ),
             ),
           ),
           if (session.saveWarning case final warning?)
@@ -838,15 +807,11 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
               filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Color.lerp(
-                    const Color(0x8A1C1C1E),
-                    PosterPalette.instance.videoTint,
-                    .14,
-                  ),
+                  color: const Color(0xCC2A2B2F),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: PosterPalette.instance.videoTint?.withValues(alpha: .34) ??
-                        Colors.white.withValues(alpha: .12),
+                    color: const Color(0x8C4A4A4C),
+                    width: 1,
                   ),
                 ),
                 child: Row(
@@ -1186,39 +1151,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// 倍速 toast 的白色小胶囊（短剧之家同款）。
-  Widget _boostToastPill(String text) {
-    final tint = PosterPalette.instance.videoTint;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Color.lerp(const Color(0xF2FFFFFF), tint, .12),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8)],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 6,
-        children: [
-          Icon(
-            Icons.fast_forward_rounded,
-            size: 15,
-            color: Color.lerp(const Color(0xFF1A1A1A), tint, .3),
-          ),
-          Text(
-            text,
-            style: TextStyle(
-              color: Color.lerp(const Color(0xFF1A1A1A), tint, .3),
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }

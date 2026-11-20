@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
+import 'bar_button.dart';
 import 'focus_ring.dart';
 
 class ChoiceOption<T> {
@@ -267,18 +270,19 @@ class _ChoiceCell<T> extends StatelessWidget {
     return FocusRing(
       radius: radius,
       child: Material(
-        color: selected ? colors.secondaryContainer : Colors.transparent,
+        color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
-          side: selected
-              ? BorderSide.none
-              : BorderSide(color: colors.outlineVariant),
+          side: GlassTones.edge(selected ? 0.90 : 0.35),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           autofocus: selected,
           focusColor: Colors.transparent,
-          onTap: () => Navigator.pop(context, option.value),
+          onTap: () {
+            unawaited(HapticFeedback.selectionClick());
+            Navigator.pop(context, option.value);
+          },
           child: Semantics(
             selected: selected,
             child: Center(
@@ -290,9 +294,9 @@ class _ChoiceCell<T> extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: form == FormFactor.television ? 15 : 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     color: selected
-                        ? colors.onSecondaryContainer
+                        ? const Color(0xFF14161A)
                         : colors.onSurface,
                   ),
                 ),

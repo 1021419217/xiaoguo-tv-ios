@@ -36,12 +36,10 @@ class AppearanceSettings extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
     final systemColorAvailable = AppScope.of(context).systemColorAvailable;
-    final followingPoster = store.followPosterColor;
-    final followingSystem =
-        !followingPoster && systemColorAvailable && store.followSystemColor;
-    // 海报色开启时功能色仍走预设种子色，只有表面层跟随海报；
-    // 系统色与海报色互斥，二者只可能有一个生效。
-    final accentLocked = followingPoster || followingSystem;
+    final following = systemColorAvailable && store.followSystemColor;
+    // 风格固定为中性冷灰玻璃，不再有「跟随海报色」这个开关；系统取色
+    // 只影响功能色（按钮/开关/进度条），表面层始终固定，不会随海报变。
+    final accentLocked = following;
     return Column(
       spacing: 12,
       children: [
@@ -74,30 +72,18 @@ class AppearanceSettings extends StatelessWidget {
                   saveSetting(context, () => store.setPureBlack(value)),
             ),
             const Divider(indent: 16, endIndent: 16),
-            SwitchTile(
-              title: '跟随海报色',
-              subtitle: '首页轮播切到哪张海报，界面底色就跟着变（短剧之家效果）',
-              value: followingPoster,
-              onChanged: (value) => saveSetting(
-                context,
-                () => store.setFollowPosterColor(value),
-              ),
-            ),
-            const Divider(indent: 16, endIndent: 16),
             TileFocus(
               builder: (focusNode) => SwitchListTile(
                 focusNode: focusNode,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                 title: const Text('跟随系统取色'),
                 subtitle: Text(
-                  followingPoster
-                      ? '已开启「跟随海报色」，关闭它后才能使用系统取色'
-                      : systemColorAvailable
+                  systemColorAvailable
                       ? 'Android 12 及以上跟随壁纸，Windows 跟随系统强调色'
                       : '本机不支持系统取色，使用预设色板',
                 ),
-                value: followingSystem,
-                onChanged: systemColorAvailable && !followingPoster
+                value: following,
+                onChanged: systemColorAvailable
                     ? (value) => saveSetting(
                         context,
                         () => store.setFollowSystemColor(value),
@@ -121,7 +107,7 @@ class AppearanceSettings extends StatelessWidget {
                         Text('预设色板', style: text.titleMedium),
                         Text(
                           accentLocked
-                              ? '关闭「跟随海报色」和「跟随系统取色」后可选'
+                              ? '关闭「跟随系统取色」后可选'
                               : '选一个种子色生成整套配色',
                           style: text.bodyMedium?.copyWith(
                             color: colors.onSurfaceVariant,

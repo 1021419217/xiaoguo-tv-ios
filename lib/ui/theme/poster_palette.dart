@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -6,134 +5,48 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../cover_loader.dart';
 import '../../models.dart';
-import '../app_scope.dart';
 
-/// 首页轮播海报的动态取色。当前海报变化 → 提取主色相 → 通知全局主题重建。
+/// 动态取色（历史实现，现已停用）。
 ///
-/// 与短剧之家的机制一致：界面底色跟随当前海报的色系，海报一切整套界面
-/// 跟着变。取色源是首页轮播当前海报的本地封面文件（已经由 CoverLoader
-/// 缓存好），用 dart:ui 解码后做色相直方图统计，取最有代表性的色相作为
-/// 表面层的染色种子。强调色（按钮、开关、进度）不参与，保持功能色不变。
+/// 早期按「每张海报 / 每帧视频都重建全局主题」实现，结果任何一次
+/// notifyListeners 都会让 app.dart 重建整棵 MaterialApp，界面每换一张
+/// 海报就闪一下；而短剧之家实际是首页底栏固定色、只在进入具体页面时
+/// 定一次色、顶部按钮只微微透出底色。
 ///
-/// 这是一个 [ChangeNotifier]，DuanjuApp 直接监听它；同一部剧只取一次色，
-/// 避免自动轮播反复解码同一张图。
+/// 现在整套风格锁死为固定中性冷灰玻璃。保留这个类与全库 27 处调用点，
+/// 但这些入口全部是 no-op：不解码、不通知、不改主题，从根上消除闪烁，
+/// 也避免大范围删调用点引入编译风险。
 final class PosterPalette extends ChangeNotifier {
   PosterPalette._();
   static final instance = PosterPalette._();
 
-  Color? _color;
-  Color? _videoTint;
-  String? _dramaId;
-  int _generation = 0;
-  bool _followEnabled = true;
+  /// 动态取色总闸，恒 false。只有改这里才会重新启用取色链路。
+  static const bool dynamicTintEnabled = false;
 
-  /// 首页轮播当前是否处于可见前台。AppShell 每次 build 写入：
-  /// 只有「发现」tab 激活时才为 true。切到别的 tab / 打开二级页后，
-  /// 轮播定时器仍在后台跑，但不再改全局取色，避免把当前页的主色劫持走。
-  /// 默认 true，保证任何未接入 AppShell 的调用方行为不变。
+  /// AppShell 会写入、HeroCarousel 会读取；固定模式下不产生任何视觉效果。
   bool carouselActive = true;
 
-  Color? get color => _color;
-  String? get dramaId => _dramaId;
+  Color? get color => null;
+  String? get dramaId => null;
+  Color? get videoTint => null;
+  Color? get effectiveTint => null;
+  bool get followEnabled => false;
+  set followEnabled(bool _) {}
+  Color? get buttonTint => null;
 
-  /// 播放器当前视频帧的主色。独立于海报色，只用于播放器控件局部染色，
-  /// 避免每几秒就重建整个 App 主题。关闭「跟随海报色」时同步骤退。
-  Color? get videoTint => _followEnabled ? _videoTint : null;
+  static void syncDrama(BuildContext context, Drama? drama) {}
 
-  /// 「当前应染到界面上的色」：播放中优先用实时视频色，退出播放后回退到
-  /// 最近一张海报色。供播放器弹层/投屏页这类三级页面重建局部主题时使用，
-  /// 保证一/二/三级页面跟随的是同一个色系；关闭跟随时统一返回 null。
-  Color? get effectiveTint => _followEnabled
-      ? (_videoTint ?? _color)
-      : null;
+  Future<void> sync(String dramaId, String? path) async {}
 
-  /// 是否启用「跟随海报色」。由 DuanjuApp 在每次重建时同步，关闭后按钮
-  /// 与表面层一起退回中性白玻璃，不再残留上一次取到的海报色。
-  bool get followEnabled => _followEnabled;
-  set followEnabled(bool value) {
-    _followEnabled = value;
-  }
+  void applyVideoTint(Color color) {}
 
-  /// 按钮玻璃层专用的色相源。
-  ///
-  /// 海报色本身只负责「定色调」：这里把饱和与明度重算成偏亮的中间调，
-  /// 让按钮底与描边带上当前海报的色系，同时仍能透出背后的封面。
-  /// 图标/文字颜色不取这个值，继续用 onSurface 反色，保证在花哨海报上可读。
-  Color? get buttonTint {
-    if (!_followEnabled || _color == null) return null;
-    final hsl = HSLColor.fromColor(_color!);
-    return HSLColor.fromAHSL(1, hsl.hue, 0.52, 0.66).toColor();
-  }
+  void resetVideoTint() {}
 
-  /// 页面用「当前主角封面」驱动全局取色——短剧之家的核心机制：进入哪个页面、
-  /// 页面里最显眼的那张封面是什么色系，整套界面底色与按钮就跟着变。
-  ///
-  /// 列表页首项、详情页当前剧都调这个；封面尚未落地时 cachedPath 为空，
-  /// 借 CoverShapes.revision 触发的重建再补一次即可。sync 幂等，不会重复解码。
-  static void syncDrama(BuildContext context, Drama? drama) {
-    if (drama == null || drama.id.isEmpty || drama.cover.isEmpty) return;
-    // 被二级页盖住的页面仍在树里、仍可能 rebuild；只允许最上层可见页
-    // 声明主色，避免后台旧页把当前页的取色抢回去。null 表示没有路由包裹
-    // （如根级 widget），照常放行。
-    if (ModalRoute.of(context)?.isCurrent == false) return;
-    final path = CoverLoader.cachedPath(
-      AppScope.of(context).repository,
-      drama,
-    );
-    if (path == null || path.isEmpty) return;
-    unawaited(instance.sync(drama.id, path));
-  }
-
-  /// 用当前海报的本地封面路径取色。
-  ///
-  /// [dramaId] 相同且已经成功取色时直接跳过；[generation] 用来丢弃翻页
-  /// 过程中过期的异步结果，保证落地的一定是用户当前看到的那张海报。
-  Future<void> sync(String dramaId, String? path) async {
-    if (path == null || path.isEmpty) return;
-    if (_dramaId == dramaId && _color != null) return;
-    final generation = ++_generation;
-    final color = await extractCoverColor(path);
-    if (generation != _generation || color == null) return;
-    _dramaId = dramaId;
-    if (_color == color) return;
-    _color = color;
-    notifyListeners();
-  }
-
-  /// 应用一帧视频的主色。只有色相变化超过阈值才通知，避免视频颜色微抖
-  /// 导致控件每两秒重建闪烁；同一场景内的渐变由调用方平滑过渡。
-  void applyVideoTint(Color color) {
-    if (!_followEnabled) return;
-    final previous = _videoTint;
-    if (previous != null) {
-      var delta = (HSLColor.fromColor(color).hue - HSLColor.fromColor(previous).hue).abs();
-      if (delta > 180) delta = 360 - delta;
-      if (delta < 12) return;
-    }
-    _videoTint = color;
-    notifyListeners();
-  }
-
-  /// 退出播放器时清空视频色，避免残留到下一个页面。
-  void resetVideoTint() {
-    if (_videoTint == null) return;
-    _videoTint = null;
-    notifyListeners();
-  }
-
-  /// 主动清空（关闭「跟随海报色」时调用），避免下次打开残留旧色。
-  void reset() {
-    _generation++;
-    if (_color == null) return;
-    _color = null;
-    _dramaId = null;
-    notifyListeners();
-  }
+  void reset() {}
 }
 
-/// 从封面文件提取一个可用于染表面层的种子色。
+/// 从封面文件提取一个可用于染表面层的种子色。（保留供后续按需启用）
 ///
 /// 返回的是「中等饱和、中等明度」的纯色，只保留色相信息；具体明暗与
 /// 饱和度由 AppTheme 按表面层级重新计算，这样不同海报只会改变色系，
@@ -160,7 +73,7 @@ Future<Color?> extractColorFromImageBytes(Uint8List bytes) async {
       targetWidth: 64,
       targetHeight: 64,
     );
-    final frame = await codec.getNextFrame();
+    final frame = await codec!.getNextFrame();
     image = frame.image;
     final data = await image!.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (data == null) return null;

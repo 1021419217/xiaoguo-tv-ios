@@ -76,44 +76,24 @@ abstract final class AppTheme {
 
     // 纯黑玻璃拟态：深色下用 AMOLED 纯黑底 + 分层深灰容器 + 白色细描边，
     // 模拟毛玻璃的分层通透感（真 BackdropFilter 用在有背景图的页面）。
+    // 固定中性冷灰玻璃色板（按短剧之家截图逐点取色实测）：
+    //   背景 #1B1D23 / 卡片 #2E3138 / 控件 #1D1D1F + 亮边 #4A4A4C
+    // 早期误取的暖棕 3C312A 已废弃；surfaceTint 恒为 null，这里所有层级
+    // 都是固定值，不会再随海报或视频帧变化。
     final glassScheme = dark
         ? base.copyWith(
-            surface: surfaceColor(0.085, 0.09, const Color(0xFF131418)),
+            surface: const Color(0xFF1A1B20),
             onSurface: Colors.white,
-            onSurfaceVariant: const Color(0xFF8E8E93),
-            outline: Colors.white.withValues(alpha: 0.14),
-            outlineVariant: Colors.white.withValues(alpha: 0.09),
-            surfaceContainerLowest: surfaceColor(
-              0.083,
-              0.09,
-              const Color(0xFF131418),
-            ),
-            surfaceContainerLow: surfaceColor(
-              0.105,
-              0.10,
-              const Color(0xFF18191D),
-            ),
-            surfaceContainer: surfaceColor(
-              0.155,
-              0.13,
-              const Color(0xFF1F2024),
-            ),
-            surfaceContainerHigh: surfaceColor(
-              0.195,
-              0.14,
-              const Color(0xFF28292E),
-            ),
-            surfaceContainerHighest: surfaceColor(
-              0.235,
-              0.15,
-              const Color(0xFF323339),
-            ),
-            surfaceDim: surfaceColor(0.060, 0.08, const Color(0xFF0E0E11)),
-            surfaceBright: surfaceColor(
-              0.275,
-              0.16,
-              const Color(0xFF41424A),
-            ),
+            onSurfaceVariant: const Color(0xFFA9ABB3),
+            outline: Colors.white.withValues(alpha: 0.20),
+            outlineVariant: Colors.white.withValues(alpha: 0.12),
+            surfaceContainerLowest: const Color(0xFF17181C),
+            surfaceContainerLow: const Color(0xFF23252A),
+            surfaceContainer: const Color(0xFF2E3138),
+            surfaceContainerHigh: const Color(0xFF393A40),
+            surfaceContainerHighest: const Color(0xFF45474E),
+            surfaceDim: const Color(0xFF121316),
+            surfaceBright: const Color(0xFF4E515A),
           )
         : base.copyWith(
             // 浅色主题同样跟随海报色：用高明度 + 低饱和重算，只带上一点
@@ -156,18 +136,16 @@ abstract final class AppTheme {
             surface: Colors.black,
             surfaceDim: Colors.black,
             surfaceContainerLowest: Colors.black,
-            surfaceContainerLow: surfaceColor(0.035, 0.08, const Color(0xFF0B0B0B)),
-            surfaceContainer: surfaceColor(0.075, 0.12, const Color(0xFF121212)),
-            surfaceContainerHigh: surfaceColor(0.110, 0.13, const Color(0xFF1A1A1A)),
-            surfaceContainerHighest: surfaceColor(0.150, 0.14, const Color(0xFF242424)),
+            surfaceContainerLow: const Color(0xFF17181C),
+            surfaceContainer: const Color(0xFF23252A),
+            surfaceContainerHigh: const Color(0xFF2E3138),
+            surfaceContainerHighest: const Color(0xFF393A40),
           )
         : glassScheme;
 
     const radius = 22.0;
     final background = dark
-        ? (pureBlack
-            ? Colors.black
-            : surfaceColor(0.083, 0.09, const Color(0xFF131418)))
+        ? (pureBlack ? Colors.black : const Color(0xFF1B1D23))
         : scheme.surfaceContainerLowest;
     // 卡片用半透明磨砂：低不透明度 + 细描边，让下层内容与模糊透出来。
     final glass = CardThemeData(
@@ -187,7 +165,10 @@ abstract final class AppTheme {
     final theme = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: background,
+      // 深色下 Scaffold 透明，露出 app.dart builder 里那层冷灰蓝渐变，
+      // 不再是整块死黑；浅色仍用实色底。canvasColor 保持实色，
+      // 对话框 / BottomSheet 不受影响。
+      scaffoldBackgroundColor: dark ? Colors.transparent : background,
       canvasColor: background,
       // 小果 2.0 的页面转场（电视端禁用动画）保持不变。
       pageTransitionsTheme: pageTransitions(television: television),

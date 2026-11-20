@@ -762,21 +762,11 @@ class _DetailPageState extends State<DetailPage> {
               spacing: 12,
               children: [
                 if (_canDownload)
-                  FocusRing(
-                    radius: m.button / 2,
-                    child: IconButton.filledTonal(
-                      tooltip: '下载选集',
-                      onPressed: _ready ? _download : null,
-                      style: IconButton.styleFrom(
-                        minimumSize: Size.square(m.button),
-                        shape: const CircleBorder(),
-                        // 圆形下载钮跟随海报色，未取色时退回默认主题色。
-                        backgroundColor: PosterPalette.instance.buttonTint
-                            ?.withValues(alpha: 0.18),
-                        foregroundColor: PosterPalette.instance.buttonTint,
-                      ),
-                      icon: const Icon(Icons.download_rounded),
-                    ),
+                  GlassOrb(
+                    icon: Icons.download_rounded,
+                    tooltip: '下载选集',
+                    size: m.button,
+                    onTap: _ready ? _download : null,
                   ),
                 Expanded(child: _playButton(details, m)),
               ],
@@ -1453,8 +1443,7 @@ class _DetailPageState extends State<DetailPage> {
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : colors.onSurface;
-    final glass = PosterPalette.instance.buttonTint ??
-        (dark ? Colors.white : colors.onSurface);
+    final glass = GlassTones.hairline;
     final name = drama.author.trim().isEmpty ? '作者' : drama.author.trim();
     return Align(
       alignment: Alignment.centerLeft,
@@ -1465,7 +1454,10 @@ class _DetailPageState extends State<DetailPage> {
           shape: const StadiumBorder(),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: () => _openAuthor(drama),
+            onTap: () {
+              unawaited(HapticFeedback.selectionClick());
+              _openAuthor(drama);
+            },
             splashColor: glass.withValues(alpha: 0.10),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -1477,14 +1469,15 @@ class _DetailPageState extends State<DetailPage> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        glass.withValues(alpha: dark ? 0.16 : 0.09),
-                        glass.withValues(alpha: dark ? 0.07 : 0.04),
-                      ],
+                      colors: dark
+                          ? const [Color(0xDD2A2B2F), Color(0xEE161618)]
+                          : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
                     ),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: glass.withValues(alpha: dark ? 0.26 : 0.16),
+                      color: GlassTones.hairline.withValues(
+                        alpha: dark ? 0.72 : 0.18,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -1496,12 +1489,21 @@ class _DetailPageState extends State<DetailPage> {
                         height: 26,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: glass.withValues(alpha: 0.22),
+                          gradient: const RadialGradient(
+                            center: Alignment(0, -0.4),
+                            radius: 0.95,
+                            colors: [Color(0xFF4B4B4D), Color(0xFF232427)],
+                          ),
+                          border: Border.all(
+                            color: GlassTones.hairline.withValues(alpha: 0.80),
+                            width: 1,
+                          ),
                         ),
                         child: Icon(
                           Icons.person_outline_rounded,
                           size: 15,
-                          color: glass,
+                          weight: 700,
+                          color: ink,
                         ),
                       ),
                       Text(
@@ -1752,25 +1754,29 @@ class _DetailPageState extends State<DetailPage> {
     String trailing = '',
   }) {
     final colors = Theme.of(context).colorScheme;
+    const radius = 16.0;
+    const selectedInk = Color(0xFF14161A);
     return FocusRing(
-      radius: 12,
+      radius: radius,
       child: Material(
-        color: selected
-            ? colors.primary.withValues(alpha: .16)
-            : colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
+        borderRadius: BorderRadius.circular(radius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _selectQuality(value),
+          onTap: () {
+            unawaited(HapticFeedback.selectionClick());
+            _selectQuality(value);
+          },
           child: Container(
             width: 96,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: selected
-                    ? colors.primary.withValues(alpha: .55)
-                    : Colors.transparent,
+                    ? const Color(0xFFF2F2F4)
+                    : GlassTones.hairline.withValues(alpha: 0.45),
+                width: 1,
               ),
             ),
             child: Column(
@@ -1781,8 +1787,8 @@ class _DetailPageState extends State<DetailPage> {
                   label,
                   style: TextStyle(
                     fontSize: m.note,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? colors.primary : colors.onSurface,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? selectedInk : Colors.white,
                   ),
                 ),
                 if (trailing.isNotEmpty)
@@ -1790,7 +1796,9 @@ class _DetailPageState extends State<DetailPage> {
                     trailing,
                     style: TextStyle(
                       fontSize: m.tag - 1,
-                      color: colors.onSurfaceVariant,
+                      color: selected
+                          ? selectedInk.withValues(alpha: 0.6)
+                          : colors.onSurfaceVariant,
                     ),
                   ),
               ],
@@ -1889,23 +1897,25 @@ class _DetailPageState extends State<DetailPage> {
     final label = details.watch != null && details.episodes.isNotEmpty
         ? '继续播放 · 第 ${details.episodes[details.resumeIndex].number} 集'
         : '立即播放';
-    // 短剧之家同款主 CTA：白色大胶囊 + 深色字，白底掺一点当前海报色相，
-    // 在花哨封面页上最醒目，又不破坏「白底主按钮」的视觉焦点。
-    final tint = PosterPalette.instance.buttonTint;
+    // 短剧之家同款主 CTA：纯白大胶囊 + 深色粗字。风格固定，不再掺海报色，
+    // 在花哨封面页上最醒目，也不随取色变化。
     return FocusRing(
       radius: m.button / 2,
       child: FilledButton.icon(
         key: const ValueKey('detail-play'),
         focusNode: focusNode,
         onPressed: _ready
-            ? () => _play(details.resumeIndex, resume: true)
+            ? () {
+                unawaited(HapticFeedback.selectionClick());
+                _play(details.resumeIndex, resume: true);
+              }
             : null,
         style: FilledButton.styleFrom(
           minimumSize: Size(0, m.button),
           iconSize: m.buttonIcon,
           shape: const StadiumBorder(),
-          backgroundColor: Color.lerp(const Color(0xFFFFFFFF), tint, .12),
-          foregroundColor: Color.lerp(const Color(0xFF141414), tint, .28),
+          backgroundColor: const Color(0xFFFDFDFD),
+          foregroundColor: const Color(0xFF14161A),
           textStyle: TextStyle(
             fontSize: m.buttonText,
             fontWeight: FontWeight.w800,
@@ -2539,43 +2549,51 @@ class _GroupChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final m = metrics;
+    final radius = m.chipRadius;
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(m.chipRadius),
+      borderRadius: BorderRadius.circular(radius),
     );
-    final padding = EdgeInsets.symmetric(horizontal: m.chipPadding);
-    final size = Size(0, m.chip);
     return FocusRing(
-      radius: m.chipRadius,
-      child: selected
-          ? FilledButton.tonal(
-              focusNode: focusNode,
-              onPressed: onPressed,
-              style: FilledButton.styleFrom(
-                shape: shape,
-                padding: padding,
-                minimumSize: size,
-                textStyle: TextStyle(
-                  fontSize: m.chipText,
-                  fontWeight: FontWeight.w600,
+      radius: radius,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? const Color(0xFFF2F2F4) : GlassTones.cell,
+          shape: shape,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            focusNode: focusNode,
+            onTap: () {
+              unawaited(HapticFeedback.selectionClick());
+              onPressed();
+            },
+            child: Container(
+              height: m.chip,
+              padding: EdgeInsets.symmetric(horizontal: m.chipPadding),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(
+                  color: selected
+                      ? const Color(0xFFF2F2F4)
+                      : GlassTones.hairline.withValues(alpha: 0.45),
+                  width: 1,
                 ),
               ),
-              child: Text(label),
-            )
-          : OutlinedButton(
-              focusNode: focusNode,
-              onPressed: onPressed,
-              style: OutlinedButton.styleFrom(
-                shape: shape,
-                padding: padding,
-                minimumSize: size,
-                foregroundColor: colors.onSurfaceVariant,
-                side: BorderSide(color: colors.outlineVariant),
-                textStyle: TextStyle(fontSize: m.chipText),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: m.chipText,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? const Color(0xFF14161A) : Colors.white,
+                ),
               ),
-              child: Text(label),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2610,12 +2628,18 @@ class _EpisodeCell extends StatelessWidget {
         label: '第 ${episode.number} 集${episode.vip ? '，VIP' : ''}',
         excludeSemantics: true,
         child: Material(
-          color: current ? colors.primaryContainer : colors.surfaceContainer,
-          borderRadius: radius,
+          color: current ? const Color(0xFFF2F2F4) : GlassTones.cell,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: GlassTones.edge(current ? 0.9 : 0.35),
+          ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             focusNode: focusNode,
-            onTap: onPressed,
+            onTap: () {
+              unawaited(HapticFeedback.selectionClick());
+              onPressed();
+            },
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -2630,7 +2654,7 @@ class _EpisodeCell extends StatelessWidget {
                           ? FontWeight.w400
                           : FontWeight.w600,
                       color: current
-                          ? colors.onPrimaryContainer
+                          ? const Color(0xFF14161A)
                           : watched
                           ? colors.onSurfaceVariant
                           : colors.onSurface,

@@ -49,7 +49,7 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   int? _profileEpoch;
   var _television = false;
   var _phone = false;
-  (Color, Color?, bool, bool)? _themeKey;
+  (Color, bool, bool)? _themeKey;
   CoverBlur? _coverBlur;
   late (ThemeData, ThemeData) _themes;
 
@@ -208,8 +208,11 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
+    // 固定主题：不再监听 PosterPalette。取色对象任何一次 notifyListeners
+    // 都会重建整棵 MaterialApp，正是「换一张海报就闪一下」的根因；现在
+    // 只有用户真正改了设置（store 通知）才重建主题。
     return ListenableBuilder(
-      listenable: Listenable.merge([?store, PosterPalette.instance]),
+      listenable: Listenable.merge([if (store != null) store]),
       builder: (_, _) => _application(store),
     );
   }
@@ -245,35 +248,23 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
           : CoverBlur.off;
     }
     final coverBlur = _coverBlur ?? CoverBlur.off;
-    // 海报取色与系统取色互斥：打开「跟随海报色」时，首页轮播切到哪张海报，
-    // 全局表面层就跟着变色；关闭时退回原来的系统色/预设种子色。
-    final followPoster = store?.followPosterColor ?? true;
-    // 开关状态同步给取色源：按钮玻璃层读 buttonTint，关闭时自动回中性白，
-    // 与表面层一起退色，不会出现「底色已还原、按钮还留着旧海报色」。
-    PosterPalette.instance.followEnabled = followPoster;
-    final surfaceTint = followPoster ? PosterPalette.instance.color : null;
+    // 风格锁死为固定中性冷灰玻璃：不再读取任何海报/视频取色，整套主题
+    // 只在系统色 / 种子色 / 纯黑 / 电视模式这些用户设置变化时重建。
+    PosterPalette.instance.followEnabled = false;
     final systemColor =
-        !followPoster && (store?.followSystemColor ?? true)
-        ? _systemColor
-        : null;
+        (store?.followSystemColor ?? true) ? _systemColor : null;
     final seed =
         systemColor ?? Color((store?.themeColor ?? ThemeColor.orange).seed);
     final pureBlack = store?.pureBlack ?? false;
-    if ((seed, surfaceTint, television, pureBlack) != _themeKey) {
-      _themeKey = (seed, surfaceTint, television, pureBlack);
+    if ((seed, television, pureBlack) != _themeKey) {
+      _themeKey = (seed, television, pureBlack);
       _themes = (
-        AppTheme.build(
-          seed,
-          Brightness.light,
-          television: television,
-          surfaceTint: surfaceTint,
-        ),
+        AppTheme.build(seed, Brightness.light, television: television),
         AppTheme.build(
           seed,
           Brightness.dark,
           television: television,
           pureBlack: pureBlack,
-          surfaceTint: surfaceTint,
         ),
       );
     }
@@ -293,8 +284,36 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
       theme: _themes.$1,
       darkTheme: _themes.$2,
       themeMode: AppTheme.mode(store?.themeMode ?? 'system'),
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: AppTheme.systemBars(Theme.of(context).brightness),
+      builder: (context, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          // 短剧之家设置页那种有层次的冷灰蓝背景：顶部偏蓝紫、往下压到
+          // 中性深灰。深色下所有 Scaffold 透明，统一透出这一层，不再是
+          // 一整块死黑；纯黑模式仍给纯黑。
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: pureBlack
+                ? const [
+                    Color(0xFF000000),
+                    Color(0xFF000000),
+                    Color(0xFF000000),
+                  ]
+                : Theme.of(context).brightness == Brightness.dark
+                ? const [
+                    Color(0xFF252C3E),
+                    Color(0xFF1B1D23),
+                    Color(0xFF101114),
+                  ]
+                : const [
+                    Color(0xFFF4F5F9),
+                    Color(0xFFFAFAFC),
+                    Color(0xFFFFFFFF),
+                  ],
+            stops: const [0.0, 0.45, 1.0],
+          ),
+        ),
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: AppTheme.systemBars(Theme.of(context).brightness),
         child: Focus(
           canRequestFocus: false,
           skipTraversal: true,
@@ -345,6 +364,7 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
               ),
             ),
           ),
+        ),
         ),
       ),
       themeAnimationDuration: Motion.long,

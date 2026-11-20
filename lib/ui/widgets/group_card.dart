@@ -1,9 +1,15 @@
+import 'dart:async';
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/type_scale.dart';
+import 'bar_button.dart';
 import 'focus_ring.dart';
 
-/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带半透明磨砂底色与细描边。
+/// 深灰分组圆角卡：项目之间用极细分隔线，卡片带真磨砂玻璃底色与细亮描边。
+/// 色板固定为中性冷灰，不随海报或视频帧变化。
 class GroupCard extends StatelessWidget {
   const GroupCard({super.key, required this.children});
   final List<Widget> children;
@@ -14,25 +20,32 @@ class GroupCard extends StatelessWidget {
     // 用 Material 承载底色而不是 Container：ListTile / InkWell 的水波纹只会画在
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
     // 设置页所有条目点下去都没有任何反馈，就是这个原因。
-    return Material(
-      color: colors.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Divider(height: 1, color: colors.outlineVariant),
-              ),
-            children[i],
-          ],
-        ],
+    // 模糊层放在 Material 外侧，只作用于卡片背后的内容，不影响水波纹。
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Material(
+          color: GlassTones.card.withValues(alpha: 0.78),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: GlassTones.edge(0.55),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Divider(height: 1, color: colors.outlineVariant),
+                  ),
+                children[i],
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -64,6 +77,7 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final badge = iconColor ?? colors.primary;
     return TileFocus(
       builder: (focusNode) => ListTile(
         focusNode: focusNode,
@@ -76,10 +90,21 @@ class SettingsTile extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: iconColor ?? colors.primary.withValues(alpha: 0.85),
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.4),
+                    radius: 0.95,
+                    colors: [
+                      badge.withValues(alpha: 0.95),
+                      badge.withValues(alpha: 0.62),
+                    ],
+                  ),
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    width: 1,
+                  ),
                 ),
-                child: Icon(icon, size: 19, color: Colors.white),
+                child: Icon(icon, size: 19, weight: 700, color: Colors.white),
               ),
         title: Text(
           title,
@@ -118,7 +143,12 @@ class SettingsTile extends StatelessWidget {
                         ),
                     ],
                   )),
-        onTap: onTap,
+        onTap: onTap == null
+            ? null
+            : () {
+                unawaited(HapticFeedback.selectionClick());
+                onTap!();
+              },
         enabled: enabled,
       ),
     );

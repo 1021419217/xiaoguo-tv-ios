@@ -858,23 +858,31 @@ class _FloatingCapsuleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final tint = PosterPalette.instance.buttonTint ??
-        (dark ? Colors.white : theme.colorScheme.onSurface);
+    final tint = GlassTones.hairline;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
-          height: 66,
+          // 参考图实测约 60pt，之前 66pt 明显偏高；连同圆角一起收一档。
+          height: 56,
           decoration: BoxDecoration(
-            color: tint.withValues(alpha: dark ? 0.14 : 0.08),
-            borderRadius: BorderRadius.circular(32),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: dark
+                  ? const [Color(0xCC2A2B2F), Color(0xDD161618)]
+                  : const [Color(0x33FFFFFF), Color(0x22FFFFFF)],
+            ),
+            borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: tint.withValues(alpha: dark ? 0.22 : 0.14),
-              width: 0.8,
+              color: GlassTones.hairline.withValues(
+                alpha: dark ? 0.72 : 0.18,
+              ),
+              width: 1,
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Row(
             children: [
               for (final tab in tabs)
@@ -925,22 +933,31 @@ class _CapsuleDestination extends StatelessWidget {
         child: AnimatedContainer(
           duration: Motion.of(context, Motion.short),
           curve: Motion.standard,
-          height: 54,
+          height: 48,
           decoration: BoxDecoration(
-            color: active
-                ? tint.withValues(alpha: dark ? 0.26 : 0.14)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(26),
+            gradient: active
+                ? const RadialGradient(
+                    center: Alignment(0, -0.4),
+                    radius: 1.0,
+                    colors: [Color(0xFF4B4B4D), Color(0xFF333437)],
+                  )
+                : null,
+            color: active ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+            border: active
+                ? Border.all(color: tint.withValues(alpha: 0.80), width: 1)
+                : null,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            spacing: 3,
+            spacing: 2,
             children: [
               badged(
                 tab,
                 Icon(
                   active ? tab.selectedIcon : tab.icon,
-                  size: 21,
+                  size: 22,
+                  weight: 700,
                   color: color,
                 ),
               ),

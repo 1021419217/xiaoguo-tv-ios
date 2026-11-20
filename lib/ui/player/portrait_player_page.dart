@@ -757,11 +757,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: Color.lerp(
-                          const Color(0xF2FFFFFF),
-                          PosterPalette.instance.videoTint,
-                          .12,
-                        ),
+                        color: const Color(0xF2FFFFFF),
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: const [
                           BoxShadow(color: Color(0x33000000), blurRadius: 8),
@@ -770,11 +766,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                       child: Text(
                         _hint,
                         style: TextStyle(
-                          color: Color.lerp(
-                            const Color(0xFF1A1A1A),
-                            PosterPalette.instance.videoTint,
-                            .3,
-                          ),
+                          color: const Color(0xFF1A1A1A),
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
