@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import 'bar_button.dart';
 import 'choice_panel.dart';
 import 'focus_ring.dart';
@@ -203,7 +204,8 @@ class _Tab extends StatelessWidget {
     // 选中时把外层留白等量让给胶囊内边距，标签总宽度不变，切换不跳动。
     // 文字颜色跟随主题（onSurface），浅色顶栏下不会再出现白字消失。
     final ink = colors.onSurface;
-    final accent = colors.primary;
+    // 选中胶囊跟随海报色，文字仍用 onSurface，避免彩色底上字看不清。
+    final accent = PosterPalette.instance.buttonTint ?? colors.primary;
     final labelColor = selected
         ? ink
         : ink.withValues(alpha: dark ? 0.66 : 0.72);
@@ -263,6 +265,8 @@ class _AllCategoriesChip extends StatelessWidget {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    // 玻璃底/描边跟随海报色，图标与文字继续用反色。
+    final tint = PosterPalette.instance.buttonTint ?? ink;
     return Builder(
       builder: (anchor) => Padding(
         padding: const EdgeInsets.only(left: 8, right: 12),
@@ -296,10 +300,10 @@ class _AllCategoriesChip extends StatelessWidget {
                           height: 38,
                           padding: const EdgeInsets.symmetric(horizontal: 13),
                           decoration: BoxDecoration(
-                            color: ink.withValues(alpha: dark ? 0.09 : 0.06),
+                            color: tint.withValues(alpha: dark ? 0.13 : 0.08),
                             borderRadius: BorderRadius.circular(19),
                             border: Border.all(
-                              color: ink.withValues(alpha: dark ? 0.12 : 0.10),
+                              color: tint.withValues(alpha: dark ? 0.22 : 0.14),
                             ),
                           ),
                           child: Row(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
+import '../theme/type_scale.dart';
 import '../widgets/cover_backdrop.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/drama_grid.dart';
@@ -159,10 +160,7 @@ class ExploreHero extends StatelessWidget {
           drama.title,
           maxLines: metrics.detail ? 1 : 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: metrics.title,
-            fontWeight: FontWeight.w800,
-            height: 1.3,
+          style: TypeScale.display(metrics.title).copyWith(
             color: Colors.white,
           ),
         ),

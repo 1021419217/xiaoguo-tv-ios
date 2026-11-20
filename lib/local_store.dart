@@ -23,6 +23,7 @@ const _themeModes = {'light', 'dark', 'system'};
 const coverBlurLaunchModes = {'off': '关闭', 'adult': '仅限制级', 'all': '全部'};
 const _movedFlags = {
   'followSystemColor': 'followSystemColor',
+  'followPosterColor': 'followPosterColor',
   'checkUpdates': 'checkUpdates',
   'shareUsage': 'shareUsage',
   'autoExport': 'exportAfterDownload',
@@ -40,6 +41,7 @@ const _backupFlags = {
   'televisionKeyboard',
   'historyTab',
   'pureBlack',
+  'followPosterColor',
   'blurCoversButton',
   'blurCoversOnLaunch',
   'blurAllCovers',
@@ -556,6 +558,9 @@ class LocalStore extends ChangeNotifier {
   }
 
   bool get followSystemColor => _flag('followSystemColor', true);
+  /// 跟随首页海报取色：开启后全局表面层按当前轮播海报的色系变化。
+  /// 默认开启（短剧之家的核心视觉），与「跟随系统取色」互斥。
+  bool get followPosterColor => _flag('followPosterColor', true);
   ThemeColor get themeColor =>
       ThemeColor.byName(_settings['themeColor']) ?? ThemeColor.orange;
   bool get sideBarExpanded => preferences.getBool('sideBarExpanded') ?? true;
@@ -701,6 +706,8 @@ class LocalStore extends ChangeNotifier {
       : Future.value();
   Future<void> setFollowSystemColor(bool value) =>
       _setting('followSystemColor', value);
+  Future<void> setFollowPosterColor(bool value) =>
+      _setting('followPosterColor', value);
   Future<void> setThemeColor(ThemeColor value) =>
       _setting('themeColor', value.name);
   Future<void> setSideBarExpanded(bool value) => _queue(() async {
@@ -1152,6 +1159,7 @@ class LocalStore extends ChangeNotifier {
       'displayMode': displayMode,
       'themeMode': themeMode,
       'followSystemColor': followSystemColor,
+      'followPosterColor': followPosterColor,
       'themeColor': themeColor.name,
       'pureBlack': pureBlack,
       'blurCoversButton': blurCoversButton,

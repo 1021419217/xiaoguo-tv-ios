@@ -12,6 +12,7 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../theme/poster_palette.dart';
 import '../widgets/glass_app_bar.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/follow_button.dart';
@@ -200,6 +201,8 @@ class _SearchPageState extends State<SearchPage> {
         child: _recent(context),
       );
     }
+    // 搜索结果首张封面驱动全局取色：点进搜索页后整套界面随结果色调变化。
+    PosterPalette.syncDrama(context, results.items.firstOrNull);
     if (results.items.isEmpty) {
       if (results.loading) {
         return const StatusView.loading(

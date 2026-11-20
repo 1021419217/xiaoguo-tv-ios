@@ -10,6 +10,7 @@ import '../../models.dart';
 import '../../source_modules.dart';
 import '../../watch_history.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/action_pill.dart';
@@ -184,6 +185,15 @@ class _DownloadsPageState extends State<DownloadsPage>
               ? {for (final job in pending) job.id}
               : {for (final item in downloaded) item.drama.id},
         ),
+      );
+      // 下载管理当前 tab 的首张封面驱动全局取色（短剧之家机制）。
+      PosterPalette.syncDrama(
+        context,
+        index == 0
+            ? pending.firstOrNull?.drama
+            : index == 1
+            ? downloaded.firstOrNull?.drama
+            : widget.merges.tasks.firstOrNull?.drama,
       );
       final body = !widget.downloads.available
           ? const StatusView(
@@ -419,10 +429,10 @@ class _DownloadsPageState extends State<DownloadsPage>
           ? glassAppBar(
               titleSpacing: 16,
               leading: widget.headerChild == null
-                  ? IconButton(
+                  ? BarButton(
                       tooltip: '返回',
                       onPressed: () => Navigator.maybePop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
+                      icon: Icons.arrow_back_rounded,
                     )
                   : null,
               title: widget.headerChild == null ? '下载管理' : null,
@@ -456,10 +466,10 @@ class _DownloadsPageState extends State<DownloadsPage>
             )
           : glassAppBar(
               title: _selectedTitle(selection),
-              leading: IconButton(
+              leading: BarButton(
                 tooltip: '退出编辑',
                 onPressed: () => setState(() => _selection = null),
-                icon: const Icon(Icons.close_rounded),
+                icon: Icons.close_rounded,
               ),
               actions: [_selectAll(view), const SizedBox(width: 8)],
             ),

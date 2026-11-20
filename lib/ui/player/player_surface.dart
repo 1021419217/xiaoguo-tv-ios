@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../theme/poster_palette.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -550,8 +552,9 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 4,
-              activeTrackColor: colors.primary,
-              thumbColor: colors.primary,
+              activeTrackColor:
+                  PosterPalette.instance.videoTint ?? colors.primary,
+              thumbColor: PosterPalette.instance.videoTint ?? colors.primary,
               inactiveTrackColor: Colors.white.withValues(alpha: .25),
               secondaryActiveTrackColor: Colors.white.withValues(alpha: .4),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),

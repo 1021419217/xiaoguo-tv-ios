@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/poster_palette.dart';
+
 /// 统一的胶囊分段控件：模块页、下载页、追剧页共用同一套外观与手感。
 ///
 /// 关键点（上一版几个页面的痛点都在这里）：
@@ -86,6 +88,8 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
       alpha: dark ? 0.86 : 0.92,
     );
     final selected = weight > 0.5;
+    // 分段高亮跟随海报色：底色/描边带色相，文字仍走反色保证可读。
+    final tint = PosterPalette.instance.buttonTint ?? ink;
     return Semantics(
       selected: selected,
       button: true,
@@ -104,9 +108,9 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
           ),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: ink.withValues(alpha: 0.12 * weight),
+            color: tint.withValues(alpha: 0.14 * weight),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: ink.withValues(alpha: 0.14 * weight)),
+            border: Border.all(color: tint.withValues(alpha: 0.26 * weight)),
           ),
           child: Text(
             widget.labels[i],
@@ -129,6 +133,7 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    final tint = PosterPalette.instance.buttonTint ?? ink;
     final segments = [
       for (var i = 0; i < widget.labels.length; i++)
         KeyedSubtree(
@@ -165,9 +170,9 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
       padding: widget.margin,
       child: Container(
         decoration: BoxDecoration(
-          color: ink.withValues(alpha: 0.05),
+          color: tint.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: ink.withValues(alpha: 0.08)),
+          border: Border.all(color: tint.withValues(alpha: 0.12)),
         ),
         child: content,
       ),

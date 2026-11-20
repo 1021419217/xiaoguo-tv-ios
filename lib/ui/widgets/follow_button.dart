@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../theme/motion.dart';
+import '../theme/poster_palette.dart';
 import 'focus_ring.dart';
 import 'motion/motion_widgets.dart';
 
@@ -85,6 +86,9 @@ class FollowPill extends StatelessWidget {
     builder: (context, _) {
       final followed = store.isFavorite(drama.id);
       final corner = radius ?? height / 2;
+      // 追剧胶囊跟随海报色：已追剧用更实的填充区分状态，未追剧是淡玻璃。
+      // 没取到色 / 关闭跟随时传 null，退回原来的 FilledButton.tonal 外观。
+      final tint = PosterPalette.instance.buttonTint;
       return FocusRing(
         radius: corner,
         child: FilledButton.tonalIcon(
@@ -105,6 +109,8 @@ class FollowPill extends StatelessWidget {
               fontSize: height >= 44 ? 15 : 14,
               fontWeight: FontWeight.w600,
             ),
+            backgroundColor: tint?.withValues(alpha: followed ? 0.34 : 0.12),
+            foregroundColor: tint,
           ),
           icon: ToggleIconSwitcher(
             child: Icon(

@@ -14,6 +14,8 @@ import '../downloads/download_picker_page.dart';
 import '../player/playback_handle.dart';
 import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
+import '../theme/poster_palette.dart';
+import '../widgets/bar_button.dart';
 import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_backdrop.dart';
 import '../widgets/cover_image.dart';
@@ -532,6 +534,8 @@ class _DetailPageState extends State<DetailPage> {
           body: Center(child: CircularProgressIndicator()),
         );
       }
+      // 详情页当前剧的封面驱动全局取色，进详情整套界面随这部剧变色。
+      PosterPalette.syncDrama(context, details.drama);
       final form = AppScope.formFactorOf(context);
       if (form == FormFactor.television) return _televisionPage(details);
       if (form == FormFactor.phone || MediaQuery.sizeOf(context).width < 840) {
@@ -545,10 +549,10 @@ class _DetailPageState extends State<DetailPage> {
     return glassAppBar(
       toolbarHeight: height,
       actions: [
-        IconButton(
+        BarButton(
           tooltip: '更新剧集信息',
           onPressed: details.loading ? null : _refresh,
-          icon: const Icon(Icons.refresh_rounded),
+          icon: Icons.refresh_rounded,
         ),
         const SizedBox(width: 4),
       ],
@@ -764,6 +768,11 @@ class _DetailPageState extends State<DetailPage> {
                       onPressed: _ready ? _download : null,
                       style: IconButton.styleFrom(
                         minimumSize: Size.square(m.button),
+                        shape: const CircleBorder(),
+                        // 圆形下载钮跟随海报色，未取色时退回默认主题色。
+                        backgroundColor: PosterPalette.instance.buttonTint
+                            ?.withValues(alpha: 0.18),
+                        foregroundColor: PosterPalette.instance.buttonTint,
                       ),
                       icon: const Icon(Icons.download_rounded),
                     ),

@@ -1,8 +1,7 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import 'bar_button.dart';
 import 'page_header.dart';
 import 'search_field.dart';
@@ -130,9 +129,11 @@ class _SourceSwitcher extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    // 深色用白色磨砂玻璃，浅色换成淡墨色玻璃，保证两种主题下都清晰。
+    // 形状保持胶囊不动，仅配色接入实时海报取色：玻璃底与地球徽标跟随
+    // 当前海报色相，文字仍用反色保证可读；没取到色 / 关闭跟随时退回白/墨玻璃。
     final ink = dark ? Colors.white : colors.onSurface;
-    final glass = dark ? Colors.white : colors.onSurface;
+    final glass =
+        PosterPalette.instance.buttonTint ?? (dark ? Colors.white : colors.onSurface);
     return Builder(
       builder: (anchor) => Tooltip(
         message: '切换站源',
@@ -157,13 +158,13 @@ class _SourceSwitcher extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      glass.withValues(alpha: dark ? 0.12 : 0.07),
-                      glass.withValues(alpha: dark ? 0.05 : 0.03),
+                      glass.withValues(alpha: dark ? 0.16 : 0.09),
+                      glass.withValues(alpha: dark ? 0.07 : 0.04),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: glass.withValues(alpha: dark ? 0.16 : 0.12),
+                    color: glass.withValues(alpha: dark ? 0.26 : 0.16),
                   ),
                 ),
                 child: Row(
@@ -174,12 +175,12 @@ class _SourceSwitcher extends StatelessWidget {
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: colors.primary.withValues(alpha: 0.22),
+                        color: glass.withValues(alpha: 0.22),
                       ),
                       child: Icon(
                         Icons.public_rounded,
                         size: 17,
-                        color: colors.primary,
+                        color: glass,
                       ),
                     ),
                     const SizedBox(width: 9),
@@ -214,88 +215,19 @@ class _SourceSwitcher extends StatelessWidget {
   }
 }
 
-/// 顶栏搜索胶囊：对齐参考图右上角那枚「✦ 发现 ⌄」的低对比磨砂胶囊。
+/// 顶栏搜索钮：对齐短剧之家那种圆形毛玻璃图标钮。
 ///
-/// 均匀半透明玻璃 + 轻模糊 + 极细描边，图标 / 文字 / 箭头三段，
-/// 刻意不加渐变、内高光、外发光，让控件退到背景后面，
-/// 与左上角换源胶囊左右同款呼应。
+/// 直接复用 [BarButton]，自动继承统一调好的玻璃档位（0.20 填充 / 0.28 描边），
+/// 与全 App 其它圆形操作钮同款。搜索功能 [onPressed] 原样透传，不变。
 class _SearchPill extends StatelessWidget {
   const _SearchPill({required this.tooltip, required this.onPressed});
   final String tooltip;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
-    final glass = dark ? Colors.white : theme.colorScheme.onSurface;
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(21),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(21),
-            splashColor: glass.withValues(alpha: 0.10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(21),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.fromLTRB(13, 0, 11, 0),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        glass.withValues(alpha: dark ? 0.12 : 0.07),
-                        glass.withValues(alpha: dark ? 0.05 : 0.03),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(21),
-                    border: Border.all(
-                      color: glass.withValues(alpha: dark ? 0.16 : 0.12),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.search_rounded,
-                        size: 18,
-                        color: ink.withValues(alpha: 0.92),
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        '搜索',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                          color: ink.withValues(alpha: 0.92),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 17,
-                        color: ink.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => BarButton(
+        icon: Icons.search_rounded,
+        tooltip: tooltip,
+        onPressed: onPressed,
+      );
 }

@@ -17,6 +17,7 @@ import 'shell/app_shell.dart';
 import 'terms_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/motion.dart';
+import 'theme/poster_palette.dart';
 import 'theme/system_color.dart';
 import 'users/unlock_page.dart';
 import 'widgets/focus_ring.dart';
@@ -48,7 +49,7 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   int? _profileEpoch;
   var _television = false;
   var _phone = false;
-  (Color, bool, bool)? _themeKey;
+  (Color, Color?, bool, bool)? _themeKey;
   CoverBlur? _coverBlur;
   late (ThemeData, ThemeData) _themes;
 
@@ -208,7 +209,7 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final store = widget.store;
     return ListenableBuilder(
-      listenable: Listenable.merge([?store]),
+      listenable: Listenable.merge([?store, PosterPalette.instance]),
       builder: (_, _) => _application(store),
     );
   }
@@ -244,21 +245,35 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
           : CoverBlur.off;
     }
     final coverBlur = _coverBlur ?? CoverBlur.off;
-    final systemColor = (store?.followSystemColor ?? true)
+    // 海报取色与系统取色互斥：打开「跟随海报色」时，首页轮播切到哪张海报，
+    // 全局表面层就跟着变色；关闭时退回原来的系统色/预设种子色。
+    final followPoster = store?.followPosterColor ?? true;
+    // 开关状态同步给取色源：按钮玻璃层读 buttonTint，关闭时自动回中性白，
+    // 与表面层一起退色，不会出现「底色已还原、按钮还留着旧海报色」。
+    PosterPalette.instance.followEnabled = followPoster;
+    final surfaceTint = followPoster ? PosterPalette.instance.color : null;
+    final systemColor =
+        !followPoster && (store?.followSystemColor ?? true)
         ? _systemColor
         : null;
     final seed =
         systemColor ?? Color((store?.themeColor ?? ThemeColor.orange).seed);
     final pureBlack = store?.pureBlack ?? false;
-    if ((seed, television, pureBlack) != _themeKey) {
-      _themeKey = (seed, television, pureBlack);
+    if ((seed, surfaceTint, television, pureBlack) != _themeKey) {
+      _themeKey = (seed, surfaceTint, television, pureBlack);
       _themes = (
-        AppTheme.build(seed, Brightness.light, television: television),
+        AppTheme.build(
+          seed,
+          Brightness.light,
+          television: television,
+          surfaceTint: surfaceTint,
+        ),
         AppTheme.build(
           seed,
           Brightness.dark,
           television: television,
           pureBlack: pureBlack,
+          surfaceTint: surfaceTint,
         ),
       );
     }

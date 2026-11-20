@@ -8,6 +8,7 @@ import '../../resource_settings_editor.dart';
 import '../app_scope.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
+import '../theme/type_scale.dart';
 import '../modules/modules_page.dart';
 import '../users/users_view.dart';
 import '../widgets/bar_button.dart';
@@ -284,40 +285,46 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final text = theme.textTheme;
-    // 设置页统一字体风格（全剧TV 同款）：整体加粗、放大一档，分组标题、
-    // 条目、说明文字形成一致层级，子页面与各分组详情自动继承这套字重。
+    // 短剧之家字阶：标题粗、说明细，靠对比制造层次，不再「整体加粗」。
+    // 分组标题小灰字 + 正字距，条目标题中粗，副标题细灰，子页面自动继承。
     final scoped = theme.copyWith(
       textTheme: text.copyWith(
         bodyLarge: text.bodyLarge?.copyWith(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
+          fontWeight: TypeScale.semibold,
+          letterSpacing: TypeScale.trackingSnug,
+          height: TypeScale.leadingTitle,
         ),
         bodyMedium: text.bodyMedium?.copyWith(
           fontSize: 14.5,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.1,
+          fontWeight: TypeScale.regular,
+          letterSpacing: TypeScale.trackingNormal,
+          height: TypeScale.leadingBody,
         ),
         bodySmall: text.bodySmall?.copyWith(
           fontSize: 12.5,
-          fontWeight: FontWeight.w500,
+          fontWeight: TypeScale.regular,
+          height: TypeScale.leadingCaption,
         ),
         titleMedium: text.titleMedium?.copyWith(
           fontSize: 17,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.3,
+          fontWeight: TypeScale.heavy,
+          letterSpacing: TypeScale.trackingSnug,
+          height: TypeScale.leadingTitle,
         ),
         titleSmall: text.titleSmall?.copyWith(
           fontSize: 15,
-          fontWeight: FontWeight.w700,
+          fontWeight: TypeScale.semibold,
+          height: TypeScale.leadingTitle,
         ),
         labelLarge: text.labelLarge?.copyWith(
           fontSize: 15,
-          fontWeight: FontWeight.w700,
+          fontWeight: TypeScale.bold,
         ),
         labelMedium: text.labelMedium?.copyWith(
           fontSize: 13,
-          fontWeight: FontWeight.w600,
+          fontWeight: TypeScale.medium,
+          letterSpacing: TypeScale.trackingLoose,
         ),
       ),
     );

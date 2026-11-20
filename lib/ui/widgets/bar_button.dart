@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import 'focus_ring.dart';
 
 /// 顶栏操作按钮：单层低对比磨砂圆钮（40×40）。
@@ -51,24 +52,29 @@ class BarButton extends StatelessWidget {
     }
 
     final dark = theme.brightness == Brightness.dark;
-    final tint = dark ? Colors.white : colors.onSurface;
+    // 玻璃底跟随当前海报色相（短剧之家的圆钮就是透出背后封面的颜色）；
+    // 没取到色 / 关闭跟随时退回中性白玻璃。图标始终用反色，保证可读。
+    final tint = PosterPalette.instance.buttonTint ??
+        (dark ? Colors.white : colors.onSurface);
     final ink = dark ? Colors.white : colors.onSurface;
     final inactive = onPressed == null;
 
-    // 单层均匀玻璃：一个圆、一层底色、一圈极细描边，没有第二层圆形边界。
+    // 短剧之家玻璃档位：填充约 0.20 alpha（截图实测），比原来 0.10 更实、
+    // 更能透出背后封面却仍有清晰圆形边界；描边 0.28 让圆在花哨海报上立得住。
+    // 仍是单层圆 + 一层底色 + 一圈极细描边，不叠加内高光 / 外发光。
     final fill = tint.withValues(
       alpha: inactive
-          ? 0.04
+          ? 0.06
           : accent
-          ? 0.16
-          : 0.10,
+          ? 0.26
+          : 0.20,
     );
     final hairline = tint.withValues(
       alpha: inactive
-          ? 0.08
+          ? 0.10
           : accent
-          ? 0.24
-          : 0.16,
+          ? 0.34
+          : 0.28,
     );
 
     return FocusRing(

@@ -8,6 +8,9 @@ import '../../models.dart';
 import '../../source_modules.dart';
 import '../../watch_history.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/continue_bar.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
@@ -318,10 +321,10 @@ class _FollowPageState extends State<FollowPage> {
                           title: '追剧',
                           titleChild: widget.headerChild,
                           leading: widget.standalone
-                              ? IconButton(
+                              ? BarButton(
                                   tooltip: '返回',
                                   onPressed: () => Navigator.maybePop(context),
-                                  icon: const Icon(Icons.arrow_back_rounded),
+                                  icon: Icons.arrow_back_rounded,
                                 )
                               : null,
                           actions: [_editButtonFor(view)],
@@ -557,10 +560,24 @@ class _FollowPageState extends State<FollowPage> {
       final first = view.shown.isEmpty
           ? null
           : (updated.firstOrNull ?? rest.first);
+      // 当前追剧列表的首张封面驱动全局取色（短剧之家机制）。
+      PosterPalette.syncDrama(context, first);
       final scroll = ValueListenableBuilder<int>(
         valueListenable: CoverShapes.revision,
         builder: (context, _, _) => CustomScrollView(
           slivers: [
+          // 短剧之家式继续观看横条：首剧驱动，点开直达详情。
+          if (first != null)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(inset, 0, inset, 12),
+              sliver: SliverToBoxAdapter(
+                child: ContinueWatchingBar(
+                  title: first.title,
+                  progress: '第 1 集',
+                  onTap: () => _open(first),
+                ),
+              ),
+            ),
           if (view.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,

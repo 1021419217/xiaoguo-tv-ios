@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../player/player_surface.dart' show formatClock;
+import '../theme/poster_palette.dart';
 import 'contained_slider.dart';
 
 /// 播放器进度条：左侧「已播」、右侧「/ 总时长」，中间是胶囊形轨道。
@@ -22,6 +23,7 @@ class SeekBar extends StatelessWidget {
     this.showTimes = true,
     this.thumbRadius = 6,
     this.height = 4,
+    this.followVideoColor = false,
   });
 
   /// 当前位置（毫秒），拖动时由调用方替换成手指位置。
@@ -43,16 +45,21 @@ class SeekBar extends StatelessWidget {
   final double thumbRadius;
   final double height;
 
+  /// 播放器内开启：进度条已播段跟随当前视频帧主色。
+  final bool followVideoColor;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final videoTint = followVideoColor ? PosterPalette.instance.videoTint : null;
+    final active = videoTint ?? colors.primary;
     final max = duration > 0 ? duration : 1.0;
     return SliderTheme(
       data: SliderTheme.of(context).copyWith(
         trackHeight: height,
         // 左右各留一个拇指半径，滑到两端时圆点不会被切掉。
         padding: EdgeInsets.symmetric(horizontal: thumbRadius + 1),
-        activeTrackColor: colors.primary,
+        activeTrackColor: active,
         inactiveTrackColor: Colors.white.withValues(alpha: .20),
         secondaryActiveTrackColor: Colors.white.withValues(alpha: .30),
         thumbColor: Colors.white,

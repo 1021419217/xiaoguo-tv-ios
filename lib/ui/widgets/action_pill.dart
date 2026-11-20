@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/poster_palette.dart';
 import 'focus_ring.dart';
 
 enum ActionTone {
@@ -51,10 +52,14 @@ class ActionPill extends StatelessWidget {
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : colors.onSurface;
+    // 胶囊玻璃底跟随海报色相，图标/文字仍用反色；danger 保留红色语义不参与。
+    final tint = PosterPalette.instance.buttonTint ?? ink;
+    // 主按钮保持「白底黑字」的视觉焦点，只掺一点海报色，不整块染色。
+    final accentFill = Color.lerp(ink, tint, 0.24) ?? ink;
     final active = onPressed != null;
     final (background, border, foreground) = switch (tone) {
       ActionTone.accent => (
-        ink.withValues(alpha: active ? 0.92 : 0.16),
+        accentFill.withValues(alpha: active ? 0.92 : 0.16),
         Colors.transparent,
         dark ? const Color(0xFF111114) : colors.surface,
       ),
@@ -64,8 +69,8 @@ class ActionPill extends StatelessWidget {
         colors.error.withValues(alpha: active ? 0.92 : 0.36),
       ),
       ActionTone.neutral => (
-        ink.withValues(alpha: active ? 0.10 : 0.04),
-        ink.withValues(alpha: active ? 0.16 : 0.08),
+        tint.withValues(alpha: active ? 0.14 : 0.04),
+        tint.withValues(alpha: active ? 0.26 : 0.08),
         ink.withValues(alpha: active ? 0.92 : 0.30),
       ),
     };

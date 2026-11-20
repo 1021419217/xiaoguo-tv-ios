@@ -14,6 +14,7 @@ import '../app_scope.dart';
 import '../downloads/download_actions.dart';
 import '../theme/app_theme.dart';
 import '../theme/motion.dart';
+import '../theme/poster_palette.dart';
 import '../widgets/seek_bar.dart';
 import '../widgets/motion/motion_widgets.dart';
 import 'cast_page.dart';
@@ -941,7 +942,9 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                         color: Colors.black.withValues(alpha: .38),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: .22),
+                          color: PosterPalette.instance.videoTint
+                                  ?.withValues(alpha: .48) ??
+                              Colors.white.withValues(alpha: .22),
                         ),
                       ),
                       child: AnimatedSwitcher(
@@ -1051,6 +1054,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       enabled: seekable,
       showTimes: false,
       thumbRadius: thumb,
+      followVideoColor: true,
       onStart: (value) {
         _seekTimer?.cancel();
         _seekTarget = null;

@@ -3,8 +3,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../cover_loader.dart';
 import '../../cover_shape.dart';
 import '../../models.dart';
+import '../app_scope.dart';
+import '../theme/poster_palette.dart';
 import '../widgets/cover_image.dart';
 
 /// 首页顶部的「大海报」：把当前分类最靠前的几部剧做成可横滑的轮播。
@@ -38,6 +41,20 @@ class _HeroCarouselState extends State<HeroCarousel> {
   void initState() {
     super.initState();
     _restartAuto();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncTint());
+  }
+
+  /// 把当前轮播海报的主色同步给全局主题。取色幂等：同一部剧只解码一次，
+  /// 因此翻页、封面落地、分类切换反复调用都不会重复开销。
+  void _syncTint() {
+    if (!mounted || widget.items.isEmpty) return;
+    final item = widget.items[_index.clamp(0, widget.items.length - 1)];
+    if (item.id.isEmpty || item.cover.isEmpty) return;
+    final path = CoverLoader.cachedPath(
+      AppScope.of(context).repository,
+      item,
+    );
+    if (path != null) unawaited(PosterPalette.instance.sync(item.id, path));
   }
 
   @override
@@ -49,6 +66,7 @@ class _HeroCarouselState extends State<HeroCarousel> {
     _index = 0;
     if (_pages.hasClients) _pages.jumpToPage(0);
     _restartAuto();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncTint());
   }
 
   @override
@@ -82,7 +100,10 @@ class _HeroCarouselState extends State<HeroCarousel> {
     final item = items[_index.clamp(0, items.length - 1)];
     return ValueListenableBuilder<int>(
       valueListenable: CoverShapes.revision,
-      builder: (context, _, _) => SizedBox(
+      builder: (context, _, _) {
+        // 封面首次落地时 cachedPath 才可用，借 revision 信号补一次取色。
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncTint());
+        return SizedBox(
         height: widget.height,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
@@ -107,6 +128,10 @@ class _HeroCarouselState extends State<HeroCarousel> {
                 onPageChanged: (index) {
                   setState(() => _index = index);
                   _restartAuto();
+                  // 翻页立刻让全局底色跟随新海报。
+                  WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => _syncTint(),
+                  );
                 },
                 itemBuilder: (context, index) => _slide(items[index]),
               ),
@@ -120,7 +145,8 @@ class _HeroCarouselState extends State<HeroCarousel> {
           ],
         ),
       ),
-      ),
+        );
+      },
     );
   }
 

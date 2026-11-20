@@ -22,13 +22,14 @@ import '../update_prompt.dart';
 import '../modules/module_install.dart';
 import '../widgets/bar_button.dart';
 import '../theme/motion.dart';
+import '../theme/poster_palette.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/source_bar.dart';
 
 enum AppTab {
   explore('发现', Icons.explore_outlined, Icons.explore),
-  history('历史', Icons.history_rounded, Icons.history_rounded),
+  history('最近观看', Icons.history_rounded, Icons.history_rounded),
   live('直播', Icons.live_tv_outlined, Icons.live_tv_rounded),
   settings('设置', Icons.tune_rounded, Icons.tune_rounded);
 
@@ -81,7 +82,7 @@ class _AppShellState extends State<AppShell>
   /// 初始停在完成态，切换时 forward(from: 0) 重播 320ms。
   late final AnimationController _tabAnim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 320),
+    duration: const Duration(milliseconds: 280),
     value: 1.0,
   );
   int _tabDirection = 1;
@@ -182,12 +183,14 @@ class _AppShellState extends State<AppShell>
     child: child,
     builder: (context, pages) {
       final t = Curves.easeOutCubic.transform(_tabAnim.value);
-      final slide = (1 - t) * 22.0 * _tabDirection;
+      // 短剧之家式柔和切页：极轻的方向性位移 + 淡入 + 回正缩放，
+      // 不再是明显的整页横滑，视觉重心留在内容本身。
+      final slide = (1 - t) * 12.0 * _tabDirection;
       return Transform.translate(
         offset: Offset(slide, 0),
         child: Transform.scale(
-          scale: 0.99 + 0.01 * t,
-          child: Opacity(opacity: 0.6 + 0.4 * t, child: pages),
+          scale: 0.988 + 0.012 * t,
+          child: Opacity(opacity: 0.72 + 0.28 * t, child: pages),
         ),
       );
     },
@@ -346,26 +349,19 @@ class _AppShellState extends State<AppShell>
         FormFactor.phone => Scaffold(
           body: pages,
           extendBody: true,
+          // 短剧之家式居中悬浮胶囊底栏：不占满宽度、浮在内容之上，
+          // 搜索仍在顶部，不放独立搜索球。玻璃底色跟随当前海报色相。
           bottomNavigationBar: covered
               ? null
-              : ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: NavigationBar(
-                      selectedIndex: tabs.indexOf(_tab),
-                      onDestinationSelected: (index) {
-                        unawaited(HapticFeedback.selectionClick());
-                        _tap(tabs[index]);
-                      },
-                      destinations: [
-                        for (final tab in tabs)
-                          NavigationDestination(
-                            key: ValueKey('nav-${tab.name}'),
-                            icon: _badged(tab, Icon(tab.icon)),
-                            selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                            label: tab.label,
-                          ),
-                      ],
+              : SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                    child: _FloatingCapsuleBar(
+                      tabs: tabs,
+                      selected: _tab,
+                      badged: _badged,
+                      onSelect: _tap,
                     ),
                   ),
                 ),
@@ -821,6 +817,129 @@ class _TelevisionTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18),
             alignment: Alignment.center,
             child: Text(tab.label),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 短剧之家式居中悬浮胶囊底栏：约屏宽 85%、强模糊玻璃、四个「图标 + 小字」
+/// 标签，选中项是一枚浅色实心胶囊。搜索保持在顶部，不放右下角搜索球。
+/// 玻璃底色与选中高亮都跟随当前海报色相，和其余按钮同一套语言。
+class _FloatingCapsuleBar extends StatelessWidget {
+  const _FloatingCapsuleBar({
+    required this.tabs,
+    required this.selected,
+    required this.badged,
+    required this.onSelect,
+  });
+  final List<AppTab> tabs;
+  final AppTab selected;
+  final Widget Function(AppTab tab, Widget icon) badged;
+  final ValueChanged<AppTab> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final tint = PosterPalette.instance.buttonTint ??
+        (dark ? Colors.white : theme.colorScheme.onSurface);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          height: 66,
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: dark ? 0.14 : 0.08),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: tint.withValues(alpha: dark ? 0.22 : 0.14),
+              width: 0.8,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            children: [
+              for (final tab in tabs)
+                Expanded(
+                  child: _CapsuleDestination(
+                    tab: tab,
+                    active: tab == selected,
+                    tint: tint,
+                    badged: badged,
+                    onTap: () => onSelect(tab),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CapsuleDestination extends StatelessWidget {
+  const _CapsuleDestination({
+    required this.tab,
+    required this.active,
+    required this.tint,
+    required this.badged,
+    required this.onTap,
+  });
+  final AppTab tab;
+  final bool active;
+  final Color tint;
+  final Widget Function(AppTab tab, Widget icon) badged;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    final color = active ? ink : ink.withValues(alpha: dark ? 0.62 : 0.68);
+    return Semantics(
+      selected: active,
+      button: true,
+      label: tab.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Motion.of(context, Motion.short),
+          curve: Motion.standard,
+          height: 54,
+          decoration: BoxDecoration(
+            color: active
+                ? tint.withValues(alpha: dark ? 0.26 : 0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 3,
+            children: [
+              badged(
+                tab,
+                Icon(
+                  active ? tab.selectedIcon : tab.icon,
+                  size: 21,
+                  color: color,
+                ),
+              ),
+              Text(
+                tab.label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  letterSpacing: -0.1,
+                  color: color,
+                ),
+              ),
+            ],
           ),
         ),
       ),

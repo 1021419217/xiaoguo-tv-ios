@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/type_scale.dart';
 import 'focus_ring.dart';
 
 /// 深灰分组圆角卡：项目之间用极细分隔线，卡片带半透明磨砂底色与细描边。
@@ -82,22 +83,13 @@ class SettingsTile extends StatelessWidget {
               ),
         title: Text(
           title,
-          style: TextStyle(
-            fontSize: 15.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
-            color: colors.onSurface,
-          ),
+          style: TypeScale.title(15.5).copyWith(color: colors.onSurface),
         ),
         subtitle: subtitle == null
             ? null
             : Text(
                 subtitle!,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.4,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.1,
+                style: TypeScale.caption(12.5).copyWith(
                   color: colors.onSurfaceVariant.withValues(alpha: 0.95),
                 ),
               ),
@@ -158,10 +150,7 @@ class SectionHeader extends StatelessWidget {
               header: true,
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
+                style: TypeScale.section(13).copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),

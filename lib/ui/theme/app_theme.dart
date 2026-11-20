@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'motion.dart';
+import 'type_scale.dart';
 
 /// 全剧TV「Lumenic 玻璃拟态」视觉 + 小果 2.0 的 pureBlack / pageTransitions。
 ///
@@ -37,26 +38,82 @@ abstract final class AppTheme {
     Brightness brightness, {
     required bool television,
     bool pureBlack = false,
+    Color? surfaceTint,
   }) {
     final base = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
     final dark = brightness == Brightness.dark;
+
+    // 表面层染色：只取海报的色相，明暗与饱和度按短剧之家的克制风格重算，
+    // 这样不同海报只改变界面色系，不会把海报本身的深浅直接带进来。
+    // surfaceTint 为空时退回中性深灰——此前卡片被写死成暖棕 3C312A，
+    // 换任何海报都不变，是"跟随海报色"要做成的正是这件事。
+    Color surfaceColor(double lightness, double saturation, Color neutral) {
+      if (surfaceTint == null) return neutral;
+      return HSLColor.fromAHSL(
+        1,
+        HSLColor.fromColor(surfaceTint).hue,
+        saturation,
+        lightness,
+      ).toColor();
+    }
+
+    // 按钮跟随海报色：把色相重算成偏亮的中间调，只做「轻微染色」——
+    // FilledButton / 开关 / 进度条仍保持原来的明暗层级与反色对比，
+    // 但整体色系会跟着当前海报一起走。关闭跟随时 buttonAccent 为空，
+    // 下面 tintedWhite 原样返回中性白，行为与改造前完全一致。
+    final buttonAccent = surfaceTint == null
+        ? null
+        : HSLColor.fromAHSL(
+            1,
+            HSLColor.fromColor(surfaceTint).hue,
+            0.52,
+            0.66,
+          ).toColor();
+    Color tintedWhite(Color neutral) {
+      if (buttonAccent == null) return neutral;
+      return Color.lerp(neutral, buttonAccent, 0.22) ?? neutral;
+    }
 
     // 纯黑玻璃拟态：深色下用 AMOLED 纯黑底 + 分层深灰容器 + 白色细描边，
     // 模拟毛玻璃的分层通透感（真 BackdropFilter 用在有背景图的页面）。
     final glassScheme = dark
         ? base.copyWith(
-            surface: const Color(0xFF131418),
+            surface: surfaceColor(0.085, 0.09, const Color(0xFF131418)),
             onSurface: Colors.white,
             onSurfaceVariant: const Color(0xFF8E8E93),
             outline: Colors.white.withValues(alpha: 0.14),
             outlineVariant: Colors.white.withValues(alpha: 0.09),
-            surfaceContainerLowest: const Color(0xFF131418),
-            surfaceContainerLow: const Color(0xFF18191D),
-            surfaceContainer: const Color(0xFF3C312A),
-            surfaceContainerHigh: const Color(0xFF453A31),
-            surfaceContainerHighest: const Color(0xFF4F433A),
-            surfaceDim: const Color(0xFF000000),
-            surfaceBright: const Color(0xFF5A4D43),
+            surfaceContainerLowest: surfaceColor(
+              0.083,
+              0.09,
+              const Color(0xFF131418),
+            ),
+            surfaceContainerLow: surfaceColor(
+              0.105,
+              0.10,
+              const Color(0xFF18191D),
+            ),
+            surfaceContainer: surfaceColor(
+              0.155,
+              0.13,
+              const Color(0xFF1F2024),
+            ),
+            surfaceContainerHigh: surfaceColor(
+              0.195,
+              0.14,
+              const Color(0xFF28292E),
+            ),
+            surfaceContainerHighest: surfaceColor(
+              0.235,
+              0.15,
+              const Color(0xFF323339),
+            ),
+            surfaceDim: surfaceColor(0.060, 0.08, const Color(0xFF0E0E11)),
+            surfaceBright: surfaceColor(
+              0.275,
+              0.16,
+              const Color(0xFF41424A),
+            ),
           )
         : base.copyWith(
             surface: Colors.white,
@@ -69,21 +126,25 @@ abstract final class AppTheme {
 
     // pureBlack 只把「底」压到纯黑，容器层级继续保留玻璃拟态的冷调深灰，
     // 这样胶囊、卡片、对话框依旧有分层，不会糊成一片。
+    // 纯黑模式仍然让分层容器带海报色相，只有「底」压到纯黑，
+    // 二者不冲突：既保留 OLED 省电，也保留跟随海报的色系。
     final scheme = pureBlack && dark
         ? glassScheme.copyWith(
             surface: Colors.black,
             surfaceDim: Colors.black,
             surfaceContainerLowest: Colors.black,
-            surfaceContainerLow: const Color(0xFF0B0B0B),
-            surfaceContainer: const Color(0xFF121212),
-            surfaceContainerHigh: const Color(0xFF1A1A1A),
-            surfaceContainerHighest: const Color(0xFF242424),
+            surfaceContainerLow: surfaceColor(0.035, 0.08, const Color(0xFF0B0B0B)),
+            surfaceContainer: surfaceColor(0.075, 0.12, const Color(0xFF121212)),
+            surfaceContainerHigh: surfaceColor(0.110, 0.13, const Color(0xFF1A1A1A)),
+            surfaceContainerHighest: surfaceColor(0.150, 0.14, const Color(0xFF242424)),
           )
         : glassScheme;
 
     const radius = 22.0;
     final background = dark
-        ? (pureBlack ? Colors.black : const Color(0xFF131418))
+        ? (pureBlack
+            ? Colors.black
+            : surfaceColor(0.083, 0.09, const Color(0xFF131418)))
         : scheme.surfaceContainerLowest;
     // 卡片用半透明磨砂：低不透明度 + 细描边，让下层内容与模糊透出来。
     final glass = CardThemeData(
@@ -123,9 +184,9 @@ abstract final class AppTheme {
       ),
       // 分段标签栏（下载页等）也走黑白反色，不用主题蓝。
       tabBarTheme: TabBarThemeData(
-        labelColor: dark ? Colors.white : scheme.primary,
+        labelColor: dark ? tintedWhite(Colors.white) : scheme.primary,
         unselectedLabelColor: scheme.onSurfaceVariant,
-        indicatorColor: dark ? Colors.white : scheme.primary,
+        indicatorColor: dark ? tintedWhite(Colors.white) : scheme.primary,
         indicatorSize: TabBarIndicatorSize.label,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -152,7 +213,9 @@ abstract final class AppTheme {
       // 主按钮一律「白底黑字胶囊」，选中态同样靠反色，而不是主题色高亮。
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: dark ? const Color(0xFFF2F2F5) : scheme.primary,
+          backgroundColor: dark
+              ? tintedWhite(const Color(0xFFF2F2F5))
+              : scheme.primary,
           foregroundColor: dark ? const Color(0xFF111114) : scheme.onPrimary,
           disabledBackgroundColor: Colors.white.withValues(alpha: 0.16),
           disabledForegroundColor: Colors.white.withValues(alpha: 0.45),
@@ -175,7 +238,9 @@ abstract final class AppTheme {
         trackColor: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           if (selected) {
-            return dark ? const Color(0xFFF2F2F5) : scheme.primary;
+            return dark
+                ? tintedWhite(const Color(0xFFF2F2F5))
+                : scheme.primary;
           }
           return dark
               ? Colors.white.withValues(alpha: 0.10)
@@ -188,7 +253,7 @@ abstract final class AppTheme {
         }),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: dark ? Colors.white : scheme.primary,
+        color: dark ? tintedWhite(Colors.white) : scheme.primary,
         linearTrackColor: Colors.white.withValues(alpha: 0.22),
       ),
       listTileTheme: ListTileThemeData(
@@ -219,20 +284,52 @@ abstract final class AppTheme {
     );
 
     final titled = theme.copyWith(
+      // 短剧之家字阶：标题特粗收紧、正文细而放松，靠对比制造层次。
+      // 字号沿用 Material 默认档位，只改字重 / 字距 / 行高三件事。
       textTheme: theme.textTheme.copyWith(
         headlineMedium: theme.textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
+          fontWeight: TypeScale.heavy,
+          letterSpacing: TypeScale.trackingTight,
+          height: TypeScale.leadingTitle,
         ),
         headlineSmall: theme.textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.4,
+          fontWeight: TypeScale.heavy,
+          letterSpacing: TypeScale.trackingSnug,
+          height: TypeScale.leadingTitle,
         ),
         titleLarge: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: TypeScale.heavy,
+          letterSpacing: TypeScale.trackingSnug,
+          height: TypeScale.leadingTitle,
         ),
         titleMedium: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
+          fontWeight: TypeScale.semibold,
+          letterSpacing: TypeScale.trackingSnug,
+          height: TypeScale.leadingTitle,
+        ),
+        // 正文层：短剧之家是常规字重 + 放松行高，不跟标题抢粗。
+        bodyLarge: theme.textTheme.bodyLarge?.copyWith(
+          fontWeight: TypeScale.regular,
+          height: TypeScale.leadingBody,
+        ),
+        bodyMedium: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: TypeScale.regular,
+          height: TypeScale.leadingBody,
+        ),
+        bodySmall: theme.textTheme.bodySmall?.copyWith(
+          fontWeight: TypeScale.regular,
+          height: TypeScale.leadingCaption,
+        ),
+      ),
+      // 所有裸写 IconButton（各页面返回钮、刷新钮等）统一获得短剧之家式
+      // 圆形玻璃底，并跟随当前海报色；显式指定 style 的按钮以自身为准。
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          shape: const CircleBorder(),
+          backgroundColor:
+              (buttonAccent ?? (dark ? Colors.white : scheme.onSurface))
+                  .withValues(alpha: dark ? 0.20 : 0.08),
+          foregroundColor: dark ? Colors.white : scheme.onSurface,
         ),
       ),
       appBarTheme: theme.appBarTheme.copyWith(
@@ -249,7 +346,7 @@ abstract final class AppTheme {
             : Colors.white.withValues(alpha: 0.80),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: Colors.white.withValues(alpha: 0.14),
+        indicatorColor: tintedWhite(Colors.white).withValues(alpha: 0.14),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return theme.textTheme.labelMedium?.copyWith(

@@ -5,6 +5,8 @@ import '../../core_bridge.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../playback_session.dart';
+import '../theme/poster_palette.dart';
+import 'frame_color_sampler.dart';
 
 Player _player() => Player(
   configuration: const PlayerConfiguration(
@@ -39,12 +41,20 @@ class PlaybackHandle {
       position: position,
       autoplay: autoplay,
     );
+    // 播放时周期性从当前视频帧取主色，驱动播放器控件跟随视频色调变化；
+    // 每次从 session.player 即时读取，切集换了 player 也能跟上。
+    _sampler = FrameColorSampler(() => session.player)..start();
   }
 
   late final PlaybackSession session;
+  late final FrameColorSampler _sampler;
   final _videos = <Player, VideoController>{};
 
   VideoController video(Player player) => _videos[player]!;
 
-  void dispose() => session.dispose();
+  void dispose() {
+    _sampler.stop();
+    PosterPalette.instance.resetVideoTint();
+    session.dispose();
+  }
 }

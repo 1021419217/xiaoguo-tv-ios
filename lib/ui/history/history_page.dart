@@ -6,6 +6,9 @@ import '../../models.dart';
 import '../../source_modules.dart';
 import '../../watch_history.dart';
 import '../app_scope.dart';
+import '../theme/poster_palette.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/continue_bar.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
@@ -341,10 +344,10 @@ class _HistoryPageState extends State<HistoryPage> {
             ? null
             : selection == null
             ? null
-            : IconButton(
+            : BarButton(
                 tooltip: '退出编辑',
                 onPressed: _finishEditing,
-                icon: const Icon(Icons.close_rounded),
+                icon: Icons.close_rounded,
               ),
         titleWidget: FadeSwitcher(
           duration: Motion.short,
@@ -354,8 +357,9 @@ class _HistoryPageState extends State<HistoryPage> {
               : GlassTitle(
                   key: ValueKey(selection == null),
                   title: selection == null
-                      ? '观看记录'
+                      ? '最近观看'
                       : '已选择 ${selection.length} 部',
+                  count: selection == null ? '${widget.store.history.length}' : null,
                 ),
         ),
         actions: [
@@ -537,10 +541,27 @@ class _HistoryPageState extends State<HistoryPage> {
           id: view.shown[index],
       };
       final first = view.shown.firstOrNull;
+      // 最近观看列表的首张封面驱动全局取色（短剧之家机制）。
+      PosterPalette.syncDrama(context, first?.drama);
       final scroll = ValueListenableBuilder<int>(
         valueListenable: CoverShapes.revision,
         builder: (context, _, _) => CustomScrollView(
           slivers: [
+          // 短剧之家式继续观看横条：最近一条记录驱动，点开直达详情。
+          if (first != null)
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(inset, 0, inset, 12),
+              sliver: SliverToBoxAdapter(
+                child: ContinueWatchingBar(
+                  title: first.drama.title,
+                  progress: '第 ${first.episode} 集',
+                  onTap: () => openPage<void>(
+                    context,
+                    (_) => DetailPage(store: widget.store, drama: first.drama),
+                  ),
+                ),
+              ),
+            ),
           if (view.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
