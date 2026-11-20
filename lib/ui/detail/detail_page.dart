@@ -1848,6 +1848,9 @@ class _DetailPageState extends State<DetailPage> {
     final label = details.watch != null && details.episodes.isNotEmpty
         ? '继续播放 · 第 ${details.episodes[details.resumeIndex].number} 集'
         : '立即播放';
+    // 短剧之家同款主 CTA：白色大胶囊 + 深色字，白底掺一点当前海报色相，
+    // 在花哨封面页上最醒目，又不破坏「白底主按钮」的视觉焦点。
+    final tint = PosterPalette.instance.buttonTint;
     return FocusRing(
       radius: m.button / 2,
       child: FilledButton.icon(
@@ -1859,9 +1862,12 @@ class _DetailPageState extends State<DetailPage> {
         style: FilledButton.styleFrom(
           minimumSize: Size(0, m.button),
           iconSize: m.buttonIcon,
+          shape: const StadiumBorder(),
+          backgroundColor: Color.lerp(const Color(0xFFFFFFFF), tint, .12),
+          foregroundColor: Color.lerp(const Color(0xFF141414), tint, .28),
           textStyle: TextStyle(
             fontSize: m.buttonText,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
         icon: const Icon(Icons.play_arrow_rounded),

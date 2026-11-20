@@ -333,6 +333,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       _holding = true;
       _heldIndex = _session.index;
     });
+    _say('${_session.store.playbackPreferences.boostLabel}加速中');
   }
 
   void _pointerMove(PointerMoveEvent event) {
@@ -398,6 +399,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
     if (!_holding) return;
     _session.endBoost();
     setState(() => _holding = false);
+    _say('恢复 1 倍速');
   }
 
   Future<void> _openSettings() => showPlayerSheet(
@@ -755,14 +757,26 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .72),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Color.lerp(
+                          const Color(0xF2FFFFFF),
+                          PosterPalette.instance.videoTint,
+                          .12,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x33000000), blurRadius: 8),
+                        ],
                       ),
                       child: Text(
                         _hint,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
+                        style: TextStyle(
+                          color: Color.lerp(
+                            const Color(0xFF1A1A1A),
+                            PosterPalette.instance.videoTint,
+                            .3,
+                          ),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
