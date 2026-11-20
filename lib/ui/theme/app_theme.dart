@@ -52,9 +52,9 @@ abstract final class AppTheme {
             outlineVariant: Colors.white.withValues(alpha: 0.09),
             surfaceContainerLowest: const Color(0xFF131418),
             surfaceContainerLow: const Color(0xFF18191D),
-            surfaceContainer: const Color(0xFF22232A),
-            surfaceContainerHigh: const Color(0xFF2A2B33),
-            surfaceContainerHighest: const Color(0xFF32333B),
+            surfaceContainer: const Color(0xFF3C312A),
+            surfaceContainerHigh: const Color(0xFF453A31),
+            surfaceContainerHighest: const Color(0xFF4F433A),
             surfaceDim: const Color(0xFF000000),
             surfaceBright: const Color(0xFF5A4D43),
           )

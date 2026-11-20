@@ -14,7 +14,7 @@ class GroupCard extends StatelessWidget {
     // 最近的 Material 上，套一层带底色的 Container 会把水波纹盖在下面——
     // 设置页所有条目点下去都没有任何反馈，就是这个原因。
     return Material(
-      color: Colors.white.withValues(alpha: 0.05),
+      color: colors.surfaceContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
         side: BorderSide(color: colors.outlineVariant),
