@@ -1,7 +1,7 @@
 {
   "id": "whostv",
   "name": "whos.tv",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "whos.tv（原 bad.news）- 日本AV在線看，含排行榜",
   "runtime": "js",
   "api": 1,
