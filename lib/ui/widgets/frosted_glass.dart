@@ -117,10 +117,10 @@ class FrostedGlass extends StatelessWidget {
       end: Alignment.bottomRight,
       colors: dark
           ? const [
-              Color(0x8CFFFFFF),
-              Color(0x42FFFFFF),
-              Color(0x14FFFFFF),
-              Color(0x33FFFFFF),
+              Color(0x9EFFFFFF),
+              Color(0x50FFFFFF),
+              Color(0x30FFFFFF),
+              Color(0x46FFFFFF),
             ]
           : const [
               Color(0xE6FFFFFF),
@@ -162,38 +162,39 @@ class FrostedGlass extends StatelessWidget {
     return LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: dark
-          ? (selected
-                ? const [
-                    Color(0xC86D6E74),
-                    Color(0xC848494F),
-                    Color(0xDA2C2D32),
-                  ]
-                : accent
-                ? const [
-                    Color(0xBE5A5B61),
-                    Color(0xBE37383E),
-                    Color(0xCE202125),
-                  ]
-                : const [
-                    Color(0xB84E4F55),
-                    Color(0xB82D2E33),
-                    Color(0xCC17181B),
-                  ])
-          : const [
-              Color(0xCCFFFFFF),
-              Color(0xB8F2F3F7),
-              Color(0xA9E2E4EA),
-            ],
+        colors: dark
+            ? (selected
+                  ? const [
+                      Color(0xCE828389),
+                      Color(0xCE5A5B61),
+                      Color(0xDC3A3B40),
+                    ]
+                  : accent
+                  ? const [
+                      Color(0xBA6E6F76),
+                      Color(0xBA4A4B51),
+                      Color(0xCC2B2C31),
+                    ]
+                  : const [
+                      Color(0xA864656C),
+                      Color(0xAE3E3F45),
+                      Color(0xC41D1E22),
+                    ])
+            : const [
+                Color(0xCCFFFFFF),
+                Color(0xB8F2F3F7),
+                Color(0xA9E2E4EA),
+              ],
       stops: const [0.0, 0.48, 1.0],
     );
   }
 
-  /// 第 3 层上半：顶部弧形高光，模拟玻璃反光的曲面。
-  RadialGradient get _topGlow => const RadialGradient(
-    center: Alignment(0, -1.05),
-    radius: 1.45,
-    colors: [Color(0x2BFFFFFF), Color(0x00FFFFFF)],
+  /// 第 3 层上半：顶部弧形高光。圆形控件把光心压到上中部、收小半径，
+  /// 出来的是「球面鼓起」而不是一条横贯的亮带；胶囊/卡片仍用顶缘弧光。
+  RadialGradient _topGlow(bool circle) => RadialGradient(
+    center: circle ? const Alignment(0, -0.5) : const Alignment(0, -1.05),
+    radius: circle ? 1.1 : 1.45,
+    colors: const [Color(0x2BFFFFFF), Color(0x00FFFFFF)],
     stops: [0.0, 1.0],
   );
 
@@ -224,7 +225,7 @@ class FrostedGlass extends StatelessWidget {
     Widget layers = Container(
       decoration: BoxDecoration(gradient: _slant(dark)),
       child: Container(
-        decoration: BoxDecoration(gradient: _topGlow),
+        decoration: BoxDecoration(gradient: _topGlow(circle)),
         child: Container(
           decoration: BoxDecoration(gradient: _innerShade),
           child: Container(

@@ -9,7 +9,8 @@ import 'frosted_glass.dart';
 
 // 历史调用点都从本文件拿玻璃常量与圆钮组件，这里统一转发，
 // 让全部现有 import 保持有效，质感实现集中在 frosted_glass.dart 一处。
-export 'frosted_glass.dart' show GlassTones, GlassOrb, FrostedGlass;
+export 'frosted_glass.dart'
+    show GlassTones, GlassOrb, FrostedGlass, GlassVariant;
 
 /// 顶栏操作按钮：直接复用 [GlassOrb]，与全 App 圆形控件同一套磨砂玻璃质感。
 class BarButton extends StatelessWidget {
