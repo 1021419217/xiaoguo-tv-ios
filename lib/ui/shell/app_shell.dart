@@ -846,6 +846,14 @@ class _FloatingCapsuleBar extends StatelessWidget {
   final Widget Function(AppTab tab, Widget icon) badged;
   final ValueChanged<AppTab> onSelect;
 
+  /// 切到不同 tab 时给一次轻震，保持改造前 NavigationBar 的
+  /// onDestinationSelected 手感；重复点当前 tab 时 _tap 内部本来就会震，
+  /// 这里不再叠加，避免一次点击震两下。
+  void _select(AppTab tab) {
+    if (tab != selected) unawaited(HapticFeedback.selectionClick());
+    onSelect(tab);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -876,7 +884,7 @@ class _FloatingCapsuleBar extends StatelessWidget {
                     active: tab == selected,
                     tint: tint,
                     badged: badged,
-                    onTap: () => onSelect(tab),
+                    onTap: () => _select(tab),
                   ),
                 ),
             ],

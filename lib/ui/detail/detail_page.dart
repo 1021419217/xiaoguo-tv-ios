@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1443,44 +1444,84 @@ class _DetailPageState extends State<DetailPage> {
 
   /// 作者入口：站源拿到作者信息就显示，点进去看同一作者在本源的其它作品。
   /// 取数由原生 authorCatalog 统一兜底，不挑源。
+  ///
+  /// 位置与跳转逻辑保持不动，只把外观换成短剧之家那套玻璃语言：
+  /// 圆形人像徽标 + 毛玻璃胶囊，玻璃底 / 描边 / 徽标跟随当前海报取色，
+  /// 与顶部换源、搜索胶囊同款；没取到色时退回中性玻璃，文字仍清晰。
   Widget _authorEntry(Drama drama, _Metrics m) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : colors.onSurface;
+    final glass = PosterPalette.instance.buttonTint ??
+        (dark ? Colors.white : colors.onSurface);
     final name = drama.author.trim().isEmpty ? '作者' : drama.author.trim();
     return Align(
       alignment: Alignment.centerLeft,
       child: FocusRing(
         radius: 999,
         child: Material(
-          color: colors.onSurface.withValues(alpha: 0.055),
+          color: Colors.transparent,
           shape: const StadiumBorder(),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => _openAuthor(drama),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 5,
-                children: [
-                  Icon(
-                    Icons.person_outline_rounded,
-                    size: 15,
-                    color: colors.onSurfaceVariant,
-                  ),
-                  Text(
-                    name,
-                    style: TextStyle(
-                      fontSize: m.tag,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
+            splashColor: glass.withValues(alpha: 0.10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(6, 5, 11, 5),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        glass.withValues(alpha: dark ? 0.16 : 0.09),
+                        glass.withValues(alpha: dark ? 0.07 : 0.04),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: glass.withValues(alpha: dark ? 0.26 : 0.16),
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 15,
-                    color: colors.onSurfaceVariant,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 7,
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: glass.withValues(alpha: 0.22),
+                        ),
+                        child: Icon(
+                          Icons.person_outline_rounded,
+                          size: 15,
+                          color: glass,
+                        ),
+                      ),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: m.tag,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                          height: 1.2,
+                          color: ink.withValues(alpha: 0.92),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 15,
+                        color: ink.withValues(alpha: 0.5),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

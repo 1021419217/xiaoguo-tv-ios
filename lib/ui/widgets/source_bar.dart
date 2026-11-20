@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -215,19 +217,98 @@ class _SourceSwitcher extends StatelessWidget {
   }
 }
 
-/// 顶栏搜索钮：对齐短剧之家那种圆形毛玻璃图标钮。
+/// 顶栏搜索胶囊：保留「搜索」二字，同时套用短剧之家的圆形玻璃语言。
 ///
-/// 直接复用 [BarButton]，自动继承统一调好的玻璃档位（0.20 填充 / 0.28 描边），
-/// 与全 App 其它圆形操作钮同款。搜索功能 [onPressed] 原样透传，不变。
+/// 左端一枚圆形放大镜徽标（与左侧换源胶囊的地球徽标同款呼应），
+/// 玻璃底 / 描边 / 徽标都跟随当前海报取色，没取到色时退回中性白玻璃。
+/// 搜索功能 [onPressed] 原样透传，形状与交互都不变。
 class _SearchPill extends StatelessWidget {
   const _SearchPill({required this.tooltip, required this.onPressed});
   final String tooltip;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => BarButton(
-        icon: Icons.search_rounded,
-        tooltip: tooltip,
-        onPressed: onPressed,
-      );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : colors.onSurface;
+    final glass = PosterPalette.instance.buttonTint ??
+        (dark ? Colors.white : colors.onSurface);
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(21),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(21),
+            splashColor: glass.withValues(alpha: 0.10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(21),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.fromLTRB(6, 0, 11, 0),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        glass.withValues(alpha: dark ? 0.16 : 0.09),
+                        glass.withValues(alpha: dark ? 0.07 : 0.04),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(21),
+                    border: Border.all(
+                      color: glass.withValues(alpha: dark ? 0.26 : 0.16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: glass.withValues(alpha: 0.22),
+                        ),
+                        child: Icon(
+                          Icons.search_rounded,
+                          size: 17,
+                          color: glass,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        '搜索',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                          color: ink.withValues(alpha: 0.92),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 17,
+                        color: ink.withValues(alpha: 0.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
