@@ -919,31 +919,38 @@ class _CapsuleDestination extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     final color = active ? ink : ink.withValues(alpha: dark ? 0.62 : 0.68);
-    final content = Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      spacing: 2,
-      children: [
-        badged(
-          tab,
-          Icon(
-            active ? tab.selectedIcon : tab.icon,
-            size: 22,
-            weight: 700,
-            color: color,
-          ),
-        ),
-        Text(
-          tab.label,
-          maxLines: 1,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            letterSpacing: -0.1,
-            color: color,
-          ),
-        ),
-      ],
+    final icon = badged(
+      tab,
+      Icon(
+        active ? tab.selectedIcon : tab.icon,
+        size: active ? 20 : 22,
+        weight: 700,
+        color: color,
+      ),
     );
+    final label = Text(
+      tab.label,
+      maxLines: 1,
+      style: TextStyle(
+        fontSize: active ? 12 : 10.5,
+        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+        letterSpacing: -0.1,
+        color: color,
+      ),
+    );
+    // 参考底栏的选中态是「图标 + 文字横排的大圆角胶囊」，不是竖排圆豆。
+    final content = active
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 7,
+            children: [icon, label],
+          )
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: 2,
+            children: [icon, label],
+          );
     return Semantics(
       selected: active,
       button: true,
@@ -951,8 +958,8 @@ class _CapsuleDestination extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        // 选中项是一颗「鼓起来的圆形玻璃豆」：居中、比底栏亮一档，自带
-        // 高斯模糊、渐变亮边与顶部弧光；未选中项保持透明，直接露出底栏玻璃。
+        // 选中项是一块「横排图标+文字的大圆角玻璃胶囊」：居中、比底栏亮
+        // 一档，自带高斯模糊、细亮边与顶部弧光；未选中项保持透明。
         child: AnimatedSwitcher(
           duration: Motion.of(context, Motion.short),
           switchInCurve: Motion.standard,
@@ -962,11 +969,11 @@ class _CapsuleDestination extends StatelessWidget {
                   key: const ValueKey('selected'),
                   child: FrostedGlass(
                     radius: 27,
-                    width: 82,
+                    width: 100,
                     height: 54,
                     blur: 14,
                     selected: true,
-                    child: content,
+                    child: Center(child: content),
                   ),
                 )
               : SizedBox(

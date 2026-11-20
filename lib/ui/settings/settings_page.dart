@@ -340,7 +340,7 @@ class _SettingsPageState extends State<SettingsPage> {
     appBar: AppBar(
       surfaceTintColor: Colors.transparent,
       flexibleSpace: const FrostedHeader(fill: true),
-      title: const GlassTitle(title: '设置'),
+      title: const GlassTitle(title: '设置', plain: true),
     ),
     body: SafeArea(
       top: true,
@@ -365,7 +365,7 @@ class _SettingsPageState extends State<SettingsPage> {
               if (widget.followPage != null || widget.downloadsPage != null) ...[
                 const SectionHeader(
                   title: '内容',
-                  padding: EdgeInsets.fromLTRB(4, 2, 8, 6),
+                  padding: EdgeInsets.fromLTRB(4, 18, 8, 10),
                 ),
                 GroupCard(
                   children: [
@@ -393,7 +393,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
               const SectionHeader(
                 title: '常用',
-                padding: EdgeInsets.fromLTRB(4, 2, 8, 6),
+                padding: EdgeInsets.fromLTRB(4, 18, 8, 10),
               ),
               GroupCard(
                 children: [

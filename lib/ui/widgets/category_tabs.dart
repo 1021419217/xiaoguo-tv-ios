@@ -111,11 +111,10 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
         showAll = _AllCategoriesChip(onShowAll: onShowAll);
       }
     }
-    return Container(
+    // 标签栏下方原来有一条 outlineVariant 实线，真机上变成一道横贯的硬边，
+    // 和「上半蓝、下半黑」的顶栏色带叠在一起尤其脏。参考图里没有这条线。
+    return SizedBox(
       height: height,
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-      ),
       child: Row(
         children: [
           if (television) ?showAll,

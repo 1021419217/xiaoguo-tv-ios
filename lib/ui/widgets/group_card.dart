@@ -23,7 +23,7 @@ class GroupCard extends StatelessWidget {
     // Material 放在最内层，让 ListTile / InkWell 的水波纹画在卡片内部而不是
     // 被玻璃层盖住；外层玻璃负责裁剪与质感。
     return FrostedGlass(
-      radius: 22,
+      radius: 20,
       blur: 18,
       child: Material(
         color: Colors.transparent,
@@ -78,19 +78,19 @@ class SettingsTile extends StatelessWidget {
     // 短剧之家的图标底是亮饱和的实色圆，不是压暗的半透明径向渐变。
     // 统一往白提一档，紫色/橙色才不会在深色玻璃上发灰。
     final raw = iconColor ?? colors.primary;
-    final badge = Color.lerp(raw, Colors.white, 0.14) ?? raw;
-    final badgeEdge = Color.lerp(badge, Colors.black, 0.08) ?? badge;
+    final badge = Color.lerp(raw, Colors.white, 0.30) ?? raw;
+    final badgeEdge = Color.lerp(badge, Colors.black, 0.10) ?? badge;
     return TileFocus(
       builder: (focusNode) => ListTile(
         focusNode: focusNode,
-        minTileHeight: subtitle == null ? 60 : 72,
+        minTileHeight: subtitle == null ? 68 : 80,
         contentPadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
         horizontalTitleGap: 14,
         leading: icon == null
             ? null
             : Container(
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   gradient: RadialGradient(
                     center: const Alignment(0, -0.4),
@@ -99,11 +99,11 @@ class SettingsTile extends StatelessWidget {
                   ),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.20),
+                    color: Colors.white.withValues(alpha: 0.28),
                     width: 1,
                   ),
                 ),
-                child: Icon(icon, size: 19, weight: 700, color: Colors.white),
+                child: Icon(icon, size: 21, weight: 700, color: Colors.white),
               ),
         title: Text(
           title,

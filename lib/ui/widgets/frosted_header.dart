@@ -20,27 +20,12 @@ class FrostedHeader extends StatelessWidget {
   final bool fill;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                colors.surface.withValues(alpha: 0.09),
-                colors.surface.withValues(alpha: 0.09),
-              ],
-            ),
-          ),
-          child: fill ? const SizedBox.expand() : child,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ClipRect(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: fill ? const SizedBox.expand() : (child ?? const SizedBox.expand()),
+    ),
+  );
 }
 
 /// 玻璃标题胶囊：与顶栏「编辑 / 清空」等 ActionPill 完全同一套玻璃件
@@ -53,10 +38,15 @@ class GlassTitle extends StatelessWidget {
     required this.title,
     this.count,
     this.expand = true,
+    this.plain = false,
   });
 
   final String title;
   final String? count;
+
+  /// 裸大标题模式：对齐短剧之家设置页「返回圆钮 + 大号粗体标题」的层级，
+  /// 不套胶囊底。只给 tab 根页（设置）用，其余页面仍用统一玻璃胶囊。
+  final bool plain;
 
   /// 是否用 Spacer 占满整行。嵌在一行里（标题后面还要放筛选胶囊）时传 false，
   /// 否则内部 Spacer 会把后面的胶囊挤出去。
@@ -67,6 +57,35 @@ class GlassTitle extends StatelessWidget {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
+    if (plain) {
+      return Row(
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              color: ink,
+            ),
+          ),
+          if (count case final value?) ...[
+            const SizedBox(width: 8),
+            Text(
+              '· $value',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: ink.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+          if (expand) const Spacer(),
+        ],
+      );
+    }
     return Row(
       children: [
         Semantics(

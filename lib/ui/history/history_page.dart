@@ -286,15 +286,14 @@ class _HistoryPageState extends State<HistoryPage> {
         ),
       );
 
-  Widget _sourceChip(String id, String label, _View view) => FocusRing(
-    radius: 8,
-    child: ChoiceChip(
-      key: ValueKey('history-source-$id'),
-      label: Text(label),
-      showCheckmark: false,
-      selected: view.source == id,
-      onSelected: (_) => setState(() => _source = id),
-    ),
+  /// 站源分类改用与顶栏同一套玻璃胶囊：选中/未选中只差色调，不再出现
+  /// 「全部」是紫色实心块、其余是描边框这种两种控件混排。
+  Widget _sourceChip(String id, String label, _View view) => GlassChip(
+    key: ValueKey('history-source-$id'),
+    label: label,
+    selected: view.source == id,
+    height: 38,
+    onTap: () => setState(() => _source = id),
   );
 
   Widget? _sources(_View view, {required double inset, bool scroll = false}) {
