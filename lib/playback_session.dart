@@ -58,7 +58,7 @@ class PlaybackSession extends ChangeNotifier {
     _preloader = PlaybackPreloader(repository)..addListener(_prime);
     danmaku = DanmakuController(repository)
       ..setEnabled(_danmakuEnabled)
-      ..setMerge(preferences.danmakuMerge)
+      ..setMergeWindow(preferences.danmakuMerge)
       ..setBlockedWords(preferences.danmakuWords);
     store.addListener(_accessChanged);
     store.addListener(_syncBlockedWords);
@@ -953,6 +953,9 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> retry() =>
       play(_index, position: currentPosition, playWhenReady: true);
 
+  /// 播放失败且已有进度时，从当前集开头重试（上游 2.0.3+115）。
+  Future<void> retryFromStart() => play(_index);
+
   Future<void> switchOnline() {
     _online = true;
     return retry();
@@ -1154,10 +1157,10 @@ class PlaybackSession extends ChangeNotifier {
     );
   }
 
-  Future<void> setDanmakuMerge(bool merge) async {
+  Future<void> setDanmakuMerge(DanmakuMerge merge) async {
     if (_preferences.danmakuMerge == merge) return;
     await _savePreferences(_preferences.copyWith(danmakuMerge: merge));
-    danmaku.setMerge(merge);
+    danmaku.setMergeWindow(merge);
   }
 
   Future<void> toggleDanmaku() async {

@@ -40,7 +40,17 @@ abstract final class AppTheme {
     bool pureBlack = false,
     Color? surfaceTint,
   }) {
-    final base = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final white = seed == Colors.white;
+    var base = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: brightness,
+      dynamicSchemeVariant: white
+          ? DynamicSchemeVariant.monochrome
+          : DynamicSchemeVariant.tonalSpot,
+    );
+    if (white && brightness == Brightness.light) {
+      base = base.copyWith(surface: Colors.white);
+    }
     final dark = brightness == Brightness.dark;
 
     // 表面层染色：只取海报的色相，明暗与饱和度按短剧之家的克制风格重算，
@@ -99,7 +109,7 @@ abstract final class AppTheme {
             // 浅色主题同样跟随海报色：用高明度 + 低饱和重算，只带上一点
             // 色相，保持浅色界面通透；关闭跟随时退回原来的中性白/浅灰。
             // 此前这一支是写死的常量，导致浅色模式下任何页面都不跟随。
-            surface: surfaceColor(0.985, 0.05, Colors.white),
+            surface: white ? Colors.white : surfaceColor(0.985, 0.05, Colors.white),
             surfaceContainerLowest: surfaceColor(
               0.972,
               0.06,

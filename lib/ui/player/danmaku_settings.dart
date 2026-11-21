@@ -121,7 +121,7 @@ class DanmakuSettings extends StatelessWidget {
     bool? bold,
     DanmakuCoverage? coverage,
     double? speed,
-    bool? merge,
+    DanmakuMerge? merge,
     List<String>? words,
   }) async {
     _save(
@@ -197,15 +197,32 @@ class DanmakuSettings extends StatelessWidget {
         _shadowTile(),
         _section(context, '滚动'),
         _speedTile(),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('合并重复'),
-          subtitle: const Text('同一时段的相同弹幕并成一条，并标出次数'),
-          value: preferences.danmakuMerge,
-          onChanged: (value) => _apply(
-            () =>
-                session?.setDanmakuMerge(value) ??
-                _asyncSave(merge: value),
+        _section(context, '合并重复'),
+        Text(
+          preferences.danmakuMerge == DanmakuMerge.off
+              ? '关闭时每条弹幕单独滚动。'
+              : '时间相近、文字完全相同的弹幕并成一条，后面标上出现的次数。',
+          style: TextStyle(fontSize: 13, height: 1.4, color: label.color),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final merge in DanmakuMerge.values)
+                ChoiceChip(
+                  label: Text(merge.label),
+                  selected: preferences.danmakuMerge == merge,
+                  showCheckmark: false,
+                  shape: const StadiumBorder(),
+                  onSelected: (_) => _apply(
+                    () =>
+                        session?.setDanmakuMerge(merge) ??
+                        _asyncSave(merge: merge),
+                  ),
+                ),
+            ],
           ),
         ),
         _section(context, '显示区域'),

@@ -115,22 +115,33 @@ class AppearanceSettings extends StatelessWidget {
                         ),
                       ],
                     ),
-                    Row(
-                      children: [
-                        for (final color in ThemeColor.values)
-                          Expanded(
-                            child: _Swatch(
-                              color: color,
-                              selected: !accentLocked && store.themeColor == color,
-                              onPressed: accentLocked
-                                  ? null
-                                  : () => saveSetting(
-                                      context,
-                                      () => store.setThemeColor(color),
-                                    ),
-                            ),
-                          ),
-                      ],
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        const palette = ThemeColor.values;
+                        final columns = constraints.maxWidth >= palette.length * 50
+                            ? palette.length
+                            : 4;
+                        return Wrap(
+                          runSpacing: 12,
+                          children: [
+                            for (final color in palette)
+                              SizedBox(
+                                width: constraints.maxWidth / columns,
+                                child: _Swatch(
+                                  color: color,
+                                  selected:
+                                      !accentLocked && store.themeColor == color,
+                                  onPressed: accentLocked
+                                      ? null
+                                      : () => saveSetting(
+                                          context,
+                                          () => store.setThemeColor(color),
+                                        ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -241,10 +252,14 @@ class _Swatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final white = color == ThemeColor.white;
     final scheme = ColorScheme.fromSeed(
       seedColor: Color(color.seed),
       brightness: theme.brightness,
+      dynamicSchemeVariant:
+          white ? DynamicSchemeVariant.monochrome : DynamicSchemeVariant.tonalSpot,
     );
+    final ring = white ? theme.colorScheme.onSurface : scheme.primary;
     return Column(
       spacing: 6,
       children: [
@@ -264,13 +279,13 @@ class _Swatch extends StatelessWidget {
               decoration: ShapeDecoration(
                 shape: CircleBorder(
                   side: BorderSide(
-                    color: selected ? scheme.primary : Colors.transparent,
+                    color: selected ? ring : Colors.transparent,
                     width: 2,
                   ),
                 ),
               ),
               child: Material(
-                color: scheme.primary,
+                color: white ? Colors.white : scheme.primary,
                 shape: const CircleBorder(),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -280,7 +295,7 @@ class _Swatch extends StatelessWidget {
                         ? Icon(
                             Icons.check_rounded,
                             key: const ValueKey(true),
-                            color: scheme.onPrimary,
+                            color: white ? Colors.black : scheme.onPrimary,
                           )
                         : const SizedBox.shrink(key: ValueKey(false)),
                   ),

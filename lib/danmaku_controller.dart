@@ -6,6 +6,7 @@ import 'catalog_sort.dart';
 import 'core_bridge.dart';
 import 'danmaku_models.dart';
 import 'models.dart';
+import 'playback_preferences.dart';
 
 class DanmakuController extends ChangeNotifier {
   DanmakuController(this.repository, {DateTime Function()? now})
@@ -20,7 +21,6 @@ class DanmakuController extends ChangeNotifier {
   int? _pendingStart;
   bool _closed = false;
   bool _enabled = true;
-  bool _merge = false;
   bool _available = false;
   bool _foreground = true;
   bool _playing = false;
@@ -32,6 +32,7 @@ class DanmakuController extends ChangeNotifier {
   int motionRevision = 0;
   int dataRevision = 0;
   List<DanmakuItem> items = const [];
+  DanmakuMerge _merge = DanmakuMerge.ten;
   List<String> _words = const [];
   List<String> _normalizedWords = const [];
   int _blocked = 0;
@@ -58,6 +59,9 @@ class DanmakuController extends ChangeNotifier {
   bool get loading => _pendingStart != null;
   bool get canRetry => visible && _failures.isNotEmpty;
   List<String> get blockedWords => _words;
+  DanmakuMerge get mergeWindow => _merge;
+  int get itemCount =>
+      items.fold<int>(0, (total, item) => total + item.count);
   int get blockedCount => _blocked;
   String get status {
     if (!_enabled) return '弹幕已关闭';
@@ -66,7 +70,7 @@ class DanmakuController extends ChangeNotifier {
     if (canRetry) return '弹幕暂不可用，可重试';
     if (loading && _pages.isEmpty) return '正在加载弹幕';
     if (_pages.isNotEmpty) {
-      if (items.isNotEmpty) return '已载入 ${items.length} 条弹幕';
+      if (items.isNotEmpty) return '已载入 $itemCount 条弹幕';
       return _blocked > 0 ? '这段弹幕都被屏蔽了' : '这段暂无弹幕';
     }
     return '等待播放';
@@ -83,13 +87,6 @@ class DanmakuController extends ChangeNotifier {
     _available = false;
     positionMs = durationMs = 0;
     _resetMotion();
-    notifyListeners();
-  }
-
-  void setMerge(bool merge) {
-    if (_closed || _merge == merge) return;
-    _merge = merge;
-    _rebuildItems();
     notifyListeners();
   }
 
@@ -113,6 +110,14 @@ class DanmakuController extends ChangeNotifier {
     _normalizedWords = List.unmodifiable(
       next.map(normalizedSearchText).where((word) => word.isNotEmpty),
     );
+    _rebuildItems();
+    _resetMotion();
+    notifyListeners();
+  }
+
+  void setMergeWindow(DanmakuMerge merge) {
+    if (_closed || _merge == merge) return;
+    _merge = merge;
     _rebuildItems();
     _resetMotion();
     notifyListeners();
@@ -318,28 +323,37 @@ class DanmakuController extends ChangeNotifier {
       }
     }
     _blocked = blocked;
-    if (!_merge) {
-      items = List.unmodifiable(kept);
-      dataRevision++;
-      return;
-    }
-    // 同一时段（5 秒）文字完全相同的弹幕并成一条，末尾标次数。
-    final grouped = <String, List<DanmakuItem>>{};
-    for (final item in kept) {
-      final key = '${item.text}\u0000${item.timeMs ~/ 5000}';
-      grouped.putIfAbsent(key, () => []).add(item);
-    }
-    items = List.unmodifiable([
-      for (final group in grouped.values)
-        group.length == 1
-            ? group.first
-            : DanmakuItem(
-                id: group.first.id,
-                text: '${group.first.text} ×${group.length}',
-                timeMs: group.first.timeMs,
-              ),
-    ]..sort((a, b) => a.timeMs.compareTo(b.timeMs)));
+    items = List.unmodifiable(_mergeItems(kept));
     dataRevision++;
+  }
+
+  List<DanmakuItem> _mergeItems(List<DanmakuItem> source) {
+    final window = _merge.seconds * 1000;
+    if (window <= 0) return source;
+    final merged = <DanmakuItem>[];
+    final bases = <String>[];
+    final starts = <String, int>{};
+    final slots = <String, int>{};
+    for (final item in source) {
+      final slot = slots[item.text];
+      final start = starts[item.text];
+      if (slot != null && start != null && item.timeMs - start < window) {
+        final previous = merged[slot];
+        final count = previous.count + 1;
+        merged[slot] = DanmakuItem(
+          id: '${bases[slot]}#$count',
+          text: previous.text,
+          timeMs: previous.timeMs,
+          count: count,
+        );
+        continue;
+      }
+      slots[item.text] = merged.length;
+      starts[item.text] = item.timeMs;
+      bases.add(item.id);
+      merged.add(item);
+    }
+    return merged;
   }
 
   bool _isBlocked(String text) {

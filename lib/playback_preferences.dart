@@ -26,6 +26,18 @@ enum DanmakuCoverage {
   final String label;
 }
 
+enum DanmakuMerge {
+  off(0, '关闭'),
+  ten(10, '10 秒'),
+  twenty(20, '20 秒'),
+  thirty(30, '30 秒');
+
+  const DanmakuMerge(this.seconds, this.label);
+
+  final int seconds;
+  final String label;
+}
+
 enum VideoFit {
   auto('自动'),
   stretch('拉伸'),
@@ -91,7 +103,7 @@ class PlaybackPreferences {
     this.danmakuShadow = 3,
     this.danmakuCoverage = DanmakuCoverage.half,
     this.danmakuSpeed = 1,
-    this.danmakuMerge = false,
+    this.danmakuMerge = DanmakuMerge.ten,
     this.danmakuWords = const [],
     this.preload = true,
     this.televisionDecoder = TelevisionDecoder.optimized,
@@ -121,7 +133,7 @@ class PlaybackPreferences {
   final double danmakuShadow;
   final DanmakuCoverage danmakuCoverage;
   final double danmakuSpeed;
-  final bool danmakuMerge;
+  final DanmakuMerge danmakuMerge;
   final double boostSpeed;
 
   String get boostLabel =>
@@ -157,7 +169,7 @@ class PlaybackPreferences {
     double? danmakuShadow,
     DanmakuCoverage? danmakuCoverage,
     double? danmakuSpeed,
-    bool? danmakuMerge,
+    DanmakuMerge? danmakuMerge,
     double? boostSpeed,
     List<String>? danmakuWords,
     bool? preload,
@@ -219,7 +231,7 @@ class PlaybackPreferences {
     'danmakuShadow': danmakuShadow,
     'danmakuCoverage': danmakuCoverage.name,
     'danmakuSpeed': danmakuSpeed,
-    'danmakuMerge': danmakuMerge,
+    'danmakuMerge': danmakuMerge.name,
     'boostSpeed': boostSpeed,
     'danmakuWords': danmakuWords,
     'preload': preload,
@@ -280,7 +292,8 @@ class PlaybackPreferences {
         danmakuSpeedMin,
         danmakuSpeedMax,
       ),
-      danmakuMerge: value['danmakuMerge'] as bool? ?? false,
+      danmakuMerge:/n          DanmakuMerge.values.asNameMap()[value['danmakuMerge']] ??
+          DanmakuMerge.ten,
       danmakuWords: normalizeDanmakuWords(value['danmakuWords']),
       preload: preload,
       televisionDecoder:
