@@ -58,6 +58,10 @@ function get(path) {
 // 卡片（首页用 .vx-card，列表页用 .vx-th item，但都有 a.vx-media + img.vx-img）：
 //   <a class="vx-media" href="https://viralxxxporn.com/zh/video/553583/slug/" title="…">
 //     <img class="vx-img" src="https://imgcdn.viralxxxporn.com/…/800x450/2.jpg" alt="…">
+function shrinkCover(url) {
+  return String(url || '').replace('/800x450/', '/320x180/');
+}
+
 function parseCards(html) {
   const out = [];
   const seen = {};
@@ -73,7 +77,7 @@ function parseCards(html) {
     out.push({
       sourceId: id,
       title: alt ? clean(alt[1]) : m[2].replace(/-/g, ' '),
-      cover: img ? img[1] : '',
+      cover: img ? shrinkCover(img[1]) : '',
       duration: ''
     });
   }
@@ -161,7 +165,7 @@ module.exports = {
     const og = html.match(/property="og:image"[^>]*content="([^"]+)"/);
     const desc = html.match(/name="description"[^>]*content="([^"]*)"/);
 
-    const drama = toDrama({ sourceId: sourceId, title: title, cover: og ? og[1] : '' });
+    const drama = toDrama({ sourceId: sourceId, title: title, cover: og ? shrinkCover(og[1]) : '' });
     drama.desc = desc ? clean(desc[1]).substring(0, 200) : '';
 
     // 详情页已经打开了：顺手把时长和文件大小缓存好，播放时就不用再请求。
