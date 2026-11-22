@@ -6,16 +6,16 @@ import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 
-/// 与首页同款的「左右快滑切换分类」层。
+/// 与首页同款的「左右跟手翻页切换分类」层。
 ///
 /// 只把**内容区**包进来（顶栏、搜索框、分类胶囊留在外面），传分类数量 /
-/// 当前序号，快滑时回调目标序号：拖动时内容带阻尼轻微跟手，
-/// 松手后由切换动画把这一点位移平滑收回，同时新内容淡入。
-/// 切换时不再浮出分类名提示胶囊（按用户要求去掉，避免多余弹窗）。
+/// 当前序号，手指横向拖动时内容 **1:1 跟手平移**，松手时按位移 + 速度判断
+/// 吸附到相邻分类：翻页则当前内容顺势推出、新内容从另一侧滑入；不翻则回弹。
+/// 观感对齐上游 PageView 的「翻书」手感，但不改各页的内容构建结构（六个页面
+/// 共用本组件，改这一处即可全体升级）。
 ///
-/// 这里刻意不做「整页侧滑 + 整体变暗」：那种做法在列表页会让标题、搜索
-/// 框一起抖，而且淡到 0.55 再回来会闪一下。位移只在手指拖出的那一点上
-/// 收敛，透明度最低只到 0.72，切换看起来是内容轻轻一沉而不是整页晃动。
+/// 切换时不弹分类名提示（按用户要求去掉），只在成功翻页时给一次轻震动。
+/// [reservedTop] 让首页大海报那一段的横滑留给海报自己的 PageView 翻封面。
 class SwipeCategoryLayer extends StatefulWidget {
   const SwipeCategoryLayer({
     super.key,
@@ -34,7 +34,7 @@ class SwipeCategoryLayer extends StatefulWidget {
   final ValueChanged<int> onIndexChanged;
   final Widget child;
 
-  /// 提示胶囊距内容区顶部的距离（全剧TV 同款：贴在磨砂顶栏下方）。
+  /// 提示胶囊距内容区顶部的距离（保留接口兼容，当前不再渲染提示）。
   final double hintTop;
 
   /// 落在该 y（相对本层，向下为正）以内的按下不参与「切分类」手势。
@@ -48,32 +48,107 @@ class SwipeCategoryLayer extends StatefulWidget {
 
 class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _anim = AnimationController(
+  late final AnimationController _settle = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 260),
-    value: 1.0,
+    duration: const Duration(milliseconds: 220),
   );
-  double _dragX = 0;
+
+  /// 手指拖动中的实时位移；松手后由 [_settle] 接管。
+  double _dx = 0;
+  double _settleFrom = 0;
+  double _settleTo = 0;
+
+  /// 0=空闲；1=推出当前页（第一段）；2=新页滑入（第二段）。
+  int _phase = 0;
+  int _pendingDelta = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _settle.addStatusListener(_onSettleStatus);
+  }
 
   @override
   void dispose() {
-    _anim.dispose();
+    _settle.removeStatusListener(_onSettleStatus);
+    _settle.dispose();
     super.dispose();
   }
 
-  void _switch(int delta) {
-    if (widget.itemCount < 2) return;
-    final next = widget.index + delta;
-    if (next < 0 || next >= widget.itemCount) return;
-    // 快滑切分类成功时给一次轻震动；到头(越界)直接返回不震，
-    // 让用户能从「有没有震」区分是否滑到了最后一个分类。
-    unawaited(HapticFeedback.selectionClick());
-    _anim.forward(from: 0);
-    widget.onIndexChanged(next);
+  /// 动画到位时推进状态机，避免在回调里嵌套/递归启动动画。
+  void _onSettleStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    if (_phase == 1) {
+      if (_pendingDelta == 0) {
+        _finish();
+        return;
+      }
+      // 第一段（旧页推出）完成：切页，再从对称位置把新页滑回原位。
+      widget.onIndexChanged(widget.index + _pendingDelta);
+      _phase = 2;
+      _settleFrom = -_settleTo;
+      _settleTo = 0;
+      _settle
+        ..duration = const Duration(milliseconds: 240)
+        ..forward(from: 0);
+    } else if (_phase == 2) {
+      _finish();
+    }
+  }
+
+  void _finish() {
+    if (!mounted) return;
     setState(() {
-      // 位移交还给动画，手指拖出的那一点直接归零，不会残留偏移。
-      _dragX = 0;
+      _dx = 0;
+      _phase = 0;
+      _pendingDelta = 0;
     });
+  }
+
+  void _onUpdate(DragUpdateDetails details) {
+    if (_phase != 0) return;
+    final width = MediaQuery.sizeOf(context).width;
+    var next = _dx + details.delta.dx;
+    // 到头/到尾时越拉越紧（阻尼），给出「没有下一页」的反馈。
+    final atStart = widget.index <= 0 && next > 0;
+    final atEnd = widget.index >= widget.itemCount - 1 && next < 0;
+    if (atStart || atEnd) {
+      next *= 0.28;
+      next = next.clamp(-width * 0.35, width * 0.35);
+    }
+    if (next != _dx) setState(() => _dx = next);
+  }
+
+  void _onEnd(DragEndDetails details) {
+    if (_phase != 0) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final velocity = details.primaryVelocity ?? 0;
+    // 位移过 1/3 屏，或快速划动（>420px/s），都判定为翻页。
+    final passed = _dx.abs() > width / 3;
+    final flick = velocity.abs() > 420;
+    var delta = 0;
+    if (passed || flick) {
+      delta = _dx < 0 || velocity < 0 ? 1 : -1;
+      final next = widget.index + delta;
+      if (next < 0 || next >= widget.itemCount) delta = 0;
+    }
+    _startSettle(delta, width);
+  }
+
+  void _startSettle(int delta, double width) {
+    _settleFrom = _dx;
+    // 单内容架构无法让相邻两页同时可见，所以不做「滑出整屏留白」。
+    // 翻页时把当前内容顺势推到 38% 屏宽处切页，再把新内容从反向平滑收回，
+    // 得到「旧页被推走、新页滑进来」的过场，又不出现大白屏。
+    _settleTo = delta == 0
+        ? 0.0
+        : (delta > 0 ? -width * 0.38 : width * 0.38);
+    _pendingDelta = delta;
+    _phase = 1;
+    if (delta != 0) unawaited(HapticFeedback.selectionClick());
+    _settle
+      ..duration = Duration(milliseconds: delta == 0 ? 220 : 200)
+      ..forward(from: 0);
   }
 
   @override
@@ -90,41 +165,27 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
               () => _CategoryDragRecognizer(reservedTop: widget.reservedTop),
               (recognizer) => recognizer
                 ..reservedTop = widget.reservedTop
-                ..onUpdate = (details) {
-                  // 只跟手 0.08，最多 10dp：越像「拖页面」越容易和列表横滑打架。
-                  final next = (_dragX + details.delta.dx * 0.08).clamp(
-                    -10.0,
-                    10.0,
-                  );
-                  if (next != _dragX) setState(() => _dragX = next);
-                }
-                ..onEnd = (details) {
-                  final velocity = details.primaryVelocity ?? 0;
-                  if (velocity.abs() < 220) {
-                    if (_dragX != 0) setState(() => _dragX = 0);
-                    return;
-                  }
-                  _switch(velocity < 0 ? 1 : -1);
-                }
+                ..onUpdate = _onUpdate
+                ..onEnd = _onEnd
                 ..onCancel = () {
-                  if (_dragX != 0) setState(() => _dragX = 0);
+                  if (_dx != 0 && _phase == 0) {
+                    _startSettle(0, MediaQuery.sizeOf(context).width);
+                  }
                 },
             ),
       },
-      // 快滑切分类不再浮出分类名提示胶囊：用户反馈切换时弹出的提示
-      // 多余、碍眼，这里只保留跟手位移 + 淡入的切换动效与轻震动。
-      // 提示删掉后容器内只剩内容层，去掉多余的 Stack 直接放 AnimatedBuilder。
+      // 跟手期间不做淡出变暗，避免「晃一下」的观感；只有内容真实平移。
       child: AnimatedBuilder(
-        animation: _anim,
+        animation: _settle,
         child: widget.child,
         builder: (context, content) {
-          final t = Curves.easeOutCubic.transform(_anim.value);
-          // 位移从「手指松手时的那一点」线性收敛到 0，不额外跳一段，
-          // 所以看不到整页被扯动；淡入从 0.72 起，切换不闪黑。
-          final slide = _dragX * t * 0.6;
+          final dx = _phase == 0
+              ? _dx
+              : _settleFrom + (_settleTo - _settleFrom) * _settle.value;
+          if (dx == 0) return content;
           return Transform.translate(
-            offset: Offset(slide, 0),
-            child: Opacity(opacity: 0.72 + 0.28 * t, child: content),
+            offset: Offset(dx, 0),
+            child: content,
           );
         },
       ),
