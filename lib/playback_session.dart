@@ -78,7 +78,10 @@ class PlaybackSession extends ChangeNotifier {
         unawaited(_recover('position_stalled_20s'));
       }
     });
-    unawaited(play(index, position: position, playWhenReady: autoplay));
+    // 「记忆播放」关闭时，所有入口一律从头播：忽略上层传入的续播位置。
+    // 这样详情、本地下载、投屏恢复的行为一致，也彻底不走 mpv 中间分片定位。
+    final startAt = preferences.rememberProgress ? position : 0.0;
+    unawaited(play(index, position: startAt, playWhenReady: autoplay));
   }
 
   void _bind() {
@@ -937,6 +940,8 @@ class PlaybackSession extends ChangeNotifier {
 
   void start(int index, {double position = 0}) {
     if (!_usable) return;
+    // 关闭「记忆播放」时忽略上层传入的续播位置，与构造函数保持一致。
+    if (!store.playbackPreferences.rememberProgress) position = 0;
     final wasEngaged = _engaged;
     _engaged = true;
     if (index != _index ||

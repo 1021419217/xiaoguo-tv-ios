@@ -21,6 +21,19 @@ void main() {
     expect(preferences.danmakuWords, isEmpty);
   });
 
+  test('rememberProgress defaults on and round trips', () {
+    expect(
+      PlaybackPreferences.fromJson(const {'speed': 1, 'quality': 0})
+          .rememberProgress,
+      isTrue,
+    );
+    const off = PlaybackPreferences(rememberProgress: false);
+    expect(
+      PlaybackPreferences.fromJson(off.toJson()).rememberProgress,
+      isFalse,
+    );
+  });
+
   test('danmaku values round trip through json', () {
     const preferences = PlaybackPreferences(
       danmakuScale: 1.4,

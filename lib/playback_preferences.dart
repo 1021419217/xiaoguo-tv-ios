@@ -82,6 +82,7 @@ class PlaybackPreferences {
     this.boostSpeed = 2,
     this.quality = 0,
     this.autoAdvance = true,
+    this.rememberProgress = true,
     this.danmaku = true,
     this.danmakuScale = 1,
     this.danmakuColor = 0xFFFFFFFF,
@@ -112,6 +113,10 @@ class PlaybackPreferences {
   final double speed;
   final int quality;
   final bool autoAdvance;
+
+  /// 记忆播放：点开视频是否从上次进度续播。关闭后一律从头播，
+  /// 绕开 mpv 在 HLS 中间分片定位的长时间缓冲（部分站源会因此转圈）。
+  final bool rememberProgress;
   final bool danmaku;
   final double danmakuScale;
   final int danmakuColor;
@@ -148,6 +153,7 @@ class PlaybackPreferences {
     double? speed,
     int? quality,
     bool? autoAdvance,
+    bool? rememberProgress,
     bool? danmaku,
     double? danmakuScale,
     int? danmakuColor,
@@ -178,6 +184,7 @@ class PlaybackPreferences {
     speed: speed ?? this.speed,
     quality: quality ?? this.quality,
     autoAdvance: autoAdvance ?? this.autoAdvance,
+    rememberProgress: rememberProgress ?? this.rememberProgress,
     danmaku: danmaku ?? this.danmaku,
     danmakuScale: danmakuScale ?? this.danmakuScale,
     danmakuColor: danmakuColor ?? this.danmakuColor,
@@ -210,6 +217,7 @@ class PlaybackPreferences {
     'speed': speed,
     'quality': quality,
     'autoAdvance': autoAdvance,
+    'rememberProgress': rememberProgress,
     'danmaku': danmaku,
     'danmakuScale': danmakuScale,
     'danmakuColor': danmakuColor,
@@ -243,6 +251,7 @@ class PlaybackPreferences {
     final quality = value['quality'] as int? ?? 0;
     final boostSpeed = (value['boostSpeed'] as num? ?? 2).toDouble();
     final autoAdvance = value['autoAdvance'] as bool? ?? true;
+    final rememberProgress = value['rememberProgress'] as bool? ?? true;
     final danmaku = value['danmaku'] as bool? ?? true;
     final preload = value['preload'] as bool? ?? true;
     final danmakuScale = (value['danmakuScale'] as num? ?? 1).toDouble();
@@ -255,6 +264,7 @@ class PlaybackPreferences {
       boostSpeed: boostSpeeds.contains(boostSpeed) ? boostSpeed : 2,
       quality: quality,
       autoAdvance: autoAdvance,
+      rememberProgress: rememberProgress,
       danmaku: danmaku,
       danmakuScale: danmakuScale.clamp(danmakuScaleMin, danmakuScaleMax),
       danmakuColor: danmakuColors.contains(danmakuColor)

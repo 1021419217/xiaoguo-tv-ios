@@ -275,6 +275,9 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   double _startAt(int index, {required bool resume}) {
+    // 关闭「记忆播放」时一律从头播：既尊重用户选择，也绕开 mpv 在 HLS
+    // 中间分片定位造成的长时间缓冲（部分站源会因此转圈卡住）。
+    if (!widget.store.playbackPreferences.rememberProgress) return 0.0;
     final watch = _details!.watch;
     return resume &&
             watch?.episode == _details!.episodes[index].number &&

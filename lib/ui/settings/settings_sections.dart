@@ -198,6 +198,13 @@ class SettingsSection extends StatelessWidget {
           ),
           if (Platform.isAndroid) const _RenderingTile(),
           SwitchTile(
+            title: '记忆播放',
+            subtitle: '打开视频时从上次进度续播；某些站源续播会长时间转圈，可关闭改为从头播',
+            value: preferences.rememberProgress,
+            onChanged: (value) =>
+                savePreferences(preferences.copyWith(rememberProgress: value)),
+          ),
+          SwitchTile(
             title: '预开下一集',
             subtitle: '提前打开下一集的播放器，切集无需等待',
             value: preferences.preopens(television: television),
