@@ -380,6 +380,13 @@ class ExplorePageState extends State<ExplorePage> {
       itemCount: tabs.length,
       index: index,
       labels: [for (final tab in tabs) tab.name],
+      // 与上游 SwipeSwitch 调用点一致：新分类数据没到位时先 hold 住旧页，
+      // 等加载完成再播切换动画，避免翻过去是一片 loading/空页。
+      ready: switch (explore.feed) {
+        final feed? => feed.items.isNotEmpty || !feed.loading,
+        null => true,
+      },
+      onEnter: _toTop,
       onIndexChanged: (index) => explore.select(tabs[index].id),
       hintTop: hintTop,
       // 海报那一段的按下留给海报自己翻页；列表滚过去之后这段自动收窄。
