@@ -16,6 +16,7 @@ import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
 import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_backdrop.dart';
+import '../widgets/pull_refresh.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/follow_button.dart';
@@ -23,7 +24,6 @@ import '../theme/motion.dart';
 import '../widgets/choice_panel.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
-import '../widgets/swipe_category_layer.dart';
 import 'author_page.dart';
 
 class _Metrics {
@@ -218,6 +218,11 @@ class _DetailPageState extends State<DetailPage> {
   final _seasonFocus = <FocusNode>[];
   final _groupKeys = <GlobalKey>[];
   final _episodeFocus = List.generate(episodeGroupSize, (_) => FocusNode());
+  // 选集分组跟手翻页：PageController 按剧集 id 重建，避免换剧串页。
+  PageController? _groupPager;
+  String? _groupPagerDrama;
+  int? _groupTarget;
+  bool _groupDragging = false;
   bool _entered = false;
   PlaybackHandle? _watched;
   late bool _autoplayPending = widget.autoplay;
@@ -241,6 +246,7 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void dispose() {
     _probeDelay?.cancel();
+    _groupPager?.dispose();
     _handle?.dispose();
     _details?.dispose();
     for (final node in [
@@ -263,6 +269,8 @@ class _DetailPageState extends State<DetailPage> {
   bool get _ready => !_details!.loading && _details!.episodes.isNotEmpty;
 
   Future<void> _refresh() async {
+    // 详情页下拉/按钮刷新给一次轻震反馈。
+    unawaited(HapticFeedback.selectionClick());
     final details = _details!;
     await details.load();
     if (!mounted || details.error == null || details.episodes.isEmpty) return;
@@ -501,6 +509,12 @@ class _DetailPageState extends State<DetailPage> {
 
   void _locate(int index) {
     _details!.selectGroup(index ~/ episodeGroupSize);
+    // 播放器跳集要立即落到对应分组页，不要跨多页慢慢滑过去。
+    final pager = _groupPager;
+    if (pager != null && pager.hasClients) {
+      _groupTarget = null;
+      pager.jumpToPage(index ~/ episodeGroupSize);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final target = _currentEpisode.currentContext;
       if (target == null || !target.mounted) return;
@@ -613,7 +627,7 @@ class _DetailPageState extends State<DetailPage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: _appBar(details, kToolbarHeight),
-      body: RefreshIndicator(
+      body: PullRefresh(
         edgeOffset: top,
         onRefresh: _refresh,
         child: CustomScrollView(
@@ -2050,16 +2064,125 @@ class _DetailPageState extends State<DetailPage> {
     onPressed: () => details.selectGroup(group),
   );
 
-  Widget _swipeGroups(DramaDetails details, _Metrics m) => SwipeCategoryLayer(
-    itemCount: details.groupCount,
-    index: details.group,
-    labels: [
-      for (var group = 0; group < details.groupCount; group++)
-        details.groupLabel(group),
-    ],
-    onIndexChanged: (group) => _swipeTo(details, group),
-    child: _grid(details, m),
-  );
+  /// 选集分组的 PageController：同一部剧复用，换剧时重建，避免串页。
+  PageController _groupPagerFor(DramaDetails details) {
+    final drama = details.drama.id;
+    final pager = _groupPager;
+    if (pager != null && drama == _groupPagerDrama) return pager;
+    if (pager != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => pager.dispose());
+    }
+    _groupPagerDrama = drama;
+    _groupTarget = null;
+    _groupDragging = false;
+    return _groupPager = PageController(initialPage: details.group);
+  }
+
+  /// 选集跟手翻页：真 PageView，相邻分组同屏、1:1 跟手；高度按手指
+  /// 在两页行数之间插值，避免切到剧集更少的分组时下方留白跳动。
+  Widget _swipeGroups(DramaDetails details, _Metrics m) {
+    final pager = _groupPagerFor(details);
+    final group = details.group;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _followGroup(group));
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = m.columnsFor(constraints.maxWidth);
+        double heightOf(int g) {
+          final rows = (details.episodesIn(g).length / columns).ceil();
+          final extent = math.max(
+            m.cell,
+            MediaQuery.textScalerOf(context).scale(m.cellText) + 28,
+          );
+          return rows * extent + math.max(0, rows - 1) * m.cellGap;
+        }
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (n) => _groupScrolled(n, details),
+          child: AnimatedBuilder(
+            animation: pager,
+            builder: (context, child) {
+              final page = pager.hasClients &&
+                      pager.positions.length == 1 &&
+                      pager.position.hasContentDimensions
+                  ? pager.page ?? group.toDouble()
+                  : group.toDouble();
+              final last = details.groupCount - 1;
+              final low = page.floor().clamp(0, last);
+              final high = (low + 1).clamp(0, last);
+              return SizedBox(
+                height: math.lerpDouble(
+                  heightOf(low),
+                  heightOf(high),
+                  page - low,
+                ),
+                child: child,
+              );
+            },
+            child: PageView.builder(
+              key: ValueKey(details.drama.id),
+              controller: pager,
+              itemCount: details.groupCount,
+              itemBuilder: (context, page) => OverflowBox(
+                alignment: Alignment.topCenter,
+                maxHeight: double.infinity,
+                child: _grid(
+                  details,
+                  m,
+                  group: page,
+                  focus: page == details.group ? _episodeFocus : const [],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 手指拖动结束，把选中的分组同步回数据层并让 chip 滚到可见区。
+  bool _groupScrolled(ScrollNotification notification, DramaDetails details) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.horizontal) {
+      return false;
+    }
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _groupDragging = true;
+      _groupTarget = null;
+    } else if (notification is ScrollEndNotification && _groupDragging) {
+      _groupDragging = false;
+      final page = _groupPager?.page?.round();
+      if (page != null && page != details.group) _swipeTo(details, page);
+    }
+    return false;
+  }
+
+  /// 反向同步：点 chip / 播放跳集改变分组时，让 PageView 跟过去。
+  void _followGroup(int group) {
+    final pager = _groupPager;
+    if (!mounted || pager == null || !pager.hasClients || _groupDragging) {
+      return;
+    }
+    final page = pager.page;
+    if (page == null || _groupTarget == group) return;
+    if ((page - group).abs() < 0.01) return;
+    final from = page.round();
+    if ((group - from).abs() > 1) {
+      pager.jumpToPage(group > from ? group - 1 : group + 1);
+    }
+    _groupTarget = group;
+    unawaited(
+      pager
+          .animateToPage(
+            group,
+            duration: Motion.of(context, Motion.long),
+            curve: Motion.standard,
+          )
+          .whenComplete(() {
+        if (_groupTarget == group) _groupTarget = null;
+      }),
+    );
+  }
 
   void _renewKeys(String drama) {
     if (drama == _keyedDrama) return;
@@ -2101,14 +2224,16 @@ class _DetailPageState extends State<DetailPage> {
     DramaDetails details,
     _Metrics m, {
     List<FocusNode> focus = const [],
+    int? group,
   }) {
     final extent = math.max(
       m.cell,
       MediaQuery.textScalerOf(context).scale(m.cellText) + 28,
     );
     final current = details.currentIndex;
-    final start = details.group * episodeGroupSize;
-    final episodes = details.groupEpisodes;
+    final page = group ?? details.group;
+    final start = page * episodeGroupSize;
+    final episodes = details.episodesIn(page);
     Widget cell(int offset) {
       final index = start + offset;
       final episode = episodes[offset];

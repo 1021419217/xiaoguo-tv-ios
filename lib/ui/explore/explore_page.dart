@@ -24,6 +24,7 @@ import '../widgets/follow_button.dart';
 import '../widgets/frosted_header.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/page_header.dart';
+import '../widgets/pull_refresh.dart';
 import '../widgets/source_bar.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../widgets/status_view.dart';
@@ -45,19 +46,19 @@ class ExplorePageState extends State<ExplorePage> {
   /// 真 PageView 每个分类页各自持有滚动/刷新控制器，避免多页共用一个
   /// ScrollController 导致的 "multiple ScrollPositions" 崩溃。
   final _pageScrolls = <String, ScrollController>{};
-  final _pageRefreshKeys = <String, GlobalKey<RefreshIndicatorState>>{};
+  final _pageRefreshKeys = <String, GlobalKey<PullRefreshState>>{};
 
   ScrollController _scrollFor(String tabId) =>
       _pageScrolls.putIfAbsent(tabId, () => ScrollController());
-  GlobalKey<RefreshIndicatorState> _refreshKeyFor(String tabId) =>
+  GlobalKey<PullRefreshState> _refreshKeyFor(String tabId) =>
       _pageRefreshKeys.putIfAbsent(
         tabId,
-        () => GlobalKey<RefreshIndicatorState>(),
+        () => GlobalKey<PullRefreshState>(),
       );
 
   final _search = TextEditingController();
   final _tabsKey = GlobalKey<CategoryTabsState<String>>();
-  final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  final _refreshKey = GlobalKey<PullRefreshState>();
 
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
   final _headerKey = GlobalKey();
@@ -263,7 +264,9 @@ class ExplorePageState extends State<ExplorePage> {
       // 分类栏：底边叠一条刷新缓冲进度条（对齐上游 CategoryTabs 同款）。
       // 加载时淡入、完成淡出；颜色继承主题 progressIndicatorTheme
       // （深色纯白 / 浅色主题色），与玻璃界面风格一致，不写死上游的紫色。
-      final tabsLoading = explore.feed?.loading ?? false;
+      // 绑 anyLoading：切站源会全量重建所有分类 feed、PageView 会预加载相邻页，
+      // 这些都算「进入新站源」的加载过程，进度条都要亮（与上游一致）。
+      final tabsLoading = explore.anyLoading;
       final tabs = Stack(
         children: [
           Padding(
@@ -505,7 +508,7 @@ class ExplorePageState extends State<ExplorePage> {
     // 真 PageView 的某一页：按 tab id 独立取数据、用独立滚动/刷新控制器。
     String? pageTabId,
     ScrollController? pageScroll,
-    GlobalKey<RefreshIndicatorState>? pageRefreshKey,
+    GlobalKey<PullRefreshState>? pageRefreshKey,
   }) {
     final tabId = pageTabId ?? explore.tab.id;
     final isPage = pageTabId != null;
@@ -675,7 +678,7 @@ class ExplorePageState extends State<ExplorePage> {
     double topInset, {
     String? pageTabId,
     ScrollController? pageScroll,
-    GlobalKey<RefreshIndicatorState>? pageRefreshKey,
+    GlobalKey<PullRefreshState>? pageRefreshKey,
   }) {
     final scroll = pageScroll ?? _scroll;
     final refreshKey = pageRefreshKey ?? _refreshKey;
@@ -763,7 +766,7 @@ class ExplorePageState extends State<ExplorePage> {
               feed: feed,
               child: television
                   ? scrollView
-                  : RefreshIndicator(
+                  : PullRefresh(
                       key: refreshKey,
                       onRefresh: explore.refresh,
                       child: scrollView,
@@ -799,13 +802,15 @@ class ExplorePageState extends State<ExplorePage> {
   /// 别人拿到手机看不到观看痕迹。
   Widget? _hero(ExploreFeed explore) => _heroFor(explore, explore.tab.id);
 
-  /// 指定 tab 的海报：真 PageView 每页独立构建时用，只有推荐且无续看的
-  /// 那一页才有大海报，其余分类页是纯网格。
+  /// 指定 tab 的海报：真 PageView 每页独立构建，每个分类页都显示轮播大海报
+  /// （对齐 2.6.3 基线观感），只有电视端保持纯网格。
   Widget? _heroFor(ExploreFeed explore, String tabId) {
     final form = AppScope.formFactorOf(context);
     // 电视靠遥控器方向键，轮播翻页反而碍事，保持原来的纯网格。
     if (form == FormFactor.television) return null;
-    if (explore.featuredFor(tabId) == null) return null;
+    // 恢复 2.6.3 基线观感：每个分类页都显示轮播大海报，不再用
+    // featuredFor 的「仅推荐页且无续看」门槛卡住（有观看记录就没海报）。
+    // 海报与网格共用 itemsFor 同一批数据，和基线行为完全一致。
     final items = <Drama>[];
     for (final drama in explore.itemsFor(tabId)) {
       if (drama.cover.isEmpty) continue;

@@ -22,7 +22,6 @@ import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
-import '../widgets/swipe_category_layer.dart';
 import 'download_actions.dart';
 import 'downloaded_drama_page.dart';
 import 'merge_actions.dart';
@@ -86,6 +85,47 @@ class _DownloadsPageState extends State<DownloadsPage>
     if (_tabs.indexIsChanging) return;
     setState(() => _selection = null);
   }
+
+  /// 按标签页独立构造数据，供 TabBarView 每页各自渲染、互不串数据。
+  _View _viewFor(int page, List<DownloadJob> jobs) {
+    final sources = page == 2
+        ? const <SourceSite>[]
+        : downloadSources(
+            page == 0
+                ? pendingDownloads(jobs)
+                : [for (final job in jobs) if (job.completed) job],
+          );
+    final source = sources.any((site) => site.id == _sources[page])
+        ? _sources[page]
+        : '';
+    bool shown(Drama drama) => source.isEmpty || drama.source == source;
+    final pending = [
+      for (final job in pendingDownloads(jobs))
+        if (shown(job.drama)) job,
+    ];
+    final downloaded = [
+      for (final drama in downloadedDramas(jobs))
+        if (shown(drama.drama)) drama,
+    ];
+    return (
+      pending: pending,
+      downloaded: downloaded,
+      sources: sources,
+      source: source,
+      selection: _selection?.intersection(
+        page == 0
+            ? {for (final job in pending) job.id}
+            : {for (final item in downloaded) item.drama.id},
+      ),
+    );
+  }
+
+  /// 按标签页分发内容，供 TabBarView 相邻两页同时构建。
+  Widget _page(BuildContext context, int page, _View view) => switch (page) {
+    0 => _pendingList(context, view),
+    1 => _downloadedGrid(context, view),
+    _ => _mergeList(context),
+  };
 
   void _toggle(String id) => setState(() {
     final selection = {...?_selection};
@@ -152,58 +192,30 @@ class _DownloadsPageState extends State<DownloadsPage>
     builder: (context, _) {
       final jobs = widget.downloads.jobs;
       final index = _tabs.index;
-      final sources = index == 2
-          ? const <SourceSite>[]
-          : downloadSources(
-              index == 0
-                  ? pendingDownloads(jobs)
-                  : [
-                      for (final job in jobs)
-                        if (job.completed) job,
-                    ],
-            );
-      final source = sources.any((site) => site.id == _sources[index])
-          ? _sources[index]
-          : '';
-      bool shown(Drama drama) => source.isEmpty || drama.source == source;
-      final pending = [
-        for (final job in pendingDownloads(jobs))
-          if (shown(job.drama)) job,
-      ];
-      final downloaded = [
-        for (final drama in downloadedDramas(jobs))
-          if (shown(drama.drama)) drama,
-      ];
-      final view = (
-        pending: pending,
-        downloaded: downloaded,
-        sources: sources,
-        source: source,
-        selection: _selection?.intersection(
-          index == 0
-              ? {for (final job in pending) job.id}
-              : {for (final item in downloaded) item.drama.id},
-        ),
-      );
+      final view = _viewFor(index, jobs);
       final body = !widget.downloads.available
           ? const StatusView(
               title: '当前用户没有下载权限',
               icon: Icons.lock_outline_rounded,
             )
-          : index == 0
-          ? _pendingList(context, view)
-          : index == 1
-          ? _downloadedGrid(context, view)
-          : _mergeList(context);
-      // 与首页、追剧页统一的横滑层：跟手阻尼 + 侧滑淡入，不再整页黑屏。
-      final swiped = _selection == null
-          ? SwipeCategoryLayer(
-              itemCount: _tabs.length,
-              index: index,
-              labels: const ['下载中', '已下载', '合并'],
-              onIndexChanged: _tabs.animateTo,
-              hintTop: 8,
-              child: body,
+          : _page(context, index, view);
+      // 与首页、详情选集同款跟手翻页：TabBarView 原生相邻页同屏、1:1 跟手，
+      // 胶囊高亮通过 _tabs.animation 交叉淡入，整页滑动不再淡入淡出。
+      // 多选编辑态禁用滑动，避免误触切页。
+      final touch = switch (AppScope.formFactorOf(context)) {
+        FormFactor.phone || FormFactor.pad => true,
+        _ => false,
+      };
+      final swiped = touch && widget.downloads.available
+          ? TabBarView(
+              controller: _tabs,
+              physics: _selection == null
+                  ? null
+                  : const NeverScrollableScrollPhysics(),
+              children: [
+                for (var page = 0; page < _tabs.length; page++)
+                  _page(context, page, _viewFor(page, jobs)),
+              ],
             )
           : body;
       return PopScope(
