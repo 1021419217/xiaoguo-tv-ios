@@ -2110,7 +2110,7 @@ class _DetailPageState extends State<DetailPage> {
               final low = page.floor().clamp(0, last);
               final high = (low + 1).clamp(0, last);
               return SizedBox(
-                height: math.lerpDouble(
+                height: lerpDouble(
                   heightOf(low),
                   heightOf(high),
                   page - low,
