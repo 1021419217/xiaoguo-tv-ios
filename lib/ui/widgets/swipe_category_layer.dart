@@ -5,222 +5,189 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
-import '../theme/motion.dart';
 
-/// 与首页同款的「左右快滑切换分类」层。
+/// 「左右翻页切换分类」层，对齐上游短剧之家的 TabView(.page) 手感。
 ///
-/// 手感机制 1:1 移植自上游 guoapp 的 `SwipeSwitch`：
-/// - 拖动时内容按 0.4 阻尼跟手（到头只有 0.12），有真实「拖页面」的反馈；
-/// - 松手按位移（屏宽 22%）或速度（700dp/s）判定是否切页；
-/// - 切换走两段式：旧页 150ms 滑出淡出，新页 250ms 从对侧滑入淡入，
-///   曲线用上游同款 emphasizedDecelerate / emphasizedAccelerate；
-/// - 数据未就绪时先 hold 住（半透明 + 收回），就绪后再播，避免切到空页。
+/// 两种模式：
+/// * 传 [itemBuilder]：真 PageView —— 相邻两页同时贴在屏内、1:1 跟手、
+///   松手由 PageScrollPhysics 连续吸附，与上游 SwiftUI TabView(.page) 同源。
+/// * 只传 [child]：兼容旧调用点，走快滑淡入（供尚未迁移的页面临时使用）。
 ///
-/// 小果特有的增强：
-/// - `reservedTop` 让首页大海报那一段的横滑交给海报自己的 PageView；
-/// - 切换时不弹分类名提示胶囊（按用户要求去掉）。
+/// 顶栏、搜索框、分类条放在本层外面，只有内容区参与横向翻页。
 class SwipeCategoryLayer extends StatefulWidget {
   const SwipeCategoryLayer({
     super.key,
     required this.itemCount,
     required this.index,
-    required this.labels,
+    this.labels = const [],
     required this.onIndexChanged,
-    required this.child,
+    this.child,
+    this.itemBuilder,
     this.hintTop = 12,
     this.reservedTop,
-    this.ready = true,
-    this.onEnter,
   });
 
   final int itemCount;
   final int index;
   final List<String> labels;
   final ValueChanged<int> onIndexChanged;
-  final Widget child;
 
-  /// 提示胶囊距内容区顶部的距离（保留参数以兼容调用点，不再显示提示）。
+  /// 旧模式：单一内容，快滑淡入。
+  final Widget? child;
+
+  /// 新模式：按页构建内容，内部启用真 PageView。
+  final IndexedWidgetBuilder? itemBuilder;
+
+  /// 保留接口兼容（提示胶囊早已去掉，不再渲染）。
   final double hintTop;
 
-  /// 落在该 y（相对本层，向下为正）以内的按下不参与「切分类」手势。
-  /// 首页的大海报要靠它把自己的横滑让出来。
+  /// 旧模式专用：落在 [reservedTop] 以内的按下不参与切分类手势
+  /// （首页大海报自己的 PageView 用）。真 PageView 模式由嵌套手势优先接管。
   final double Function()? reservedTop;
-
-  /// 新页数据是否就绪。false 时先 hold 住旧页，就绪后再播切换动画。
-  final bool ready;
-
-  /// 旧页退出结束、新页进入之前的回调（上游同款，可选）。
-  final VoidCallback? onEnter;
 
   @override
   State<SwipeCategoryLayer> createState() => _SwipeCategoryLayerState();
 }
 
 class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
-    with TickerProviderStateMixin {
-  // 与上游 SwipeSwitch 完全一致的三个手感常数。
-  static const _distance = .22;
-  static const _velocity = 700.0;
-  static const _travel = .18;
-
-  late final _offset = AnimationController.unbounded(vsync: this);
-  late final _opacity = AnimationController(vsync: this, value: 1);
-  double _drag = 0;
-  double _width = 1;
-  Widget? _leaving;
-  int _run = 0;
-  int _direction = 1;
-  Timer? _wait;
-
-  @override
-  void didUpdateWidget(covariant SwipeCategoryLayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.index != widget.index) {
-      _leaving ??= oldWidget.child;
-      _direction = widget.index > oldWidget.index ? 1 : -1;
-      widget.ready ? _proceed() : _hold();
-    } else if (_wait != null && widget.ready) {
-      _proceed();
-    }
-  }
+    with SingleTickerProviderStateMixin {
+  PageController? _pages;
 
   @override
   void dispose() {
-    _wait?.cancel();
-    _offset.dispose();
-    _opacity.dispose();
+    _pages?.dispose();
     super.dispose();
   }
 
-  bool get _switching => _leaving != null;
-
-  void _hold() {
-    _run++;
-    _wait?.cancel();
-    // 上游等 1.5s 兜底；数据在此期间就绪会走 didUpdateWidget 分支提前切。
-    _wait = Timer(const Duration(milliseconds: 1500), _proceed);
-    final duration = Motion.of(context, Motion.medium);
-    unawaited(_offset.animateTo(0, duration: duration, curve: Motion.enter));
-    unawaited(_opacity.animateTo(.5, duration: duration, curve: Motion.enter));
-  }
-
-  void _proceed() {
-    _wait?.cancel();
-    _wait = null;
-    if (mounted) unawaited(_play(_direction));
-  }
-
-  Future<void> _play(int direction) async {
-    final run = ++_run;
-    final travel = _width * _travel * direction;
-    final exit = Motion.of(context, Motion.short);
-    try {
-      await Future.wait([
-        _offset.animateTo(-travel, duration: exit, curve: Motion.exit).orCancel,
-        _opacity.animateTo(0, duration: exit, curve: Motion.exit).orCancel,
-      ]);
-    } on TickerCanceled {
-      return;
-    }
-    if (!mounted || run != _run) return;
-    widget.onEnter?.call();
-    setState(() => _leaving = null);
-    _offset.value = travel;
-    final enter = Motion.of(context, Motion.medium);
-    unawaited(_offset.animateTo(0, duration: enter, curve: Motion.enter));
-    unawaited(_opacity.animateTo(1, duration: enter, curve: Motion.enter));
-  }
-
-  void _start(DragStartDetails _) {
-    if (_switching) return;
-    _offset.stop();
-    _drag = _offset.value / .4;
-  }
-
-  void _update(DragUpdateDetails details) {
-    if (_switching) return;
-    _drag += details.primaryDelta ?? 0;
-    final open = _drag > 0
-        ? widget.index > 0
-        : widget.index < widget.itemCount - 1;
-    if (!Motion.reduced(context)) _offset.value = _drag * (open ? .4 : .12);
-  }
-
-  void _end(DragEndDetails details) {
-    if (_switching) return;
-    final velocity = details.primaryVelocity ?? 0;
-    final next =
-        _drag < 0 && (_drag < -_width * _distance || velocity < -_velocity);
-    final previous =
-        _drag > 0 && (_drag > _width * _distance || velocity > _velocity);
-    _drag = 0;
-    final target = widget.index + (next ? 1 : (previous ? -1 : 0));
-    if (target != widget.index && target >= 0 && target < widget.itemCount) {
-      unawaited(HapticFeedback.selectionClick());
-      widget.onIndexChanged(target);
-      return;
-    }
-    _settle();
-  }
-
-  void _settle() {
-    _drag = 0;
-    if (_switching || _offset.value == 0) return;
-    unawaited(
-      _offset.animateTo(
-        0,
-        duration: Motion.of(context, Motion.long),
-        curve: Motion.enter,
-      ),
-    );
-  }
+  bool get _usePages =>
+      widget.itemBuilder != null &&
+      widget.itemCount >= 2 &&
+      AppScope.formFactorOf(context) != FormFactor.television;
 
   @override
   Widget build(BuildContext context) {
+    if (widget.itemBuilder != null) {
+      if (!_usePages) return widget.itemBuilder!(context, widget.index);
+      return _pageView(context);
+    }
+    final content = widget.child;
+    if (content == null) return const SizedBox.shrink();
     if (widget.itemCount < 2 ||
         AppScope.formFactorOf(context) == FormFactor.television) {
-      return widget.child;
+      return content;
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.hasBoundedWidth) _width = constraints.maxWidth;
-        return RawGestureDetector(
-          behavior: HitTestBehavior.translucent,
-          gestures: {
-            _CategoryDragRecognizer:
-                GestureRecognizerFactoryWithHandlers<_CategoryDragRecognizer>(
+    return _legacy(context, content);
+  }
+
+  // ---------------------------------------------------------------------
+  // 新模式：真 PageView（上游 TabView(.page) 同款）
+  // ---------------------------------------------------------------------
+
+  Widget _pageView(BuildContext context) {
+    final index = widget.index.clamp(0, widget.itemCount - 1);
+    final controller = _pages ??= PageController(initialPage: index);
+
+    // 点击分类胶囊等「外部改 index」：让 PageView 吸附过去。
+    // 手势翻页触发的 onIndexChanged 也会走到这里，但那时 page 已等于目标，
+    // 用 round 比较避免二次 animate 造成来回抖。
+    final current = controller.hasClients ? controller.page : null;
+    if (current == null || (current - index).abs() > 0.02) {
+      final target = index;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !controller.hasClients) return;
+        final now = controller.page;
+        if (now == null || (now - target).abs() <= 0.02) return;
+        unawaited(
+          controller.animateToPage(
+            target,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
+    }
+
+    return PageView.builder(
+      controller: controller,
+      itemCount: widget.itemCount,
+      physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+      onPageChanged: (page) {
+        if (page == widget.index) return;
+        unawaited(HapticFeedback.selectionClick());
+        widget.onIndexChanged(page);
+      },
+      itemBuilder: (context, page) => widget.itemBuilder!(context, page),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // 旧模式：快滑 + 淡入（保留给未迁移的调用点）
+  // ---------------------------------------------------------------------
+
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1.0,
+  );
+  double _dragX = 0;
+
+  void _switch(int delta) {
+    if (widget.itemCount < 2) return;
+    final next = widget.index + delta;
+    if (next < 0 || next >= widget.itemCount) return;
+    unawaited(HapticFeedback.selectionClick());
+    _anim.forward(from: 0);
+    widget.onIndexChanged(next);
+    setState(() => _dragX = 0);
+  }
+
+  Widget _legacy(BuildContext context, Widget content) {
+    return RawGestureDetector(
+      behavior: HitTestBehavior.translucent,
+      gestures: {
+        _CategoryDragRecognizer:
+            GestureRecognizerFactoryWithHandlers<_CategoryDragRecognizer>(
               () => _CategoryDragRecognizer(reservedTop: widget.reservedTop),
               (recognizer) => recognizer
                 ..reservedTop = widget.reservedTop
-                ..onStart = _start
-                ..onUpdate = _update
-                ..onEnd = _end
-                ..onCancel = _settle,
+                ..onUpdate = (details) {
+                  final next = (_dragX + details.delta.dx * 0.08).clamp(
+                    -10.0,
+                    10.0,
+                  );
+                  if (next != _dragX) setState(() => _dragX = next);
+                }
+                ..onEnd = (details) {
+                  final velocity = details.primaryVelocity ?? 0;
+                  if (velocity.abs() < 220) {
+                    if (_dragX != 0) setState(() => _dragX = 0);
+                    return;
+                  }
+                  _switch(velocity < 0 ? 1 : -1);
+                }
+                ..onCancel = () {
+                  if (_dragX != 0) setState(() => _dragX = 0);
+                },
             ),
-          },
-          child: AnimatedBuilder(
-            animation: Listenable.merge([_offset, _opacity]),
-            builder: (context, child) => Opacity(
-              opacity: _opacity.value,
-              child: Transform.translate(
-                offset: Offset(_offset.value, 0),
-                child: child,
-              ),
-            ),
-            child: IgnorePointer(
-              ignoring: _switching,
-              child: _leaving ?? widget.child,
-            ),
-          ),
-        );
       },
+      child: AnimatedBuilder(
+        animation: _anim,
+        child: content,
+        builder: (context, content) {
+          final t = Curves.easeOutCubic.transform(_anim.value);
+          final slide = _dragX * t * 0.6;
+          return Transform.translate(
+            offset: Offset(slide, 0),
+            child: Opacity(opacity: 0.72 + 0.28 * t, child: content),
+          );
+        },
+      ),
     );
   }
 }
 
-/// 横滑识别器：按下的位置落在 [reservedTop] 以内（大海报那一段）就不参与
-/// 竞争，让海报自己的 PageView 接住这次横滑——手指按在大封面上翻封面，
-/// 按在封面以下才是切分类。
+/// 旧模式横滑识别器：按下的位置落在 [reservedTop] 以内就不参与竞争，
+/// 让海报自己的 PageView 接住这次横滑。
 class _CategoryDragRecognizer extends HorizontalDragGestureRecognizer {
   _CategoryDragRecognizer({this.reservedTop});
 
