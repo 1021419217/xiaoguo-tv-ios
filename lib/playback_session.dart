@@ -69,13 +69,19 @@ class PlaybackSession extends ChangeNotifier {
     );
     _healthTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_closed || !_acceptErrors || _loading || _error != null) return;
+      final position = player.state.position;
+      // 开场定位到记忆点后若迟迟没有进度，多半是中间分片定位失败。
+      // 这种场景用 8 秒短超时快速降级（C），正常播放仍用 20 秒避免误判。
+      final nearStart =
+          _openedAt > 0 && position.inMilliseconds / 1000 < _openedAt + 3;
       if (_health.stalled(
-        position: player.state.position,
+        position: position,
         playing: player.state.playing && _playIntent,
         foreground: _foreground,
         now: DateTime.now(),
+        timeout: nearStart ? PlaybackHealth.seekStallTimeout : null,
       )) {
-        unawaited(_recover('position_stalled_20s'));
+        unawaited(_recover('position_stalled'));
       }
     });
     // 「记忆播放」关闭时，所有入口一律从头播：忽略上层传入的续播位置。
@@ -99,6 +105,11 @@ class PlaybackSession extends ChangeNotifier {
       stream.position.listen((position) {
         if (!_closed && _openedIndex == _index && position > Duration.zero) {
           _resumePosition = position.inMilliseconds / 1000;
+          // 进度真正往前走了（超过开场定位点 1 秒）才算定位成功，
+          // 之后卡住就按「播放中途卡顿」处理，保留位置恢复。
+          if (position.inMilliseconds / 1000 > _openedAt + 1) {
+            _positionAdvanced = true;
+          }
         }
         _sync();
       }),
@@ -205,6 +216,9 @@ class PlaybackSession extends ChangeNotifier {
   Size? _videoSize;
   VideoFit _videoFit = VideoFit.auto;
   double _resumePosition = 0;
+  // 本集是否真正吐出过播放进度。false 表示开场定位阶段就卡住，
+  // 自动恢复时应从 0 播，避免反复用同一个记忆卡点定位（死循环）。
+  bool _positionAdvanced = false;
   double _unmutedVolume = 100;
 
   Player get player => _player;
@@ -575,7 +589,13 @@ class PlaybackSession extends ChangeNotifier {
     danmaku.setPlan(null);
     _errorTimer?.cancel();
     _pendingError = false;
-    final position = currentPosition;
+    // A 治本：开场定位从未真正推进过（_positionAdvanced=false），说明卡在
+    // Media.start 的中间分片定位上。此时 currentPosition 会回退到记忆卡点，
+    // 再用它恢复必然重复卡死。改为从 0 播，彻底打破死循环。
+    final position = _positionAdvanced ? currentPosition : 0.0;
+    if (!_positionAdvanced && position == 0.0) {
+      DiaryService.add('[Play] 开场定位未成功，恢复改为从头播放');
+    }
     final action = current.local
         ? PlaybackRecoveryAction.stop
         : _recovery.next(current);
@@ -605,7 +625,7 @@ class PlaybackSession extends ChangeNotifier {
     _localFailure = current.local;
     _loginRequired = false;
     final symptom = switch (reason) {
-      'position_stalled_20s' => '画面长时间没有进度',
+      'position_stalled' => '画面长时间没有进度',
       'early_completion' => '视频提前结束',
       'open_exception' => '视频打开失败',
       _ => '播放器报错',
@@ -710,6 +730,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     _resumePosition = position;
     _openedAt = position;
+    _positionAdvanced = false;
     _index = index;
     _loading = true;
     _error = null;
@@ -764,14 +785,10 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
+        // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
+        // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
         await player.open(
-          Media(
-            plan.url,
-            httpHeaders: plan.headers,
-            start: position > 0
-                ? Duration(milliseconds: (position * 1000).round())
-                : null,
-          ),
+          Media(plan.url, httpHeaders: plan.headers),
           play: _foreground && _playIntent,
         );
         if (!_current(ticket)) return;
@@ -783,6 +800,10 @@ class PlaybackSession extends ChangeNotifier {
         _notify();
         danmaku.setPlan(plan);
         _syncDanmaku();
+        // 记忆续播：带超时的二次 seek；失败/超时就留在本集开头继续播。
+        if (position > 0 && !plan.local) {
+          unawaited(_resumeSeek(position, ticket));
+        }
       });
     } catch (error) {
       if (_current(ticket)) {
@@ -808,6 +829,43 @@ class PlaybackSession extends ChangeNotifier {
       if (warmed != null && !installed) await _release(warmed.session);
       if (retained != null) await _release(retained!.session);
     }
+  }
+
+  /// 记忆续播的二次定位：先从 0 播起来，等播放器拿到时长/缓冲后，
+  /// 再 seek 到历史位置。这样避免 Media.start 在打开阶段定位中间分片的
+  /// 长时间缓冲。任何一步失败或超时都放弃定位，留在本集开头继续播，
+  /// 不再用同一个卡点反复重开（那是转圈 60 秒的根源）。
+  Future<void> _resumeSeek(double position, int ticket) async {
+    final target = Duration(milliseconds: (position * 1000).round());
+    // 先把记忆位置夹到实际时长内，避免历史进度超过真实长度导致定位卡死。
+    final duration = player.state.duration;
+    if (duration > Duration.zero && target >= duration - const Duration(seconds: 2)) {
+      return;
+    }
+    // 等 mpv 解析出时长 / 建立缓冲，最多等 6 秒。
+    final waitUntil = DateTime.now().add(const Duration(seconds: 6));
+    while (_current(ticket) && !_closed) {
+      final state = player.state;
+      if (state.duration > Duration.zero || state.buffer > Duration.zero) break;
+      if (DateTime.now().isAfter(waitUntil)) {
+        DiaryService.add('[Play] 续播等待缓冲超时，从头播放');
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    if (!_current(ticket) || _closed) return;
+    try {
+      await player.seek(target).timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      DiaryService.add('[Play] 续播 seek 超时，从头播放');
+      return;
+    } catch (_) {
+      return;
+    }
+    if (!_current(ticket) || _closed) return;
+    _seekSequence++;
+    _resumePosition = position;
+    _syncDanmaku();
   }
 
   Future<void> _swap(int index, bool playWhenReady) async {

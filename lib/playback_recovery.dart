@@ -31,6 +31,7 @@ class PlaybackRecovery {
 
 class PlaybackHealth {
   static const stallTimeout = Duration(seconds: 20);
+  static const seekStallTimeout = Duration(seconds: 8);
   Duration? _position;
   DateTime? _lastProgress;
 
@@ -44,6 +45,9 @@ class PlaybackHealth {
     required bool playing,
     required bool foreground,
     required DateTime now,
+    // 开场用 Media.start 定位中间分片时，卡住往往意味着定位失败。
+    // 这种场景用更短的超时快速降级，避免干等满 20 秒。
+    Duration? timeout,
   }) {
     if (!playing || !foreground || position != _position) {
       _position = position;
@@ -51,6 +55,6 @@ class PlaybackHealth {
       return false;
     }
     _lastProgress ??= now;
-    return now.difference(_lastProgress!) >= stallTimeout;
+    return now.difference(_lastProgress!) >= (timeout ?? stallTimeout);
   }
 }
