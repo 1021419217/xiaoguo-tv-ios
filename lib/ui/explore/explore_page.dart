@@ -41,6 +41,20 @@ class ExplorePage extends StatefulWidget {
 class ExplorePageState extends State<ExplorePage> {
   ExploreFeed? _explore;
   final _scroll = ScrollController();
+
+  /// 真 PageView 每个分类页各自持有滚动/刷新控制器，避免多页共用一个
+  /// ScrollController 导致的 "multiple ScrollPositions" 崩溃。
+  final _pageScrolls = <String, ScrollController>{};
+  final _pageRefreshKeys = <String, GlobalKey<RefreshIndicatorState>>{};
+
+  ScrollController _scrollFor(String tabId) =>
+      _pageScrolls.putIfAbsent(tabId, () => ScrollController());
+  GlobalKey<RefreshIndicatorState> _refreshKeyFor(String tabId) =>
+      _pageRefreshKeys.putIfAbsent(
+        tabId,
+        () => GlobalKey<RefreshIndicatorState>(),
+      );
+
   final _search = TextEditingController();
   final _tabsKey = GlobalKey<CategoryTabsState<String>>();
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
@@ -99,6 +113,11 @@ class ExplorePageState extends State<ExplorePage> {
   void dispose() {
     _explore?.dispose();
     _scroll.dispose();
+    for (final controller in _pageScrolls.values) {
+      controller.dispose();
+    }
+    _pageScrolls.clear();
+    _pageRefreshKeys.clear();
     _search.dispose();
     super.dispose();
   }
@@ -115,18 +134,27 @@ class ExplorePageState extends State<ExplorePage> {
   }
 
   Future<void> refresh() async {
-    if (_scroll.hasClients) _scroll.jumpTo(0);
-    await _explore?.refresh();
+    final explore = _explore;
+    if (explore != null) {
+      final controller = _scrollFor(explore.tab.id);
+      if (controller.hasClients) controller.jumpTo(0);
+    } else if (_scroll.hasClients) {
+      _scroll.jumpTo(0);
+    }
+    await explore?.refresh();
   }
 
   void reselect() {
-    if (!_scroll.hasClients) return;
-    if (_scroll.offset <= 0) {
-      unawaited(_refreshKey.currentState?.show());
+    final explore = _explore;
+    final controller = explore == null ? _scroll : _scrollFor(explore.tab.id);
+    if (!controller.hasClients) return;
+    if (controller.offset <= 0) {
+      final key = explore == null ? _refreshKey : _refreshKeyFor(explore.tab.id);
+      unawaited(key.currentState?.show());
       return;
     }
     unawaited(
-      _scroll.animateTo(
+      controller.animateTo(
         0,
         duration: Motion.of(context, Motion.long),
         curve: Motion.enter,
@@ -140,9 +168,10 @@ class ExplorePageState extends State<ExplorePage> {
       _explore!.select(id);
       return;
     }
-    if (!_scroll.hasClients || _scroll.offset <= 0) return;
+    final controller = _scrollFor(id);
+    if (!controller.hasClients || controller.offset <= 0) return;
     unawaited(
-      _scroll.animateTo(
+      controller.animateTo(
         0,
         duration: Motion.of(context, Motion.long),
         curve: Motion.enter,
@@ -323,6 +352,16 @@ class ExplorePageState extends State<ExplorePage> {
                     // 不再压在海报标题上。
                     hintTop: heroBottom > 0 ? heroBottom + 6 : topInset + 6,
                     heroBottom: heroBottom,
+                    buildPage: (feedExplore, tabId) => _content(
+                      feedExplore,
+                      inset,
+                      false,
+                      tabs,
+                      topInset: topInset,
+                      pageTabId: tabId,
+                      pageScroll: _scrollFor(tabId),
+                      pageRefreshKey: _refreshKeyFor(tabId),
+                    ),
                   ),
                 ),
               ),
@@ -353,6 +392,15 @@ class ExplorePageState extends State<ExplorePage> {
                   _content(explore, inset, television, tabs),
                   hintTop: _hero(explore) == null ? 12 : 16 + 208 + 6,
                   heroBottom: _hero(explore) == null ? 0 : 16 + 208,
+                  buildPage: (feedExplore, tabId) => _content(
+                    feedExplore,
+                    inset,
+                    television,
+                    tabs,
+                    pageTabId: tabId,
+                    pageScroll: _scrollFor(tabId),
+                    pageRefreshKey: _refreshKeyFor(tabId),
+                  ),
                 ),
               ),
             ],
@@ -371,29 +419,52 @@ class ExplorePageState extends State<ExplorePage> {
     Widget child, {
     double hintTop = 12,
     double heroBottom = 0,
+    // 真 PageView 需要的信息：由调用点传入，用于按 tab 独立构建每一页。
+    Widget Function(ExploreFeed explore, String tabId)? buildPage,
   }) {
     final tabs = explore.tabs;
     final index = tabs.indexWhere((tab) => tab.id == explore.tab.id);
     if (!_swipes(form) || index < 0) return child;
+    if (buildPage == null) {
+      // 兜底：调用点还没迁移到 per-index 构建，走旧的快滑层。
+      return SwipeCategoryLayer(
+        key: ValueKey(explore.source?.id),
+        itemCount: tabs.length,
+        index: index,
+        labels: [for (final tab in tabs) tab.name],
+        onIndexChanged: (i) => explore.select(tabs[i].id),
+        hintTop: hintTop,
+        child: child,
+      );
+    }
+    // 相邻页可能从未被点开，先确保它们的 feed 已建立、开始加载。
+    for (final tab in tabs) {
+      explore.ensureFeed(tab.id);
+    }
     return SwipeCategoryLayer(
       key: ValueKey(explore.source?.id),
       itemCount: tabs.length,
       index: index,
       labels: [for (final tab in tabs) tab.name],
-      onIndexChanged: (index) => explore.select(tabs[index].id),
+      onIndexChanged: (i) => explore.select(tabs[i].id),
       hintTop: hintTop,
-      // 海报那一段的按下留给海报自己翻页；列表滚过去之后这段自动收窄。
-      reservedTop: heroBottom <= 0
-          ? null
-          : () {
-              final offset = _scroll.hasClients ? _scroll.offset : 0.0;
-              return math.max(0, heroBottom - offset);
-            },
-      child: child,
+      itemBuilder: (context, page) {
+        final tab = tabs[page];
+        return KeyedSubtree(
+          key: ValueKey('page-${tab.id}'),
+          child: buildPage(explore, tab.id),
+        );
+      },
     );
   }
 
   void _toTop() {
+    final explore = _explore;
+    if (explore != null) {
+      final controller = _scrollFor(explore.tab.id);
+      if (controller.hasClients) controller.jumpTo(0);
+      return;
+    }
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
@@ -404,10 +475,18 @@ class ExplorePageState extends State<ExplorePage> {
     Widget tabs, {
     // 手机端顶栏是浮层时，内容首部留出的空白，避免初始内容被磨砂顶栏压住。
     double topInset = 0,
+    // 真 PageView 的某一页：按 tab id 独立取数据、用独立滚动/刷新控制器。
+    String? pageTabId,
+    ScrollController? pageScroll,
+    GlobalKey<RefreshIndicatorState>? pageRefreshKey,
   }) {
-    final feed = explore.feed!;
-    final hero = _hero(explore);
-    final items = explore.items;
+    final tabId = pageTabId ?? explore.tab.id;
+    final isPage = pageTabId != null;
+    final feed = isPage
+        ? (explore.feedFor(tabId) ?? explore.feed!)
+        : explore.feed!;
+    final hero = isPage ? _heroFor(explore, tabId) : _hero(explore);
+    final items = isPage ? explore.itemsFor(tabId) : explore.items;
     if (feed.items.isEmpty) {
       final status = FadeSwitcher(child: _status(feed, explore.source));
       return topInset > 0
@@ -430,6 +509,10 @@ class ExplorePageState extends State<ExplorePage> {
       phone,
       desktop,
       topInset,
+      // per-page 覆盖：切到某分类自己的数据/滚动位置/刷新状态。
+      pageTabId: isPage ? tabId : null,
+      pageScroll: pageScroll,
+      pageRefreshKey: pageRefreshKey,
     );
   }
 
@@ -562,8 +645,19 @@ class ExplorePageState extends State<ExplorePage> {
     Widget tabs,
     bool phone,
     bool desktop,
-    double topInset,
-  ) {
+    double topInset, {
+    String? pageTabId,
+    ScrollController? pageScroll,
+    GlobalKey<RefreshIndicatorState>? pageRefreshKey,
+  }) {
+    final scroll = pageScroll ?? _scroll;
+    final refreshKey = pageRefreshKey ?? _refreshKey;
+    final ranks = pageTabId == null ? null : explore.ranksFor(pageTabId);
+    int? rankOf(Drama drama) =>
+        ranks == null ? explore.rankOf(drama) : ranks[drama.id];
+    final showScore = pageTabId == null
+        ? !explore.recommending
+        : !explore.recommendingFor(pageTabId);
     final heroSection = hero == null
         ? const SizedBox(key: ValueKey('none'), width: double.infinity)
         : Padding(
@@ -574,7 +668,7 @@ class ExplorePageState extends State<ExplorePage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final scroll = CustomScrollView(
-          controller: _scroll,
+          controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             // 顶栏留白：随内容一起滚动，滚动后卡片进入顶栏背后被模糊透出。
@@ -589,7 +683,7 @@ class ExplorePageState extends State<ExplorePage> {
               child: television
                   ? heroSection
                   : AnimatedSize(
-                      key: ValueKey(explore.tab.id),
+                      key: ValueKey(pageTabId ?? explore.tab.id),
                       duration: Motion.of(context, Motion.long),
                       curve: Motion.enter,
                       alignment: Alignment.topCenter,
@@ -605,11 +699,11 @@ class ExplorePageState extends State<ExplorePage> {
               sliver: DramaSliverGrid(
                 width: constraints.maxWidth - inset * 2,
                 items: items,
-                rankOf: explore.rankOf,
+                rankOf: rankOf,
                 autofocus:
                     television && hero == null && ShellForeground.of(context),
                 heroScope: 'drama',
-                showScore: !explore.recommending,
+                showScore: showScore,
                 exploreBlur: true,
                 onOpen: _open,
                 onMore: (drama) => quickFollow(context, widget.store, drama),
@@ -643,7 +737,7 @@ class ExplorePageState extends State<ExplorePage> {
               child: television
                   ? scroll
                   : RefreshIndicator(
-                      key: _refreshKey,
+                      key: refreshKey,
                       onRefresh: explore.refresh,
                       child: scroll,
                     ),
@@ -676,19 +770,24 @@ class ExplorePageState extends State<ExplorePage> {
   /// 首页顶部大海报：当前分类最靠前、带封面的几部剧。
   /// 观看记录仍然只从「追剧 → 最近观看」进入，海报只展示公开内容，
   /// 别人拿到手机看不到观看痕迹。
-  Widget? _hero(ExploreFeed explore) {
+  Widget? _hero(ExploreFeed explore) => _heroFor(explore, explore.tab.id);
+
+  /// 指定 tab 的海报：真 PageView 每页独立构建时用，只有推荐且无续看的
+  /// 那一页才有大海报，其余分类页是纯网格。
+  Widget? _heroFor(ExploreFeed explore, String tabId) {
     final form = AppScope.formFactorOf(context);
     // 电视靠遥控器方向键，轮播翻页反而碍事，保持原来的纯网格。
     if (form == FormFactor.television) return null;
+    if (explore.featuredFor(tabId) == null) return null;
     final items = <Drama>[];
-    for (final drama in explore.items) {
+    for (final drama in explore.itemsFor(tabId)) {
       if (drama.cover.isEmpty) continue;
       items.add(drama);
       if (items.length == 5) break;
     }
     if (items.isEmpty) return null;
     return HeroCarousel(
-      key: ValueKey('hero-${explore.tab.id}'),
+      key: ValueKey('hero-$tabId'),
       items: items,
       onOpen: _open,
       height: form == FormFactor.phone ? 196 : 208,
