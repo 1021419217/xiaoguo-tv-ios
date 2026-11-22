@@ -667,7 +667,7 @@ class ExplorePageState extends State<ExplorePage> {
           );
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scroll = CustomScrollView(
+        final scrollView = CustomScrollView(
           controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -735,11 +735,11 @@ class ExplorePageState extends State<ExplorePage> {
             AutoLoadMore(
               feed: feed,
               child: television
-                  ? scroll
+                  ? scrollView
                   : RefreshIndicator(
                       key: refreshKey,
                       onRefresh: explore.refresh,
-                      child: scroll,
+                      child: scrollView,
                     ),
             ),
             Positioned(
