@@ -47,8 +47,11 @@ class DramaDetails extends ChangeNotifier {
 
   int get groupCount => (_episodes.length / episodeGroupSize).ceil();
   int get group => _group;
-  List<Episode> get groupEpisodes =>
-      _episodes.skip(_group * episodeGroupSize).take(episodeGroupSize).toList();
+  List<Episode> get groupEpisodes => episodesIn(_group);
+
+  /// 指定分组的剧集：详情页选集真 PageView 按 index 构建每一页时用。
+  List<Episode> episodesIn(int group) =>
+      _episodes.skip(group * episodeGroupSize).take(episodeGroupSize).toList();
 
   String groupLabel(int group) {
     final start = group * episodeGroupSize;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'core_bridge.dart';
 import 'drama_feed.dart';
@@ -34,6 +35,10 @@ class ExploreFeed extends ChangeNotifier {
   DramaFeed? get feed => _feed;
   CatalogCategory get tab => _tab;
   bool get recommending => _tab.id == recommendTab.id;
+
+  /// 任一分类页正在加载（含切站源时的全量重建、下拉刷新、翻到未加载页）。
+  /// 分类栏刷新进度条绑这个，切站源时也能看到缓冲条，与上游一致。
+  bool get anyLoading => _feeds.values.any((feed) => feed.loading);
 
   List<CatalogCategory> get tabs {
     final catalog = _catalog;
@@ -141,6 +146,8 @@ class ExploreFeed extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    // 下拉刷新 / 刷新按钮 / 重复点 tab 触发的刷新，统一给一次轻震反馈。
+    unawaited(HapticFeedback.selectionClick());
     final catalog = _catalog;
     if (catalog == null) return;
     if (catalog.categories.length == 1) {
