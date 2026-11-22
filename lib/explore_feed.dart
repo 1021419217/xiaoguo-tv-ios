@@ -49,75 +49,6 @@ class ExploreFeed extends ChangeNotifier {
 
   int? rankOf(Drama drama) => _ranks[drama.id];
 
-  /// 真 PageView 用：按 tab id 只读地取该分类自己的数据，不改动当前选中项。
-  /// 每个分类页据此独立构建内容，相邻两页才能同时贴在屏内。
-  DramaFeed? feedFor(String id) => _feeds[id];
-
-  /// 该 tab 的榜单名次表（未加载过时为空）。
-  Map<String, int> ranksFor(String id) => _rankings[id] ?? const {};
-
-  /// 该 tab 是否走「推荐 + 顶部大海报」布局。
-  bool recommendingFor(String id) => id == recommendTab.id;
-
-  /// 指定 tab 是否处于「有续看、因而不出大海报」的状态。
-  bool hasResumeFor(String id) {
-    final source = this.source;
-    if (source == null || id != tabs.firstOrNull?.id) return false;
-    return store.history.any((entry) => entry.drama.source == source.id);
-  }
-
-  /// 指定 tab 的大海报主角（推荐且无续看时的第一条）。
-  Drama? featuredFor(String id) {
-    if (!recommendingFor(id) || hasResumeFor(id)) return null;
-    return _feeds[id]?.items.firstOrNull;
-  }
-
-  /// 指定 tab 的网格条目（有大海报时跳过第一条）。
-  List<Drama> itemsFor(String id) {
-    final items = _feeds[id]?.items ?? const <Drama>[];
-    return featuredFor(id) == null ? items : items.skip(1).toList();
-  }
-
-  /// 确保某 tab 的 feed 已建立并开始加载，但不切换当前选中项。
-  /// PageView 会预构建相邻页，这些页可能从未被点开过，需要先触发加载。
-  void ensureFeed(String id) {
-    final catalog = _catalog;
-    if (catalog == null || _feeds.containsKey(id)) return;
-    final tab = tabs.where((tab) => tab.id == id).firstOrNull;
-    if (tab == null) return;
-    final ranks = _rankings[id] = <String, int>{};
-    final feed = _feeds[id] = _createFeed(catalog, tab, ranks);
-    unawaited(feed.reload());
-  }
-
-  DramaFeed _createFeed(
-    SourceCatalog catalog,
-    CatalogCategory tab,
-    Map<String, int> ranks,
-  ) {
-    final board = catalog.boards
-        .where((board) => rankingTab(board).id == tab.id)
-        .firstOrNull;
-    final feed = tab.id == recommendTab.id
-        ? DramaFeed(
-            cumulative: true,
-            load: (page, force) =>
-                _saved(catalog.recommendations(more: page > 1, force: force)),
-          )
-        : board != null
-        ? DramaFeed(
-            load: (page, force) =>
-                _saved(_ranking(catalog, board, ranks, page, force)),
-          )
-        : DramaFeed(
-            cached: () => catalog.cached(tab),
-            load: (page, force) =>
-                _saved(catalog.fetch(tab, page: page, force: force)),
-          );
-    feed.addListener(_notify);
-    return feed;
-  }
-
   WatchEntry? get resume {
     final source = this.source;
     if (source == null || _tab.id != tabs.first.id) return null;
@@ -186,8 +117,27 @@ class ExploreFeed extends ChangeNotifier {
       _notify();
       return;
     }
+    final board = catalog.boards
+        .where((board) => rankingTab(board).id == tab.id)
+        .firstOrNull;
     final ranks = _ranks = _rankings[tab.id] = <String, int>{};
-    final feed = _feed = _feeds[tab.id] = _createFeed(catalog, tab, ranks);
+    final feed = _feed = _feeds[tab.id] = tab.id == recommendTab.id
+        ? DramaFeed(
+            cumulative: true,
+            load: (page, force) =>
+                _saved(catalog.recommendations(more: page > 1, force: force)),
+          )
+        : board != null
+        ? DramaFeed(
+            load: (page, force) =>
+                _saved(_ranking(catalog, board, ranks, page, force)),
+          )
+        : DramaFeed(
+            cached: () => catalog.cached(tab),
+            load: (page, force) =>
+                _saved(catalog.fetch(tab, page: page, force: force)),
+          );
+    feed.addListener(_notify);
     unawaited(feed.reload());
     _notify();
   }
