@@ -1,7 +1,8 @@
 ﻿name: duanju_app
 description: 独立运行的多端短剧应用
 publish_to: none
-version: 2.6.3+58
+# 出包版本规则：末位 +1、构件号 +1；末位到 10 则向前进 1 并归 0（如 2.6.10→2.7.0）。
+version: 2.6.4+59
 
 environment:
   sdk: '>=3.12.0 <4.0.0'

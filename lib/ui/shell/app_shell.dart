@@ -348,24 +348,33 @@ class _AppShellState extends State<AppShell>
           extendBody: true,
           bottomNavigationBar: covered
               ? null
-              : ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: NavigationBar(
-                      selectedIndex: tabs.indexOf(_tab),
-                      onDestinationSelected: (index) {
-                        unawaited(HapticFeedback.selectionClick());
-                        _tap(tabs[index]);
-                      },
-                      destinations: [
-                        for (final tab in tabs)
-                          NavigationDestination(
-                            key: ValueKey('nav-${tab.name}'),
-                            icon: _badged(tab, Icon(tab.icon)),
-                            selectedIcon: _badged(tab, Icon(tab.selectedIcon)),
-                            label: tab.label,
-                          ),
-                      ],
+              : Transform.translate(
+                  // 底栏整体下沉 22pt ≈ 3.4mm（用户要求 3–4mm），更贴屏幕底边。
+                  // Transform 不改布局尺寸，Scaffold 仍按原高度留位，
+                  // 只把绘制与点击区域一起下移，顶栏/列表不受影响。
+                  offset: const Offset(0, 22),
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                      child: NavigationBar(
+                        selectedIndex: tabs.indexOf(_tab),
+                        onDestinationSelected: (index) {
+                          unawaited(HapticFeedback.selectionClick());
+                          _tap(tabs[index]);
+                        },
+                        destinations: [
+                          for (final tab in tabs)
+                            NavigationDestination(
+                              key: ValueKey('nav-${tab.name}'),
+                              icon: _badged(tab, Icon(tab.icon)),
+                              selectedIcon: _badged(
+                                tab,
+                                Icon(tab.selectedIcon),
+                              ),
+                              label: tab.label,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

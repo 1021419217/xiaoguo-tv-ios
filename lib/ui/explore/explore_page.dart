@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -48,6 +49,45 @@ class ExplorePageState extends State<ExplorePage> {
   final _headerKey = GlobalKey();
   double _headerH = 0;
   String _shown = '';
+
+  /// 下滑列表时收起顶栏第一行（站源/搜索），只留分类栏可见，
+  /// 把这一行的高度让给作品；回到顶部或快速上滑时恢复。
+  /// 触发逻辑对齐上游 AppShell._scrolled：下滑即收，上滑需速度达标。
+  bool _barsHidden = false;
+  static const _revealVelocity = 400.0;
+  final _scrollClock = Stopwatch()..start();
+  VelocityTracker _scrollVelocity =
+      VelocityTracker.withKind(PointerDeviceKind.touch);
+
+  /// 与上游同款滚动判定：到顶恢复、下滑收起、快速上滑恢复。
+  /// 用 ScrollNotification 拿到真实 delta 与速度，而非自己算位移差。
+  bool _scrolled(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (metrics.axis != Axis.vertical) return false;
+    if (notification is ScrollStartNotification) {
+      _scrollVelocity = VelocityTracker.withKind(PointerDeviceKind.touch);
+    }
+    if (metrics.pixels <= metrics.minScrollExtent) {
+      if (_barsHidden) setState(() => _barsHidden = false);
+    } else if (notification is ScrollUpdateNotification &&
+        !metrics.outOfRange) {
+      _scrollVelocity.addPosition(
+        _scrollClock.elapsed,
+        Offset(0, metrics.pixels),
+      );
+      final delta = notification.scrollDelta ?? 0;
+      if (delta > 0) {
+        if (!_barsHidden) setState(() => _barsHidden = true);
+      } else if (delta < 0) {
+        final velocity =
+            _scrollVelocity.getVelocityEstimate()?.pixelsPerSecond.dy ?? 0;
+        if (-velocity >= _revealVelocity && _barsHidden) {
+          setState(() => _barsHidden = false);
+        }
+      }
+    }
+    return false;
+  }
 
   @override
   void didChangeDependencies() {
@@ -205,35 +245,55 @@ class ExplorePageState extends State<ExplorePage> {
           onShowAll: _pickCategory,
         ),
       );
+      // 手机端下滑时把站源/搜索行收起，只留分类栏可见（上游 HideOnScroll
+      // 同款观感）；桌面/电视端布局不同，原样保留整行。
+      Widget collapsibleBar(Widget bar) {
+        if (form != FormFactor.phone) return bar;
+        return ClipRect(
+          child: AnimatedAlign(
+            // 与上游 HideOnScroll 一致：底边对齐，收起时第一行往上退出，
+            // 只把分类栏留在顶部。
+            alignment: Alignment.bottomCenter,
+            heightFactor: _barsHidden ? 0 : 1,
+            duration: Motion.of(context, Motion.medium),
+            curve: Motion.standard,
+            child: bar,
+          ),
+        );
+      }
+
       final header = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (!television)
-            SourceBar(
-              source: source.name,
-              searchController: _search,
-              onSwitchSource: (anchor) => pickSource(anchor, widget.store),
-              onOpenSearch: () => openSearch(context, widget.store, source),
-              onSearchSubmitted: (query) => _searchSubmitted(source, query),
-              leading: [
-                if (widget.store.blurCoversButton)
-                  if (CoverBlurScope.of(context) case final blur?)
+            collapsibleBar(
+              SourceBar(
+                source: source.name,
+                searchController: _search,
+                onSwitchSource: (anchor) => pickSource(anchor, widget.store),
+                onOpenSearch: () => openSearch(context, widget.store, source),
+                onSearchSubmitted: (query) => _searchSubmitted(source, query),
+                leading: [
+                  if (widget.store.blurCoversButton)
+                    if (CoverBlurScope.of(context) case final blur?)
+                      BarButton(
+                        icon: blur.mode != CoverBlur.off
+                            ? Icons.visibility_off_rounded
+                            : Icons.visibility_rounded,
+                        tooltip:
+                            blur.mode != CoverBlur.off ? '显示封面' : '模糊封面',
+                        onPressed: blur.onToggle,
+                      ),
+                ],
+                actions: [
+                  if (desktop)
                     BarButton(
-                      icon: blur.mode != CoverBlur.off
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded,
-                      tooltip: blur.mode != CoverBlur.off ? '显示封面' : '模糊封面',
-                      onPressed: blur.onToggle,
+                      icon: Icons.refresh_rounded,
+                      tooltip: '刷新',
+                      onPressed: explore.refresh,
                     ),
-              ],
-              actions: [
-                if (desktop)
-                  BarButton(
-                    icon: Icons.refresh_rounded,
-                    tooltip: '刷新',
-                    onPressed: explore.refresh,
-                  ),
-              ],
+                ],
+              ),
             ),
           if (!television || explore.feed!.items.isEmpty) tabs,
         ],
@@ -252,14 +312,18 @@ class ExplorePageState extends State<ExplorePage> {
           body: Stack(
             children: [
               Positioned.fill(
-                child: _swipeTabs(
-                  explore,
-                  form,
-                  _content(explore, inset, false, tabs, topInset: topInset),
-                  // 提示胶囊落在大海报下方（和追剧页一样贴在列表顶部），
-                  // 不再压在海报标题上。
-                  hintTop: heroBottom > 0 ? heroBottom + 6 : topInset + 6,
-                  heroBottom: heroBottom,
+                // 滚动通知从内层列表冒泡上来，驱动顶栏的收起/恢复。
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _scrolled,
+                  child: _swipeTabs(
+                    explore,
+                    form,
+                    _content(explore, inset, false, tabs, topInset: topInset),
+                    // 提示胶囊落在大海报下方（和追剧页一样贴在列表顶部），
+                    // 不再压在海报标题上。
+                    hintTop: heroBottom > 0 ? heroBottom + 6 : topInset + 6,
+                    heroBottom: heroBottom,
+                  ),
                 ),
               ),
               Positioned(
