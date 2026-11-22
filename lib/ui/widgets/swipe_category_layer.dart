@@ -111,23 +111,22 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
                 },
             ),
       },
-      child: Stack(
-        // 快滑切分类不再浮出分类名提示胶囊：用户反馈切换时弹出的提示
-        // 多余、碍眼，这里只保留跟手位移 + 淡入的切换动效与轻震动。
-        child: AnimatedBuilder(
-          animation: _anim,
-          child: widget.child,
-          builder: (context, content) {
-            final t = Curves.easeOutCubic.transform(_anim.value);
-            // 位移从「手指松手时的那一点」线性收敛到 0，不额外跳一段，
-            // 所以看不到整页被扯动；淡入从 0.72 起，切换不闪黑。
-            final slide = _dragX * t * 0.6;
-            return Transform.translate(
-              offset: Offset(slide, 0),
-              child: Opacity(opacity: 0.72 + 0.28 * t, child: content),
-            );
-          },
-        ),
+      // 快滑切分类不再浮出分类名提示胶囊：用户反馈切换时弹出的提示
+      // 多余、碍眼，这里只保留跟手位移 + 淡入的切换动效与轻震动。
+      // 提示删掉后容器内只剩内容层，去掉多余的 Stack 直接放 AnimatedBuilder。
+      child: AnimatedBuilder(
+        animation: _anim,
+        child: widget.child,
+        builder: (context, content) {
+          final t = Curves.easeOutCubic.transform(_anim.value);
+          // 位移从「手指松手时的那一点」线性收敛到 0，不额外跳一段，
+          // 所以看不到整页被扯动；淡入从 0.72 起，切换不闪黑。
+          final slide = _dragX * t * 0.6;
+          return Transform.translate(
+            offset: Offset(slide, 0),
+            child: Opacity(opacity: 0.72 + 0.28 * t, child: content),
+          );
+        },
       ),
     );
   }
