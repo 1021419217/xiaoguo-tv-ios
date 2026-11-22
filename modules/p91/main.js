@@ -218,6 +218,10 @@ function authorNameOk(name) {
   // 页面把样式内联在 <style> 里，随机 class 让正则可能抓到 CSS 片段
   if (/[{}<>]|::|attr\s*\(|content\s*:|!important|@media|var\(--/i.test(n)) return false;
   if (/^(?:content|attr|before|after|important|display|none)$/i.test(n)) return false;
+  // 纯符号（***、···、---）不是名字：站点把隐藏作者显示成 ***，交由 UID 兜底
+  if (/^[*·•\-\s]+$/.test(n)) return false;
+  // HTML/JS 残留：引号、脚本关键字、属性名（-b2452) attr / iI6yev7g" / vascript:void）
+  if (/["']|\battr\b|javascript|void|\bstyle\s*=|\bclass\s*=/.test(n)) return false;
   return true;
 }
 
@@ -446,7 +450,12 @@ function authorOf(html, key) {
   const uniq = Object.keys(ids);
   if (uniq.length === 1) {
     const first = links[0];
-    return { author: first.author, authorId: first.authorId, authorUrl: first.authorUrl };
+    const name = authorNameOk(first.author) ? first.author : '';
+    return {
+      author: authorDisplayName(name, first.authorId),
+      authorId: first.authorId,
+      authorUrl: first.authorUrl,
+    };
   }
 
   // ④ 信息区投票：同一个作者出现 2 次以上才算
