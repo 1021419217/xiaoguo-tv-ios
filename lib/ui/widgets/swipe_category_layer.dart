@@ -182,10 +182,10 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
           final dx = _phase == 0
               ? _dx
               : _settleFrom + (_settleTo - _settleFrom) * _settle.value;
-          if (dx == 0) return content;
+          if (dx == 0) return content!;
           return Transform.translate(
             offset: Offset(dx, 0),
-            child: content,
+            child: content!,
           );
         },
       ),
