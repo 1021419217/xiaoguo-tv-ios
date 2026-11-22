@@ -220,6 +220,8 @@ function authorNameOk(name) {
   if (/^(?:content|attr|before|after|important|display|none)$/i.test(n)) return false;
   // 纯符号（***、···、---）不是名字：站点把隐藏作者显示成 ***，交由 UID 兜底
   if (/^[*·•\-\s]+$/.test(n)) return false;
+  // 日期/时间不是作者名（2026-11-22、2026/11/22、2026年11月22日）
+  if (/^\d{4}[-/年.]\d{1,2}[-/月.]\d{1,2}/.test(n)) return false;
   // HTML/JS 残留：引号、脚本关键字、属性名（-b2452) attr / iI6yev7g" / vascript:void）
   if (/["']|\battr\b|javascript|void|\bstyle\s*=|\bclass\s*=/.test(n)) return false;
   return true;
