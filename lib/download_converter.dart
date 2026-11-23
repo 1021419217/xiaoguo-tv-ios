@@ -32,7 +32,10 @@ class DownloadConverter extends ChangeNotifier {
 
   double? progressOf(String id) => id == _current ? _progress : null;
 
-  static List<String> arguments(DownloadConversion work) => [
+  static List<String> arguments(
+    DownloadConversion work, {
+    bool transcode = false,
+  }) => [
     if (work.key.isNotEmpty) ...['-decryption_key', work.key],
     if (path.extension(work.input).toLowerCase() == '.m3u8') ...[
       '-allowed_extensions',
@@ -46,8 +49,22 @@ class DownloadConverter extends ChangeNotifier {
     '0:v:0?',
     '-map',
     '0:a:0?',
-    '-c',
-    'copy',
+    // 先试直接复制（快）；源流不兼容时退回转码，保证能出片。
+    if (transcode) ...[
+      '-c:v',
+      'libx264',
+      '-preset',
+      'veryfast',
+      '-crf',
+      '23',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '128k',
+    ] else ...[
+      '-c',
+      'copy',
+    ],
     '-movflags',
     '+faststart',
     work.output,
@@ -96,14 +113,30 @@ class DownloadConverter extends ChangeNotifier {
       final duration = await _duration(work.input);
       if (_cancelled) return;
       result = 'failed';
-      await executor.run(
-        arguments(work),
-        duration: duration,
-        progress: (value) {
-          _progress = value;
-          if (!_disposed) notifyListeners();
-        },
-      );
+      // 直接复制失败（源流不兼容、分片不规则等）时退回转码，避免整集报废。
+      try {
+        await executor.run(
+          arguments(work),
+          duration: duration,
+          progress: (value) {
+            _progress = value;
+            if (!_disposed) notifyListeners();
+          },
+        );
+      } catch (copyError) {
+        if (_cancelled) rethrow;
+        DiaryService.add(
+          '[下载] ${job.drama.title} 第 ${job.episode.number} 集直接复制失败，改用转码：$copyError',
+        );
+        await executor.run(
+          arguments(work, transcode: true),
+          duration: duration,
+          progress: (value) {
+            _progress = value;
+            if (!_disposed) notifyListeners();
+          },
+        );
+      }
       verifyMediaDuration(await executor.probe(work.output), duration);
       result = 'done';
     } catch (error) {
