@@ -147,12 +147,7 @@ class _FollowPageState extends State<FollowPage> {
       final follows = widget.store.favorites;
       final sources = followedSources(follows);
       final source = sources.any((site) => site.id == _source) ? _source : '';
-      final shown = [
-        for (final drama in follows)
-          if ((source.isEmpty || drama.source == source) &&
-              matchesFollowTitle(drama, _query.text))
-            drama,
-      ];
+      final shown = _shownFor(follows, source);
       final view = (
         follows: follows,
         sources: sources,
@@ -283,8 +278,14 @@ class _FollowPageState extends State<FollowPage> {
   /// 左右滑动切换下方「站源」分类（全部 → 各站源）。
   /// 注意只包住**列表本身**：顶栏、搜索框、站源胶囊留在滑动层外面，
   /// 否则一滑整个追剧画面（标题、搜索框、卡片）一起位移，看着就是在抖。
-  Widget _swipe(_View view, Widget child) {
-    if (view.selection != null) return child;
+  ///
+  /// [buildPage] 每页各算一次自己的列表——真 PageView 相邻两页同屏，
+  /// 必须各自持有本页数据，不能共用「当前选中站源」那一份。
+  Widget _swipe(
+    _View view,
+    Widget Function(_View page, {bool focused}) buildPage,
+  ) {
+    if (view.selection != null) return buildPage(view, focused: true);
     final ids = ['', for (final site in view.sources) site.id];
     var index = ids.indexOf(view.source);
     if (index < 0) index = 0;
@@ -294,7 +295,20 @@ class _FollowPageState extends State<FollowPage> {
       labels: ['全部', for (final site in view.sources) site.name],
       onIndexChanged: (next) => setState(() => _source = ids[next]),
       hintTop: 8,
-      child: child,
+      itemBuilder: (context, i) {
+        final id = ids[i];
+        return buildPage(
+          (
+            follows: view.follows,
+            sources: view.sources,
+            source: id,
+            shown: _shownFor(view.follows, id),
+            selection: null,
+          ),
+          // 只有当前选中页才接管 entryFocus，否则多页会抢同一个 FocusNode。
+          focused: id == view.source,
+        );
+      },
     );
   }
 
@@ -505,6 +519,15 @@ class _FollowPageState extends State<FollowPage> {
     ),
   );
 
+  /// 按站源 + 搜索词过滤追剧列表。
+  /// 真 PageView 要求每一页独立算出自己的列表，不能再共用当前选中站源的结果。
+  List<Drama> _shownFor(List<Drama> follows, String sourceId) => [
+    for (final drama in follows)
+      if ((sourceId.isEmpty || drama.source == sourceId) &&
+          matchesFollowTitle(drama, _query.text))
+        drama,
+  ];
+
   (int, double, double) _grid(BuildContext context, double width) {
     switch (AppScope.formFactorOf(context)) {
       case FormFactor.phone:
@@ -530,17 +553,22 @@ class _FollowPageState extends State<FollowPage> {
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
-      final masonry =
-          AppScope.formFactorOf(context) == FormFactor.phone &&
-          view.shown.any((drama) => CoverShapes.isMixed(drama.source));
       final (columns, gap, runGap) = _grid(context, width);
       final tile = (width - gap * (columns - 1)) / columns;
+
+      // 一页 = 一个站源的全部内容。真 PageView 相邻两页同屏，所以整页
+      // （分区标题、海报归属、空状态）都得按本页自己的列表重算。
+      // focused 只给当前选中的那页，否则多页会同时挂同一个 entryFocus。
+      Widget page(_View v, {bool focused = false}) {
+      final masonry =
+          AppScope.formFactorOf(context) == FormFactor.phone &&
+          v.shown.any((drama) => CoverShapes.isMixed(drama.source));
       final updated = [
-        for (final drama in view.shown)
+        for (final drama in v.shown)
           if (widget.store.following(drama.id)?.hasUpdates ?? false) drama,
       ];
       final rest = [
-        for (final drama in view.shown)
+        for (final drama in v.shown)
           if (!updated.contains(drama)) drama,
       ];
       final sections = <(String?, List<Drama>)>[
@@ -549,33 +577,35 @@ class _FollowPageState extends State<FollowPage> {
       ];
       final heroOwner = {
         for (final MapEntry(key: id, value: index) in firstIndexById(
-          view.shown,
+          v.shown,
           (drama) => drama.id,
         ).entries)
-          id: view.shown[index],
+          id: v.shown[index],
       };
-      final first = view.shown.isEmpty
+      final first = v.shown.isEmpty
           ? null
           : (updated.firstOrNull ?? rest.first);
-      final scroll = ValueListenableBuilder<int>(
+      return ValueListenableBuilder<int>(
         valueListenable: CoverShapes.revision,
         builder: (context, _, _) => CustomScrollView(
+          // 每页独立保存滚动位置，来回翻不会跳回顶部。
+          key: PageStorageKey('follow-page-${v.source}'),
           slivers: [
-          if (view.shown.isEmpty)
+          if (v.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: FadeSwitcher(
                 scale: true,
                 child: StatusView(
-                  key: ValueKey(view.follows.isEmpty),
-                  title: view.follows.isEmpty ? '还没有追剧' : '没有匹配的追剧',
-                  message: view.follows.isEmpty
+                  key: ValueKey(v.follows.isEmpty),
+                  title: v.follows.isEmpty ? '还没有追剧' : '没有匹配的追剧',
+                  message: v.follows.isEmpty
                       ? missingSourceHint(
                           widget.store.missingSourceRecords().follows,
                           '部追剧',
                         )
                       : null,
-                  icon: view.follows.isEmpty
+                  icon: v.follows.isEmpty
                       ? Icons.bookmark_border_rounded
                       : Icons.search_off_rounded,
                 ),
@@ -658,11 +688,12 @@ class _FollowPageState extends State<FollowPage> {
                                 context,
                                 drama,
                                 cellWidth,
-                                view.selection,
-                                focusNode: drama == first
+                                v.selection,
+                                focusNode: focused && drama == first
                                     ? widget.entryFocus
                                     : null,
-                                hero: identical(heroOwner[drama.id], drama),
+                                hero: focused &&
+                                    identical(heroOwner[drama.id], drama),
                                 aspect: posterAspect(drama.source, drama.id),
                                 date: widget.store.watched(drama.id)?.updatedAt,
                               ),
@@ -702,11 +733,12 @@ class _FollowPageState extends State<FollowPage> {
                                 context,
                                 drama,
                                 tile,
-                                view.selection,
-                                focusNode: drama == first
+                                v.selection,
+                                focusNode: focused && drama == first
                                     ? widget.entryFocus
                                     : null,
-                                hero: identical(heroOwner[drama.id], drama),
+                                hero: focused &&
+                                    identical(heroOwner[drama.id], drama),
                               ),
                             ),
                           );
@@ -722,6 +754,7 @@ class _FollowPageState extends State<FollowPage> {
           ],
         ),
       );
+      }
       // 顶栏固定在上方，滑动层只包列表：横滑切站源时标题与搜索框纹丝不动。
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -730,7 +763,7 @@ class _FollowPageState extends State<FollowPage> {
             padding: EdgeInsets.only(top: top),
             child: Column(children: header),
           ),
-          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
+          Expanded(child: swipe ? _swipe(view, page) : page(view, focused: true)),
         ],
       );
     },

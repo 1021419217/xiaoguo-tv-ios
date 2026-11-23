@@ -146,12 +146,7 @@ class _HistoryPageState extends State<HistoryPage> {
       final history = widget.store.history;
       final sources = watchedSources(history);
       final source = sources.any((site) => site.id == _source) ? _source : '';
-      final shown = [
-        for (final entry in history)
-          if ((source.isEmpty || entry.drama.source == source) &&
-              matchesWatchTitle(entry, _query.text))
-            entry,
-      ];
+      final shown = _shownFor(history, source);
       final view = (
         history: history,
         sources: sources,
@@ -178,6 +173,15 @@ class _HistoryPageState extends State<HistoryPage> {
   Set<String> _ids(_View view) => {
     for (final entry in view.shown) entry.drama.id,
   };
+
+  /// 按站源 + 搜索词过滤观看记录。
+  /// 真 PageView 要求每页独立算自己的列表，不能共用当前选中站源那一份。
+  List<WatchEntry> _shownFor(List<WatchEntry> history, String sourceId) => [
+    for (final entry in history)
+      if ((sourceId.isEmpty || entry.drama.source == sourceId) &&
+          matchesWatchTitle(entry, _query.text))
+        entry,
+  ];
 
   Widget _search({double height = 40, FocusNode? focusNode}) => SearchField(
     hint: '搜索观看记录',
@@ -314,9 +318,15 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   /// 左右滑动切换下方「站源」分类，与追剧页、下载页的手势保持一致。
-  /// 与追剧、首页同一套横滑层：跟手阻尼 + 侧滑淡入，不会整页黑一下。
-  Widget _swipe(_View view, Widget child) {
-    if (view.selection != null) return child;
+  /// 与追剧、首页同一套横滑层：相邻两页同屏、1:1 跟手。
+  ///
+  /// [buildPage] 每页各算一次自己的列表——真 PageView 相邻两页同屏，
+  /// 必须各自持有本页数据，不能共用「当前选中站源」那一份。
+  Widget _swipe(
+    _View view,
+    Widget Function(_View page, {bool focused}) buildPage,
+  ) {
+    if (view.selection != null) return buildPage(view, focused: true);
     final ids = ['', for (final site in view.sources) site.id];
     var index = ids.indexOf(view.source);
     if (index < 0) index = 0;
@@ -326,7 +336,19 @@ class _HistoryPageState extends State<HistoryPage> {
       labels: ['全部', for (final site in view.sources) site.name],
       onIndexChanged: (next) => setState(() => _source = ids[next]),
       hintTop: 8,
-      child: child,
+      itemBuilder: (context, i) {
+        final id = ids[i];
+        return buildPage(
+          (
+            history: view.history,
+            sources: view.sources,
+            source: id,
+            shown: _shownFor(view.history, id),
+            selection: null,
+          ),
+          focused: id == view.source,
+        );
+      },
     );
   }
 
@@ -517,45 +539,52 @@ class _HistoryPageState extends State<HistoryPage> {
   }) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - inset * 2;
-      final masonry =
-          AppScope.formFactorOf(context) == FormFactor.phone &&
-          view.shown.any((entry) => CoverShapes.isMixed(entry.drama.source));
       final (columns, gap, runGap) = _grid(context, width);
       final tile = (width - gap * (columns - 1)) / columns;
+
+      // 一页 = 一个站源的全部记录。真 PageView 相邻两页同屏，所以整页
+      // （分时段标题、海报归属、空状态）都得按本页自己的列表重算。
+      // focused 只给当前选中的那页，否则多页会同时挂同一个 firstPoster。
+      Widget page(_View v, {bool focused = false}) {
+      final masonry =
+          AppScope.formFactorOf(context) == FormFactor.phone &&
+          v.shown.any((entry) => CoverShapes.isMixed(entry.drama.source));
       final now = DateTime.now();
       final periods = <WatchPeriod, List<WatchEntry>>{};
-      for (final entry in view.shown) {
+      for (final entry in v.shown) {
         periods
             .putIfAbsent(WatchPeriod.of(entry.updatedAt, now), () => [])
             .add(entry);
       }
       final heroOwner = {
         for (final MapEntry(key: id, value: index) in firstIndexById(
-          view.shown,
+          v.shown,
           (entry) => entry.drama.id,
         ).entries)
-          id: view.shown[index],
+          id: v.shown[index],
       };
-      final first = view.shown.firstOrNull;
-      final scroll = ValueListenableBuilder<int>(
+      final first = v.shown.firstOrNull;
+      return ValueListenableBuilder<int>(
         valueListenable: CoverShapes.revision,
         builder: (context, _, _) => CustomScrollView(
+          // 每页独立保存滚动位置，来回翻不会跳回顶部。
+          key: PageStorageKey('history-page-${v.source}'),
           slivers: [
-          if (view.shown.isEmpty)
+          if (v.shown.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: FadeSwitcher(
                 scale: true,
                 child: StatusView(
-                  key: ValueKey(view.history.isEmpty),
-                  title: view.history.isEmpty ? '还没有观看记录' : '没有匹配的记录',
-                  message: view.history.isEmpty
+                  key: ValueKey(v.history.isEmpty),
+                  title: v.history.isEmpty ? '还没有观看记录' : '没有匹配的记录',
+                  message: v.history.isEmpty
                       ? missingSourceHint(
                           widget.store.missingSourceRecords().history,
                           '条观看记录',
                         )
                       : null,
-                  icon: view.history.isEmpty
+                  icon: v.history.isEmpty
                       ? Icons.history_rounded
                       : Icons.search_off_rounded,
                 ),
@@ -619,9 +648,10 @@ class _HistoryPageState extends State<HistoryPage> {
                                 context,
                                 entry,
                                 cellWidth,
-                                view.selection,
-                                focusNode: entry == first ? _firstPoster : null,
-                                hero: identical(heroOwner[entry.drama.id], entry),
+                                v.selection,
+                                focusNode: focused && entry == first ? _firstPoster : null,
+                                hero: focused &&
+                                    identical(heroOwner[entry.drama.id], entry),
                                 aspect: posterAspect(
                                   entry.drama.source,
                                   entry.drama.id,
@@ -664,9 +694,10 @@ class _HistoryPageState extends State<HistoryPage> {
                                 context,
                                 entry,
                                 tile,
-                                view.selection,
-                                focusNode: entry == first ? _firstPoster : null,
-                                hero: identical(heroOwner[entry.drama.id], entry),
+                                v.selection,
+                                focusNode: focused && entry == first ? _firstPoster : null,
+                                hero: focused &&
+                                    identical(heroOwner[entry.drama.id], entry),
                               ),
                             ),
                           );
@@ -682,6 +713,7 @@ class _HistoryPageState extends State<HistoryPage> {
           ],
         ),
       );
+      }
       // 顶栏留在滑动层外面，横滑切站源时标题、搜索框不跟着动。
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -690,7 +722,9 @@ class _HistoryPageState extends State<HistoryPage> {
             padding: EdgeInsets.only(top: top),
             child: Column(children: header),
           ),
-          Expanded(child: swipe ? _swipe(view, scroll) : scroll),
+          Expanded(
+            child: swipe ? _swipe(view, page) : page(view, focused: true),
+          ),
         ],
       );
     },
