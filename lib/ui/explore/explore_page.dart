@@ -646,19 +646,24 @@ class ExplorePageState extends State<ExplorePage> {
   Widget _pageBackdrop(Drama drama) {
     final surface = Theme.of(context).colorScheme.surface;
     return IgnorePointer(
-      child: CoverBackdrop(
-        drama: drama,
-        sigma: 48,
-        opacity: 0.22,
-        overlay: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0, 0.45, 1],
-          colors: [
-            surface.withValues(alpha: 0.72),
-            surface.withValues(alpha: 0.92),
-            surface,
-          ],
+      // RepaintBoundary + 稳定 key：整页重建时不重新做全屏高斯模糊，
+      // 只有换片时才重算，避免滚动时每帧重绘模糊导致发涩卡顿。
+      child: RepaintBoundary(
+        key: ValueKey('backdrop-${drama.id}'),
+        child: CoverBackdrop(
+          drama: drama,
+          sigma: 24,
+          opacity: 0.22,
+          overlay: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0, 0.45, 1],
+            colors: [
+              surface.withValues(alpha: 0.72),
+              surface.withValues(alpha: 0.92),
+              surface,
+            ],
+          ),
         ),
       ),
     );
