@@ -5,6 +5,7 @@ import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/glass_dialog.dart';
 
 String formatBytes(int bytes) => bytes >= 1 << 30
     ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
@@ -56,34 +57,13 @@ Future<bool> confirmRemoval(
   required String message,
   required String action,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showGlassDialog(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        FocusRing(
-          radius: 20,
-          child: TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('保留'),
-          ),
-        ),
-        FocusRing(
-          radius: 20,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.error,
-              foregroundColor: colors.onError,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(action),
-          ),
-        ),
-      ],
-    ),
+    title: title,
+    message: message,
+    cancelLabel: '保留',
+    confirmLabel: action,
+    danger: true,
   );
   return confirmed == true;
 }

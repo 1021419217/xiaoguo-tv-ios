@@ -17,6 +17,7 @@ import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/frosted_header.dart';
 import '../widgets/glass_app_bar.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
@@ -104,36 +105,14 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Future<void> _remove(Set<String> ids, {required bool clear}) async {
     if (ids.isEmpty) return;
-    final colors = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(clear ? '清空观看记录？' : '删除 ${ids.length} 条观看记录？'),
-        content: Text(
-          clear ? '将删除当前列出的 ${ids.length} 条观看记录，追剧不受影响。' : '追剧不受影响。',
-        ),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.error,
-                foregroundColor: colors.onError,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(clear ? '清空' : '删除'),
-            ),
-          ),
-        ],
-      ),
+      title: clear ? '清空观看记录？' : '删除 ${ids.length} 条观看记录？',
+      message: clear
+          ? '将删除当前列出的 ${ids.length} 条观看记录，追剧不受影响。'
+          : '追剧不受影响。',
+      confirmLabel: clear ? '清空' : '删除',
+      danger: true,
     );
     if (confirmed != true || !mounted) return;
     await saveSetting(context, () => widget.store.removeHistory(ids));

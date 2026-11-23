@@ -16,6 +16,7 @@ import '../shell/app_shell.dart';
 import '../widgets/drama_grid.dart';
 import '../widgets/drama_tile.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/page_header.dart';
 import '../widgets/search_field.dart';
@@ -104,34 +105,12 @@ class _FollowPageState extends State<FollowPage> {
 
   Future<void> _unfollow(Set<String> ids) async {
     if (ids.isEmpty) return;
-    final colors = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('取消追剧 ${ids.length} 部？'),
-        content: const Text('观看记录会保留。'),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.error,
-                foregroundColor: colors.onError,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('取消追剧'),
-            ),
-          ),
-        ],
-      ),
+      title: '取消追剧 ${ids.length} 部？',
+      message: '观看记录会保留。',
+      confirmLabel: '取消追剧',
+      danger: true,
     );
     if (confirmed != true || !mounted) return;
     await saveSetting(context, () => widget.store.removeFavorites(ids));

@@ -10,6 +10,7 @@ import '../widgets/focus_ring.dart';
 import '../widgets/group_card.dart';
 import 'settings_rows.dart';
 import 'storage_view.dart';
+import '../widgets/glass_dialog.dart';
 
 class DataCard extends StatefulWidget {
   const DataCard({super.key, required this.store, required this.onCleared});
@@ -55,35 +56,13 @@ class _DataCardState extends State<DataCard> {
   }
 
   Future<void> _deleteAll() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除全部数据？'),
-        content: const Text(
+      title: '删除全部数据？',
+      message:
           '将删除所有用户、追剧、观看记录、设置、已安装模块、缓存和已下载的视频，无法恢复。已导出到相册的视频保留。完成后应用会退出。',
-        ),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('删除'),
-            ),
-          ),
-        ],
-      ),
+      confirmLabel: '删除',
+      danger: true,
     );
     if (confirmed != true || !mounted) return;
     final store = widget.store;

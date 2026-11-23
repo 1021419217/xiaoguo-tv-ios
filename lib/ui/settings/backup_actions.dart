@@ -9,6 +9,7 @@ import '../../local_store.dart';
 import '../app_scope.dart';
 import '../users/password_dialog.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/glass_dialog.dart';
 
 Future<String?> exportBackupFile(BuildContext context, LocalStore store) async {
   final repository = AppScope.of(context).repository;
@@ -105,27 +106,9 @@ Future<bool?> _confirm(
   required String title,
   required String message,
   required String action,
-}) => showDialog<bool>(
+}) => showGlassDialog(
   context: context,
-  builder: (context) => AlertDialog(
-    title: Text(title),
-    content: Text(message),
-    actions: [
-      FocusRing(
-        radius: 20,
-        child: TextButton(
-          autofocus: true,
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('取消'),
-        ),
-      ),
-      FocusRing(
-        radius: 20,
-        child: FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(action),
-        ),
-      ),
-    ],
-  ),
+  title: title,
+  message: message,
+  confirmLabel: action,
 );
