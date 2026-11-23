@@ -172,6 +172,22 @@ import WebKit
             result(html)
           }
           return
+        case "silentChallenge":
+          // 后台静默过验证：不弹窗，离屏 WebView 自己把挑战跑完，拿到凭据就回传。
+          guard let urlText = arguments?["url"] as? String,
+                let address = URL(string: urlText) else {
+            result(nil)
+            return
+          }
+          let host = (arguments?["host"] as? String) ?? address.host ?? ""
+          ChallengeWebView.shared.silentSolve(url: address, host: host) { cookie, agent in
+            guard let cookie, !cookie.isEmpty else {
+              result(nil)
+              return
+            }
+            result(["cookie": cookie, "ua": agent ?? ""])
+          }
+          return
         case "getBrightness":
           result(self.screen.map { Double($0.brightness) })
           return
@@ -381,6 +397,99 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     } else {
       web.load(URLRequest(url: url))
       waitAndFetch(0)
+    }
+  }
+
+  /// 后台静默过验证：不弹窗，离屏 WebView 打开站点，等 Cloudflare 放行。
+  ///
+  /// 和手动「去验证」走同一台 WebView 与同一份 cookie 库，区别只是不显示界面：
+  /// 站点一旦不再停在挑战页且拿到了 cf_clearance，就把凭据交回去，模块接着用。
+  /// 超时（默认 25 秒）就回 nil，由界面退回手动验证。
+  func silentSolve(
+    url: URL,
+    host: String,
+    timeout: TimeInterval = 25,
+    completion: @escaping (String?, String?) -> Void
+  ) {
+    DispatchQueue.main.async {
+      let key = Self.hostKey(host)
+      let web: WKWebView
+      let cachedKey = self.solved[key] != nil
+        ? key
+        : self.solved.keys.first { candidate in
+            key == candidate || key.hasSuffix("." + candidate)
+              || candidate.hasSuffix("." + key)
+          }
+      if let cachedKey, let cached = self.solved[cachedKey] {
+        web = cached
+      } else {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        self.harden(config)
+        web = WKWebView(frame: .zero, configuration: config)
+        if let window = Self.keyWindow() {
+          web.frame = CGRect(
+            x: -window.bounds.width - 40, y: 0,
+            width: window.bounds.width, height: window.bounds.height
+          )
+          window.insertSubview(web, at: 0)
+        }
+        self.retain(web, for: key)
+      }
+
+      let hosts = Set(
+        [host, url.host ?? ""]
+          .map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+          .filter { !$0.isEmpty }
+      )
+      let deadline = Date().addingTimeInterval(timeout)
+      var finished = false
+
+      // 拿到凭据（或超时）后立刻停到空白页：隐藏的 WebView 不能留着跑页面脚本，
+      // 上一版「突然弹出系统播放器的直播广告」就是那么来的。
+      func finish(_ cookie: String?, _ agent: String?) {
+        guard !finished else { return }
+        finished = true
+        self.park(web)
+        completion(cookie, agent)
+      }
+
+      web.load(URLRequest(url: url))
+
+      func poll() {
+        guard !finished else { return }
+        let waiting = ["just a moment", "请稍候", "請稍候", "attention required", "checking", "verifying"]
+        web.evaluateJavaScript("document.title") { value, _ in
+          let title = ((value as? String) ?? "").lowercased()
+          let blocked = title.isEmpty || waiting.contains { title.contains($0) }
+          WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+            guard !finished else { return }
+            let mine = cookies.filter { cookie in
+              let domain = cookie.domain.lowercased()
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+              guard !domain.isEmpty else { return false }
+              return hosts.contains { candidate in
+                candidate == domain || candidate.hasSuffix("." + domain)
+                  || domain.hasSuffix("." + candidate)
+              }
+            }
+            let hasClearance = mine.contains { $0.name == "cf_clearance" }
+            if !blocked && hasClearance {
+              let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+              web.evaluateJavaScript("navigator.userAgent") { agent, _ in
+                finish(header, agent as? String)
+              }
+              return
+            }
+            if Date() >= deadline {
+              finish(nil, nil)
+              return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { poll() }
+          }
+        }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { poll() }
     }
   }
 

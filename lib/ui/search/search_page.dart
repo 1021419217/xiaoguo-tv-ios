@@ -50,6 +50,7 @@ class _SearchPageState extends State<SearchPage> {
   final _shownSuggestions = <Object>{};
   bool _ready = false;
   bool _verifying = false;
+  bool _autoVerifying = false;
 
   @override
   void didChangeDependencies() {
@@ -93,6 +94,28 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       _submitted = query;
       _suggestions = const [];
+    });
+  }
+
+  /// 撞上人机验证时先自己静默试一次（离屏 WebView，不弹窗），成功就直接重试。
+  void _scheduleAutoVerify(DramaFeed results) {
+    if (_autoVerifying || _verifying) return;
+    final baseUrl = verifyBaseUrl(widget.source, results.error);
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (baseUrl.isEmpty || host.isEmpty) return;
+    _autoVerifying = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _autoVerifying = false;
+        return;
+      }
+      var ok = false;
+      try {
+        ok = await autoVerifyIfNeeded(_repository, baseUrl, host);
+      } finally {
+        _autoVerifying = false;
+      }
+      if (ok && mounted) await results.reload(force: true);
     });
   }
 
@@ -268,6 +291,7 @@ class _SearchPageState extends State<SearchPage> {
         final message = needsVerify
             ? '${results.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
             : results.error;
+        if (needsVerify) _scheduleAutoVerify(results);
         return StatusView(
           key: const ValueKey('error'),
           title: '搜索失败',

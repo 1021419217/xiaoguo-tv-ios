@@ -34,3 +34,43 @@ Future<bool> primePendingAfterFailure(
   if (pending.isEmpty) return false;
   return await primeVerifyPages(repository, pending, host) > 0;
 }
+
+/// 同一个站点的自动验证尝试间隔：失败时不要让每个请求都重开一次 WebView。
+const _autoVerifyCooldown = Duration(seconds: 45);
+final _lastAutoVerify = <String, DateTime>{};
+
+String _autoKey(String host) => host.toLowerCase().trim();
+
+/// 自动静默过验证：不弹窗，直接让原生离屏 WebView 拿凭据，成功后补抓页面。
+///
+/// 返回 true 表示这次拿到了凭据（调用方可以重试请求）；false 表示没拿到，
+/// 由界面退回手动「去验证」。同一主机 45 秒内只会尝试一次。
+Future<bool> autoVerifyIfNeeded(
+  AppRepository repository,
+  String baseUrl,
+  String host,
+) async {
+  if (baseUrl.isEmpty || host.isEmpty) return false;
+  final key = _autoKey(host);
+  final now = DateTime.now();
+  final last = _lastAutoVerify[key];
+  if (last != null && now.difference(last) < _autoVerifyCooldown) return false;
+  _lastAutoVerify[key] = now;
+
+  final solved = await AppDevice.silentSolve(baseUrl, host);
+  if (solved == null) return false;
+
+  final pending = await repository.pendingWebPages();
+  final blocked = await repository.blockedUrl(host);
+  final urls = [
+    ...pending,
+    if (blocked.isNotEmpty && !pending.contains(blocked)) blocked,
+  ];
+  await repository.saveChallenge(
+    host,
+    solved.cookie,
+    userAgent: solved.userAgent,
+  );
+  await primeVerifyPages(repository, urls, host);
+  return true;
+}

@@ -60,6 +60,7 @@ class ExplorePageState extends State<ExplorePage> {
   final _search = TextEditingController();
   final _tabsKey = GlobalKey<CategoryTabsState<String>>();
   final _refreshKey = GlobalKey<PullRefreshState>();
+  bool _autoVerifying = false;
 
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
   final _headerKey = GlobalKey();
@@ -617,6 +618,30 @@ class ExplorePageState extends State<ExplorePage> {
     }
   }
 
+  /// 页面撞上人机验证时先自己试一次静默验证（离屏 WebView，不弹窗）。
+  /// 成功就直接重试；失败才把「去验证」按钮留给用户。
+  void _scheduleAutoVerify(SourceSite? site, DramaFeed feed) {
+    if (_autoVerifying) return;
+    final baseUrl = verifyBaseUrl(site, feed.error);
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (baseUrl.isEmpty || host.isEmpty) return;
+    _autoVerifying = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _autoVerifying = false;
+        return;
+      }
+      final repository = AppScope.of(context).repository;
+      var ok = false;
+      try {
+        ok = await autoVerifyIfNeeded(repository, baseUrl, host);
+      } finally {
+        _autoVerifying = false;
+      }
+      if (ok && mounted) await feed.reload(force: true);
+    });
+  }
+
   void _tell(String text) {
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
@@ -636,6 +661,7 @@ class ExplorePageState extends State<ExplorePage> {
       final needsVerify =
           verifyBaseUrl(site, feed.error).isNotEmpty &&
           needsBrowserVerify(feed.error);
+      if (needsVerify) _scheduleAutoVerify(site, feed);
       final message = needsVerify
           ? '${feed.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
           : feed.error;
