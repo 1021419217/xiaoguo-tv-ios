@@ -39,12 +39,13 @@ class DownloadsPage extends StatefulWidget {
     super.key,
     required this.store,
     required this.downloads,
-    required this.converter,
+    this.converter,
     this.headerChild,
   });
   final LocalStore store;
   final DownloadOverview downloads;
-  final DownloadConverter converter;
+  /// 转换器由 AppShell 统一持有；万一没取到（刚重建等）就只显示下载进度。
+  final DownloadConverter? converter;
 
   /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
   /// 传入时同时把本页当作 tab 根页面处理（不显示返回箭头）。
@@ -223,7 +224,7 @@ class _DownloadsPageState extends State<DownloadsPage>
     listenable: Listenable.merge([
       widget.store,
       widget.downloads,
-      widget.converter,
+      if (widget.converter case final converter?) converter,
       _tabs,
     ]),
     builder: (context, _) {
@@ -707,7 +708,7 @@ class _DownloadsPageState extends State<DownloadsPage>
               child: _JobRow(
                 key: ValueKey(view.pending[index - 1].id),
                 job: view.pending[index - 1],
-                conversion: widget.converter.progressOf(
+                conversion: widget.converter?.progressOf(
                   view.pending[index - 1].id,
                 ),
                 selected: view.selection?.contains(view.pending[index - 1].id),

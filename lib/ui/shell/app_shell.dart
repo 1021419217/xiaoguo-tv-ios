@@ -155,8 +155,13 @@ class _AppShellState extends State<AppShell>
     _settingsEntry.dispose();
     _header.dispose();
     _exitWindow?.cancel();
-    DownloadServices.overview = null;
-    DownloadServices.converter = null;
+    // 只在登记的仍是自己这份时才清空。AppShell 重建时新实例的
+    // didChangeDependencies 可能先于旧实例 dispose 执行，无条件清空会把
+    // 新实例刚登记的值抹掉，之后「去下载」就点不动了。
+    if (identical(DownloadServices.overview, _downloads)) {
+      DownloadServices.overview = null;
+      DownloadServices.converter = null;
+    }
     _converter?.dispose();
     _downloads?.dispose();
     _followUpdater?.dispose();

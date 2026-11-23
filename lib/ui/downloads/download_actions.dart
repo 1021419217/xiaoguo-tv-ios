@@ -11,16 +11,20 @@ import '../widgets/glass_dialog.dart';
 import 'downloads_page.dart';
 
 /// 「去下载」：复用 AppShell 里那份下载概览与转换器，直接打开下载管理页。
-/// 不自己再 new 一个，免得两个转换器抢同一集去转码。
+/// 不自己再 new 一个转换器，免得两个转换器抢同一集去转码。
 void openDownloadsPage(BuildContext context, LocalStore store) {
+  if (!context.mounted) return;
   final overview = DownloadServices.overview;
   final converter = DownloadServices.converter;
-  if (overview == null || converter == null || !context.mounted) return;
+  // 服务还没登记上（AppShell 未就绪 / 正在重建）时也别让按钮点了没反应：
+  // 现场建一份只读概览，转换器缺失只是暂时看不到处理进度。
+  final downloads =
+      overview ?? DownloadOverview(AppScope.of(context).repository, store);
   openPage<void>(
     context,
     (_) => DownloadsPage(
       store: store,
-      downloads: overview,
+      downloads: downloads,
       converter: converter,
     ),
   );
