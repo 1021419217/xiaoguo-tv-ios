@@ -51,24 +51,15 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
     super.dispose();
   }
 
+  /// 对齐上游 2.0.4+116：每次选中变化都把该项滚到分类条正中，不做
+  /// 「已可见就不动」的最小滚动。上游是 alignment: 0.5 无条件居中。
   void _reveal() {
     final context = _keys[widget.selected]?.currentContext;
     if (context == null || !mounted) return;
-    final box = context.findRenderObject();
-    final viewport = _scroll.position.context.storageContext.findRenderObject();
-    if (box is! RenderBox || viewport is! RenderBox) return;
-    final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
-    final width = _scroll.position.viewportDimension;
-    final right = left + box.size.width;
-    if (left >= -16 && right <= width + 16) return;
-    final atStart = left < 0;
     Scrollable.ensureVisible(
       context,
-      alignment: atStart ? 0 : 1,
-      alignmentPolicy: atStart
-          ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
-          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-      duration: const Duration(milliseconds: 160),
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
     );
   }
