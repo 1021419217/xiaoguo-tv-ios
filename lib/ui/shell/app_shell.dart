@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../download_converter.dart';
-import '../../merge_queue.dart';
 import '../../download_overview.dart';
 import '../../follow_updater.dart';
 import '../../local_store.dart';
@@ -105,7 +104,6 @@ class _AppShellState extends State<AppShell>
   Timer? _exitWindow;
   DownloadOverview? _downloads;
   DownloadConverter? _converter;
-  MergeQueue? _merges;
   FollowUpdater? _followUpdater;
 
   NavigatorState? get _navigator => _navigators[_tab.index].currentState;
@@ -132,8 +130,10 @@ class _AppShellState extends State<AppShell>
       AppScope.of(context).repository,
       _downloads!,
     );
-    _merges ??= MergeQueue(AppScope.of(context).repository)
-      ..onFinished = _mergeFinished;
+    // 登记给详情页等其它入口用（「已加入下载」提示里的「去下载」）。
+    DownloadServices.overview = _downloads;
+    DownloadServices.converter = _converter;
+    DownloadServices.repository = AppScope.of(context).repository;
     _followUpdater ??= FollowUpdater(
       AppScope.of(context).repository,
       widget.store,
@@ -156,8 +156,15 @@ class _AppShellState extends State<AppShell>
     _settingsEntry.dispose();
     _header.dispose();
     _exitWindow?.cancel();
+    // 只在登记的仍是自己这份时才清空。AppShell 重建时新实例的
+    // didChangeDependencies 可能先于旧实例 dispose 执行，无条件清空会把
+    // 新实例刚登记的值抹掉，之后「去下载」就点不动了。
+    if (identical(DownloadServices.overview, _downloads)) {
+      DownloadServices.overview = null;
+      DownloadServices.converter = null;
+      DownloadServices.repository = null;
+    }
     _converter?.dispose();
-    _merges?.dispose();
     _downloads?.dispose();
     _followUpdater?.dispose();
     _tabAnim.dispose();
@@ -212,20 +219,6 @@ class _AppShellState extends State<AppShell>
         ),
       );
     }
-  }
-
-  void _mergeFinished(MergeTask task) {
-    if (task.state == MergeState.cancelled) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        duration: Duration(milliseconds: 1400),
-        content: Text(
-          task.state == MergeState.done
-              ? '「${task.fileName}」${task.message}'
-              : '「${task.fileName}」合并失败：${task.message}',
-        ),
-      ),
-    );
   }
 
   void _followFocus() {
@@ -283,7 +276,6 @@ class _AppShellState extends State<AppShell>
         store: widget.store,
         downloads: _downloads!,
         converter: _converter!,
-        merges: _merges!,
       ),
     ),
   };

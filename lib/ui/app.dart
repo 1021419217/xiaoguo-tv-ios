@@ -43,7 +43,7 @@ class DuanjuApp extends StatefulWidget {
 }
 
 class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
-  final _navigator = GlobalKey<NavigatorState>();
+  final _navigator = rootNavigatorKey;
   Color? _systemColor;
   int? _profileEpoch;
   var _television = false;
@@ -268,7 +268,7 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
           : FocusHighlightStrategy.alwaysTouch,
     );
     return MaterialApp(
-      navigatorKey: _navigator,
+      navigatorKey: rootNavigatorKey,
       title: appName,
       debugShowCheckedModeBanner: false,
       scrollBehavior: const FocusOutlineScrollBehavior(),

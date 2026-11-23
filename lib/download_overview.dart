@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'background_keep_alive.dart';
 import 'core_bridge.dart';
+import 'download_converter.dart';
 import 'local_store.dart';
 import 'models.dart';
 
@@ -80,7 +82,14 @@ class DownloadOverview extends ChangeNotifier {
     final request = _request;
     try {
       final jobs = await repository.downloads();
-      if (!_disposed && request == _request) _replace(jobs);
+      if (!_disposed && request == _request) {
+        // 每次拉取都对一次保活状态（内部有去重，不会反复调原生）：
+        // 不能只在「任务列表变化」时切，否则前后台切换后可能没人再把开关打开。
+        BackgroundKeepAlive.sync(
+          jobs.any((job) => job.active || job.converting),
+        );
+        _replace(jobs);
+      }
     } catch (_) {
     } finally {
       if (request == _request) _loading = false;
@@ -94,4 +103,20 @@ class DownloadOverview extends ChangeNotifier {
     store.removeListener(_sync);
     super.dispose();
   }
+}
+
+/// 下载页需要的公共实例。
+///
+/// `DownloadOverview` 和 `DownloadConverter` 由 AppShell 创建并全局唯一：
+/// 转换器会真的去跑 ffmpeg，多造一个实例会出现两个队列抢同一集的情况，
+/// 所以别处（例如详情页「已加入下载」提示里的「去下载」）要跳下载页时，
+/// 从这里取，而不是自己 new 一个。AppShell 销毁时会清空。
+class DownloadServices {
+  DownloadServices._();
+
+  static DownloadOverview? overview;
+  static DownloadConverter? converter;
+  static AppRepository? repository;
+
+  static bool get ready => overview != null && converter != null;
 }

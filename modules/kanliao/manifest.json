@@ -1,0 +1,19 @@
+{
+  "id": "kanliao",
+  "name": "今日看料",
+  "version": "1.0.1",
+  "description": "吃瓜短视频 · 分类 · 搜索 · 上传者二级页",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "www.kanliao20.net",
+    "kanliao20.net",
+    "*.kanliao20.net",
+    "*.henxihuan-ma.top"
+  ],
+  "capabilities": ["search"],
+  "aliases": ["kanliao20.net", "www.kanliao20.net"],
+  "baseUrl": "https://www.kanliao20.net",
+  "allowEmptyCatalog": false
+}

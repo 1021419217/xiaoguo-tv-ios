@@ -1,0 +1,21 @@
+{
+  "id": "cg91",
+  "name": "91吃瓜",
+  "version": "1.0.0",
+  "description": "吃瓜短视频 · 分类 · 搜索 · 上传者二级页",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "www.91cg1.com",
+    "91cg1.com",
+    "*.91cg1.com",
+    "*.micgqv.cn",
+    "*.ucjosl.cn",
+    "*.biacea.cn"
+  ],
+  "capabilities": ["search"],
+  "aliases": ["91cg1.com", "www.91cg1.com"],
+  "baseUrl": "https://www.91cg1.com",
+  "allowEmptyCatalog": false
+}

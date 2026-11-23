@@ -42,6 +42,11 @@ var verifiedChallengeHosts = []string{
 	"jable.tv", "fs1.app", "mushroomtrack.com",
 	"avple.tv", "avple.app", "cdnedge.live",
 	"5lxtv.com", "avtube.xyz",
+	// spankbang 的模块声明 browserFingerprint 并调 challengeCookie/challengeUA，
+	// 站点又确实挂 Cloudflare 托管挑战；不在这里登记的话，WebView 拿到的
+	// cf_clearance 会被 challengeLookup 直接丢掉，表现为「提示已经拿到 cookie，
+	// 却仍然一直 403」。spankbang.party 是模块里的备用主域。
+	"spankbang.com", "spankbang.party",
 }
 
 func isVerifiedChallengeHost(host string) bool {

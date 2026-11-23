@@ -1,8 +1,8 @@
 {
   "id": "av8d",
   "name": "AV8D",
-  "version": "1.0.3",
-  "description": "AV8D - 免費高畫質AV線上看（有碼/無碼/素人/FC2）",
+  "version": "1.0.4",
+  "description": "AV8D - 免費高畫質AV線上看（有碼/無碼/素人/FC2）。1.0.4：「最新」不再无限加载重复内容。",
   "runtime": "js",
   "api": 1,
   "adult": true,

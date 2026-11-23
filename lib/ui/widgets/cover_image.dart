@@ -36,6 +36,27 @@ class VipBadge extends StatelessWidget {
   );
 }
 
+/// 从徽标和标签里识别清晰度（4K / 1080P / HD / 720P），没有就不显示。
+String? _qualityLabel(Drama drama) {
+  final text = '${drama.badge} ${drama.tags.join(' ')}'.toUpperCase();
+  for (final token in const ['4K', '1080P', '1080', 'HD', '720P']) {
+    if (text.contains(token)) {
+      return token;
+    }
+  }
+  return null;
+}
+
+/// 从标签里判断有没有字幕（"字幕 / 中文字幕 / 中字"）。
+bool _hasSubtitle(Drama drama) {
+  for (final tag in drama.tags) {
+    if (tag.contains('字幕') || tag.contains('中字')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class DramaCover extends StatelessWidget {
   const DramaCover({
     super.key,
@@ -183,7 +204,7 @@ class DramaCover extends StatelessWidget {
           if (details && showScore && drama.score.isNotEmpty)
             Positioned(
               right: 9,
-              bottom: 9,
+              top: 9,
               child: Text(
                 drama.score,
                 style: const TextStyle(
@@ -202,6 +223,67 @@ class DramaCover extends StatelessWidget {
             ),
           if (rank case final rank?)
             Positioned(left: 0, top: 0, child: RankBadge(rank: rank)),
+          if (details && _hasSubtitle(drama))
+            Positioned(
+              left: 7,
+              bottom: 28,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0x8F000000),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: const Text(
+                  '字幕',
+                  style: TextStyle(
+                    color: Color(0xFFE8E6E1),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          if (details && drama.durationText.isNotEmpty)
+            Positioned(
+              right: 7,
+              bottom: 7,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xB3000000),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  drama.durationText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          if (details && _qualityLabel(drama) case final quality?)
+            Positioned(
+              left: 7,
+              top: 7,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: const Color(0x99FFFFFF), width: 0.8),
+                ),
+                child: Text(
+                  quality,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -46,6 +47,11 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 		return nativeDownloadResult{}, errors.New("下载地址无效")
 	}
 	hls := media.Playlist != "" || strings.HasSuffix(strings.ToLower(parsed.Path), ".m3u8")
+	if !hls {
+		// 有的站把播放列表挂在没有 .m3u8 后缀的地址上（av8d 是 /m3u8/{token}），
+		// 只按后缀判断会把它当成视频文件下载，最后落盘一份 m3u8 文本。
+		hls = manager.mediaLooksLikePlaylist(ctx, media)
+	}
 	entry := "media.mp4"
 	if hls {
 		bundle, err = manager.downloadBundle(ctx, media, job.Quality)
@@ -80,6 +86,7 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 		return nativeDownloadResult{}, err
 	}
 	var completedBytes int64
+	var completedChunks int64
 	var stateMu sync.Mutex
 	var firstErr error
 	downloadCtx, cancelDownloads := context.WithCancel(ctx)
@@ -103,9 +110,16 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 			}
 			stateMu.Lock()
 			completedBytes += int64(len(asset.data))
+			completedChunks++
 			done := completedBytes
+			chunks := completedChunks
 			stateMu.Unlock()
-			manager.progress(job.ID, done, 0, float64(index+1)/float64(len(bundle.assets)))
+			total := estimateChunkedTotal(done, chunks, len(bundle.assets))
+			progress := 0.0
+			if n := len(bundle.assets); n > 0 {
+				progress = float64(chunks) / float64(n)
+			}
+			manager.progress(job.ID, done, total, progress)
 			continue
 		}
 		pending.Add(1)
@@ -117,21 +131,30 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 				return
 			}
 			defer func() { <-slots }()
-			size, err := manager.downloadFile(downloadCtx, asset.address, media.Referer, target, asset.key, func(received, total int64) {
-				progress := 0.0
-				if total > 0 {
-					progress = min(1, float64(received)/float64(total))
-				}
-				if hls {
-					progress = (float64(index) + progress) / float64(len(bundle.assets))
-				}
-				overallTotal := int64(0)
-				if !hls {
-					overallTotal = total
-				}
+			size, err := manager.downloadFile(downloadCtx, asset.address, media.Referer, target, asset.key, hls, func(received, total int64) {
 				stateMu.Lock()
 				base := completedBytes
+				chunks := completedChunks
 				stateMu.Unlock()
+				progress := 0.0
+				overallTotal := total
+				if hls {
+					// 分片是 8 路并发下的：按「分片序号 + 片内进度」算，先回来的
+					// 大序号分片会把进度直接顶到很高（看着一下冲到 80%，其实没下多少），
+					// 而且序号靠后的先完成会让进度来回跳。改成用真正完成的分片数算，
+					// 8 路一起完成时每次只前进零点几个百分点，和实际下载量对得上。
+					n := len(bundle.assets)
+					if n > 0 {
+						progress = float64(chunks) / float64(n)
+					}
+					// 分片大小没有统一清单，用「已完成分片的平均大小 × 总片数」估算总量。
+					overallTotal = estimateChunkedTotal(base, chunks, n)
+					if overallTotal > 0 && base+received > overallTotal {
+						overallTotal = base + received
+					}
+				} else if total > 0 {
+					progress = min(1, float64(received)/float64(total))
+				}
 				manager.progress(job.ID, base+received, overallTotal, progress)
 			})
 			stateMu.Lock()
@@ -144,6 +167,7 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 				return
 			}
 			completedBytes += size
+			completedChunks++
 		}(index, asset, target)
 	}
 	pending.Wait()
@@ -160,6 +184,14 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 	}
 	manager.progress(job.ID, completedBytes, completedBytes, 1)
 	return nativeDownloadResult{file: entry, key: hex.EncodeToString(media.CENCKey), quality: bundle.quality}, nil
+}
+
+// estimateChunkedTotal 用已完成分片的平均大小乘总片数，估算整部视频的体积。
+func estimateChunkedTotal(completedBytes, completedChunks int64, totalChunks int) int64 {
+	if completedChunks <= 0 || totalChunks <= 0 || completedBytes <= 0 {
+		return 0
+	}
+	return completedBytes / completedChunks * int64(totalChunks)
 }
 
 func nativeDownloadValidator(header http.Header) string {
@@ -182,7 +214,7 @@ func nativeDownloadRange(value string) (int64, int64, int64, bool) {
 	return start, end, total, start >= 0 && end >= start && total > end
 }
 
-func (manager *nativeDownloads) downloadFile(ctx context.Context, address, referer, target string, key bool, progress func(int64, int64)) (int64, error) {
+func (manager *nativeDownloads) downloadFile(ctx context.Context, address, referer, target string, key, stripImage bool, progress func(int64, int64)) (int64, error) {
 	var metadata nativeDownloadFileState
 	if data, err := os.ReadFile(target + ".json"); err == nil {
 		_ = json.Unmarshal(data, &metadata)
@@ -215,7 +247,7 @@ func (manager *nativeDownloads) downloadFile(ctx context.Context, address, refer
 			case <-time.After(wait):
 			}
 		}
-		size, restart, err := manager.downloadFileAttempt(ctx, address, referer, target, key, offset, metadata, progress)
+		size, restart, err := manager.downloadFileAttempt(ctx, address, referer, target, key, stripImage, offset, metadata, progress)
 		if restart {
 			offset, metadata = 0, nativeDownloadFileState{}
 			lastErr = nil
@@ -235,7 +267,7 @@ func (manager *nativeDownloads) downloadFile(ctx context.Context, address, refer
 	return 0, errors.New("服务器无法恢复下载，请重试")
 }
 
-func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address, referer, target string, key bool, offset int64, old nativeDownloadFileState, progress func(int64, int64)) (int64, bool, error) {
+func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address, referer, target string, key, stripImage bool, offset int64, old nativeDownloadFileState, progress func(int64, int64)) (int64, bool, error) {
 	if !IsProviderHTTPMediaURL(address) {
 		return 0, false, errors.New("媒体下载地址无效")
 	}
@@ -302,6 +334,25 @@ func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address
 	if key && (total > 64 || offset > 0) {
 		return 0, false, errors.New("视频密钥格式无效")
 	}
+	// 有的站把 TS 分片伪装成 PNG（av8d 是 .image 后缀 + 假图片头）。播放走本地代理时会剥掉，
+	// 下载若原样落盘，ffmpeg 读到 PNG 头会直接失败。这里在写第一个数据块前判断并剥掉。
+	var head []byte
+	if stripImage && !key && offset == 0 {
+		head = make([]byte, 4096)
+		count, readErr := io.ReadFull(response.Body, head)
+		head = head[:count]
+		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+			return 0, false, errors.New("媒体文件读取失败，请稍后重试")
+		}
+		if skip := nativeDownloadFakeImageSkip(head); skip > 0 {
+			head = head[skip:]
+			// 落盘字节比远端少一个假头，Range 续传的偏移会对不上，这类分片只能整段重下。
+			validator = ""
+			if total > 0 {
+				total -= int64(skip)
+			}
+		}
+	}
 	metadata := nativeDownloadFileState{URL: address, Validator: validator, Total: total}
 	encoded, _ := json.Marshal(metadata)
 	if err := nativeDownloadWrite(target+".json", encoded); err != nil {
@@ -318,6 +369,18 @@ func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address
 		return 0, false, errors.New("无法写入下载文件，请检查存储空间")
 	}
 	received := offset
+	if len(head) > 0 {
+		written, writeErr := file.Write(head)
+		received += int64(written)
+		if writeErr != nil || written != len(head) {
+			closeErr := file.Close()
+			if closeErr != nil {
+				return 0, false, closeErr
+			}
+			return 0, false, errors.New("写入下载文件失败，请检查剩余空间")
+		}
+		progress(received, total)
+	}
 	buffer := make([]byte, 64<<10)
 	for {
 		n, readErr := response.Body.Read(buffer)
@@ -374,4 +437,75 @@ func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address
 
 func (manager *nativeDownloads) downloadPlaylist(ctx context.Context, address, referer string) (string, string, error) {
 	return manager.engine.downloader.fetchMediaPlaylist(ctx, address, referer)
+}
+
+// mediaLooksLikePlaylist 判断一个没有 .m3u8 后缀的地址实际返回的是不是播放列表。
+// 只看响应头与开头字节，读 2KB 就断开，不影响随后的正式下载。
+func (manager *nativeDownloads) mediaLooksLikePlaylist(ctx context.Context, media ProviderMedia) bool {
+	// 明确是视频/音频文件的地址不做探测，避免给一次性签名链接多发一次请求。
+	if nativeDownloadMediaExtension(media.URL) != "" {
+		return false
+	}
+	// 路径里带 m3u8 的直接认作播放列表（av8d 是 /m3u8/{token}）。
+	// 探测要真发一次请求，超时、被限流或临时 5xx 都会让它返回 false，
+	// 那样又退化成「把播放列表当 mp4 下载」，所以能靠路径认出来的不再依赖网络。
+	if parsed, err := url.Parse(media.URL); err == nil && strings.Contains(strings.ToLower(parsed.Path), "m3u8") {
+		return true
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, media.URL, nil)
+	if err != nil {
+		return false
+	}
+	request.Header.Set("Referer", media.Referer)
+	request.Header.Set("Range", "bytes=0-2047")
+	client := *manager.engine.downloader.client
+	client.Timeout = 10 * time.Second
+	response, err := manager.engine.downloader.doMediaRequestWithClient(request, &client)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
+		return false
+	}
+	if strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "mpegurl") {
+		return true
+	}
+	head, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
+	head = bytes.TrimSpace(bytes.TrimPrefix(head, []byte("\xef\xbb\xbf")))
+	return bytes.HasPrefix(head, []byte("#EXTM3U"))
+}
+
+var nativeDownloadPNGMagic = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+
+// nativeDownloadMediaExtension 返回地址路径里明确的媒体文件后缀（小写）；没有后缀时返回空。
+func nativeDownloadMediaExtension(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return ""
+	}
+	slash := strings.LastIndex(parsed.Path, "/")
+	dot := strings.LastIndex(parsed.Path, ".")
+	if dot <= slash {
+		return ""
+	}
+	switch extension := strings.ToLower(parsed.Path[dot:]); extension {
+	case ".mp4", ".m4v", ".mov", ".webm", ".mkv", ".flv", ".avi", ".mp3", ".m4a", ".aac", ".ogg", ".wav":
+		return extension
+	}
+	return ""
+}
+
+// nativeDownloadFakeImageSkip 返回真实媒体数据在 head 里的起点；不是伪装成图片的分片时返回 0。
+func nativeDownloadFakeImageSkip(head []byte) int {
+	if len(head) < len(nativeDownloadPNGMagic) || !bytes.HasPrefix(head, nativeDownloadPNGMagic) {
+		return 0
+	}
+	if end := bytes.Index(head, []byte("IEND")); end >= 0 && end+8 < len(head) && head[end+8] == 0x47 {
+		return end + 8
+	}
+	if trimmed := stripFakeTSHeader(head); len(trimmed) < len(head) {
+		return len(head) - len(trimmed)
+	}
+	return 0
 }

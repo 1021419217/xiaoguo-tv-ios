@@ -64,6 +64,14 @@ function listPath(category, page) {
   return entry.path + '?page=' + page;
 }
 
+// 页面里出现 page={下一頁} 的链接才算还有更多。站点只在分类页输出分页控件，
+// 首页没有任何 page= 链接，靠这个能准确判断到底。
+function hasNextPage(html, page) {
+  return new RegExp('page=' + (Number(page || 1) + 1) + '(?=[^0-9]|$)').test(
+    String(html || ''),
+  );
+}
+
 function parseCards(html) {
   const out = [];
   const seen = {};
@@ -274,9 +282,17 @@ module.exports = {
   },
 
   catalogPage(page, category) {
-    const response = get(listPath(category, page));
+    const current = Number(page || 1) < 1 ? 1 : Number(page || 1);
+    const response = get(listPath(category, current));
     const items = parseCards(response.text).map(toDrama);
-    return { items: items, hasMore: items.length >= 20 };
+    // 只有分类页会给出「下一页」链接（?page=N）；首页（最新）是单页展示，
+    // 传 ?page= 也返回同一批内容。原来用「条数 >= 20」判断还有没有更多，
+    // 首页一次给 68 条，于是被当成无限列表：滚到底反复请求同一页，
+    // 界面就一直转圈不出内容。改成看站点有没有真的给出下一页链接。
+    return {
+      items: items,
+      hasMore: items.length > 0 && hasNextPage(response.text, current),
+    };
   },
 
   search(page, query) {

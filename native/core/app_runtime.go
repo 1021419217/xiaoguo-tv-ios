@@ -449,6 +449,14 @@ func nativeDispatch(input nativeInput) (any, error) {
 		if key == "" {
 			return map[string]any{"saved": false}, nil
 		}
+		// 名单之外的站点：凭据存进去也会被 challengeLookup 丢掉，表现为
+		// 「提示已经拿到 cookie，却仍然一直 403」。写一条日志，别再静默失败。
+		if !isVerifiedChallengeHost(key) {
+			engine.downloader.recordDiagnostic(diagnosticEvent{
+				Event: "module", Level: "warning", Source: key, Host: key,
+				Message: "站点验证凭据已保存，但该站点未登记为需要人机验证的站源，凭据不会用于后续请求",
+			})
+		}
 		// 验证凭据变了，旧的缓存页清掉，避免继续喂上一轮抓的旧 HTML。
 		ClearWebPages()
 		if limiter := engine.downloader.limiter; limiter != nil {

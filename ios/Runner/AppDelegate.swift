@@ -10,6 +10,78 @@ import WebKit
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var originalBrightness: CGFloat?
   private let volumeView = MPVolumeView(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
+  private var keepAlivePlayer: AVAudioPlayer?
+
+  /// 下载时的后台保活：循环播一段静音音频。
+  /// iOS 切后台几秒后会挂起整个进程，Go 的下载线程也一起停；只有持有一条
+  /// 正在播放的音频通道才能一直在后台跑。
+  /// 注意两点（踩过的坑）：
+  ///   1. 音频会话必须独占，不能带 .mixWithOthers —— 混音时系统不认为
+  ///      App「正在播放音频」，照样挂起，保活等于没做。
+  ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出；
+  ///      数据本身就是全零 PCM，音量保持 1 即可，听不到声音。
+  @discardableResult
+  private func setDownloadKeepAlive(_ enabled: Bool) -> Bool {
+    let session = AVAudioSession.sharedInstance()
+    if !enabled {
+      keepAlivePlayer?.stop()
+      keepAlivePlayer = nil
+      try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+      return true
+    }
+    if keepAlivePlayer?.isPlaying == true { return true }
+    do {
+      try session.setCategory(.playback, mode: .default, options: [])
+      try session.setActive(true)
+      let player = try AVAudioPlayer(data: Self.silentWav(seconds: 2))
+      player.numberOfLoops = -1
+      player.volume = 1
+      player.prepareToPlay()
+      player.play()
+      keepAlivePlayer = player
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /// 进后台时补一次激活：音频会话可能刚被系统释放或被来电打断，
+  /// 不重新激活的话保活会在后台断掉。
+  /// 本工程启用了 UIScene，UIApplicationDelegate 的 applicationDidEnterBackground
+  /// 不会被系统调用，所以改听通知（两种都听，非 Scene 场景也覆盖）。
+  @objc private func reactivateKeepAlive() {
+    if let player = keepAlivePlayer {
+      try? AVAudioSession.sharedInstance().setActive(true)
+      if !player.isPlaying { player.play() }
+    }
+  }
+
+  /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
+  private static func silentWav(seconds: Double) -> Data {
+    let sampleRate = 44100
+    let frames = Int(Double(sampleRate) * seconds)
+    let dataSize = frames * 2
+    var data = Data(capacity: 44 + dataSize)
+    func put<T: FixedWidthInteger>(_ value: T) {
+      var little = value.littleEndian
+      withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+    }
+    data.append(contentsOf: Array("RIFF".utf8))
+    put(UInt32(36 + dataSize))
+    data.append(contentsOf: Array("WAVE".utf8))
+    data.append(contentsOf: Array("fmt ".utf8))
+    put(UInt32(16))
+    put(UInt16(1))
+    put(UInt16(1))
+    put(UInt32(sampleRate))
+    put(UInt32(sampleRate * 2))
+    put(UInt16(2))
+    put(UInt16(16))
+    data.append(contentsOf: Array("data".utf8))
+    put(UInt32(dataSize))
+    data.append(Data(count: dataSize))
+    return data
+  }
 
   private var keyWindow: UIWindow? {
     UIApplication.shared.connectedScenes
@@ -25,6 +97,17 @@ import WebKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     ZgjEnsureCoreLinked()
+    for name in [
+      UIApplication.didEnterBackgroundNotification,
+      UIScene.didEnterBackgroundNotification,
+    ] {
+      NotificationCenter.default.addObserver(
+        self,
+        selector: #selector(reactivateKeepAlive),
+        name: name,
+        object: nil
+      )
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -42,6 +125,10 @@ import WebKit
           }
           result(["level": Int((device.batteryLevel * 100).rounded()),
                   "charging": device.batteryState == .charging || device.batteryState == .full])
+          return
+        }
+        if call.method == "backgroundKeepAlive" {
+          result(self.setDownloadKeepAlive(call.arguments as? Bool ?? false))
           return
         }
         let arguments = call.arguments as? [String: Any]
@@ -182,6 +269,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       } else {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        self.harden(config)
         web = WKWebView(frame: .zero, configuration: config)
         // 新建的 WebView 也要进窗口层级（放在屏幕外）：不在窗口里的
         // WKWebView 同样会被系统挂起 JS，fetch 永远拿不到结果。
@@ -220,6 +308,21 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     return key
   }
 
+  /// 关掉自动播放与脚本开窗权限。成人站的广告会用 WebView 拉起系统全屏播放器，
+  /// 那层播放器浮在所有界面之上，跟当前在哪个页、哪个站源都无关，关掉还会再来。
+  private func harden(_ config: WKWebViewConfiguration) {
+    config.mediaTypesRequiringUserActionForPlayback = .all
+    config.allowsInlineMediaPlayback = true
+    config.preferences.javaScriptCanOpenWindowsAutomatically = false
+  }
+
+  /// 把 WebView 停到空白页：页面脚本与广告随之停止，WebView 本体（cookie 会话、
+  /// TLS/JS 指纹）仍保留，下次 webFetch 重新导航到目标页即可。
+  private func park(_ web: WKWebView) {
+    web.stopLoading()
+    web.load(URLRequest(url: URL(string: "about:blank")!))
+  }
+
   private static func keyWindow() -> UIWindow? {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
@@ -247,6 +350,8 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         )
         let html = (value as? String) ?? (value as? NSNumber)?.stringValue ?? ""
         completion(html.isEmpty ? nil : html)
+        // 取完立刻回到空白页：别让站点的广告在后台页面里继续跑。
+        self.park(web)
       }
     }
     func waitAndFetch(_ tries: Int) {
@@ -347,6 +452,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       let config = WKWebViewConfiguration()
       // 用默认（持久化）存储：验证拿到的 cookie 与后续 WebKit 请求共用同一份。
       config.websiteDataStore = .default()
+      self.harden(config)
       let web = WKWebView(frame: .zero, configuration: config)
       web.translatesAutoresizingMaskIntoConstraints = false
       web.navigationDelegate = self
@@ -525,6 +631,10 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       }
       web.navigationDelegate = nil
       retain(web, for: key)
+      // 抓完 cookie 就把页面清掉：站点的广告会在这台常驻 WebView 里一直播下去，
+      // 还会借它拉起系统全屏播放器（浮在所有界面之上，关掉过几秒又弹回来）。
+      // WebView 本身留着，指纹会话不丢，下次 webFetch 重新导航即可。
+      park(web)
     } else {
       web?.stopLoading()
       web?.navigationDelegate = nil

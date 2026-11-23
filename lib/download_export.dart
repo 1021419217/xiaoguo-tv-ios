@@ -5,7 +5,7 @@ import 'package:path/path.dart' as path;
 import 'app_device.dart';
 import 'core_bridge.dart';
 import 'download_collections.dart';
-import 'download_merge.dart';
+import 'safe_file_name.dart';
 import 'models.dart';
 
 String exportFileName(String title, int number, int episodes) {
