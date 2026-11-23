@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_device.dart';
 import '../../core_bridge.dart';
 import '../../drama_feed.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../../source_catalog.dart';
+import '../../verify_repair.dart';
 import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../shell/app_shell.dart';
@@ -47,6 +49,7 @@ class _SearchPageState extends State<SearchPage> {
   int _suggestion = 0;
   final _shownSuggestions = <Object>{};
   bool _ready = false;
+  bool _verifying = false;
 
   @override
   void didChangeDependencies() {
@@ -91,6 +94,57 @@ class _SearchPageState extends State<SearchPage> {
       _submitted = query;
       _suggestions = const [];
     });
+  }
+
+  /// 搜索同样可能是站点在挑战：搜索这次请求的 URL 从没被验证过的 WebView 抓过，
+  /// Go 的 TLS 指纹过不去就是 403。和发现页一套流程：过验证 → 补抓 → 重试。
+  Future<void> _verify() async {
+    final results = _results;
+    if (results == null || _verifying) return;
+    final baseUrl = verifyBaseUrl(widget.source, results.error);
+    final host = Uri.tryParse(baseUrl)?.host ?? '';
+    if (baseUrl.isEmpty || host.isEmpty) return;
+    setState(() => _verifying = true);
+    try {
+      final solved = await AppDevice.solveChallenge(baseUrl, host);
+      if (!mounted) return;
+      if (solved == null) {
+        _tell('没有拿到通行 cookie，可以再点一次「去验证」');
+        return;
+      }
+      final pending = await _repository.pendingWebPages();
+      final blocked = await _repository.blockedUrl(host);
+      final urls = [
+        ...pending,
+        if (blocked.isNotEmpty && !pending.contains(blocked)) blocked,
+      ];
+      await _repository.saveChallenge(
+        host,
+        solved.cookie,
+        userAgent: solved.userAgent,
+      );
+      if (!mounted) return;
+      await primeVerifyPages(_repository, urls, host);
+      if (!mounted) return;
+      await results.reload(force: true);
+      for (var round = 0; round < 2 && results.error.isNotEmpty; round++) {
+        if (!mounted) return;
+        if (!await primePendingAfterFailure(_repository, host)) break;
+        if (!mounted) return;
+        await results.reload(force: true);
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  void _tell(String text) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1800),
+        content: Text(text),
+      ),
+    );
   }
 
   void _changed(String text) {
@@ -208,13 +262,29 @@ class _SearchPageState extends State<SearchPage> {
         );
       }
       if (results.error.isNotEmpty) {
+        final needsVerify =
+            verifyBaseUrl(widget.source, results.error).isNotEmpty &&
+            needsBrowserVerify(results.error);
+        final message = needsVerify
+            ? '${results.error}\n点「去验证」在应用内完成一次验证，通过后会自动重试。'
+            : results.error;
         return StatusView(
           key: const ValueKey('error'),
           title: '搜索失败',
-          message: results.error,
+          message: message,
+          // 与发现页 / 详情页一致：把「N 秒后重试」做成真的倒计时，到 0 自动重试。
+          messageChild: RetryCountdown(
+            text: message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            onExpired: () => results.reload(force: true),
+          ),
           icon: Icons.cloud_off_rounded,
-          action: '重试',
-          onAction: () => results.reload(),
+          action: needsVerify ? (_verifying ? '验证中…' : '去验证') : '重试',
+          onAction: needsVerify
+              ? (_verifying ? null : () => unawaited(_verify()))
+              : () => results.reload(force: true),
         );
       }
       return StatusView(

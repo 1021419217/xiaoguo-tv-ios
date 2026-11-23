@@ -106,7 +106,13 @@ function fetchPage(path, referer) {
       timeoutMs: 25000
     });
   } catch (error) {
-    throw new Error('SpankBang 连接失败：' + String((error && error.message) || error));
+    const message = String((error && error.message) || error);
+    // host 层拦截时抛的是「… HTTP 403，请在 N 秒后重试」这类文案，模块拿不到
+    // 状态码，只能按文案识别；统一成「需要人机验证」，App 才会给「去验证」入口。
+    if (/HTTP\s*(403|429|503)|blocked|challenge|重试/i.test(message)) {
+      throw new Error('SpankBang 需要人机验证，请在站源页里点「去验证」后再试');
+    }
+    throw new Error('SpankBang 连接失败：' + message);
   }
   const status = response.status || 0;
   const body = response.body || '';
