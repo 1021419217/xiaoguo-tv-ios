@@ -286,7 +286,12 @@ function parseCards(document) {
       title = slug.toUpperCase();
     }
     const cover = image === null ? "" : coverAddress(firstNonEmpty(htmlAttr(image, "data-src"), htmlAttr(image, "src")));
-    const badge = htmlNodes(card, (node) => node.tag === "span" && htmlClass(node, "absolute"))[0];
+    // 卡片右下角的时长角标（2:15:53）。列表里没有清晰度/集数，所以 badge 留空，
+    // 只把时长交给 durationText，由封面组件显示在右下角。
+    const duration = htmlNodes(
+      card,
+      (node) => node.tag === "span" && htmlClass(node, "absolute") && htmlClass(node, "bottom-1") && htmlClass(node, "right-1"),
+    )[0];
     seen.add(slug);
     items.push({
       id: host.dramaId(slug),
@@ -298,7 +303,8 @@ function parseCards(document) {
       coverUrl: cover,
       channelName: channel,
       categoryName: "视频",
-      remark: truncate(badge ? htmlText(badge) : "", 32),
+      durationText: truncate(duration ? htmlText(duration) : "", 12),
+      remark: truncate(duration ? htmlText(duration) : "", 12),
     });
   }
   return items;
