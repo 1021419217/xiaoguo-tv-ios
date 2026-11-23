@@ -84,8 +84,8 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 	var firstErr error
 	downloadCtx, cancelDownloads := context.WithCancel(ctx)
 	defer cancelDownloads()
-	// HLS 分片之间互不依赖，串行下是最主要的慢因；限 4 路并发兼顾速度与站点压力。
-	const parallel = 4
+	// HLS 分片之间互不依赖，串行下是最主要的慢因；限 8 路并发兼顾速度与站点压力。
+	const parallel = 8
 	slots := make(chan struct{}, parallel)
 	var pending sync.WaitGroup
 	for index, asset := range bundle.assets {
