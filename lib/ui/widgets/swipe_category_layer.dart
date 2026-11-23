@@ -130,6 +130,10 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
 
   /// 朝 [target] 吸附。build 每次都会来问一遍，所以必须去重：动画未完成
   /// 就重复调 animateToPage 会把进度重置回起点，永远走不到目标页。
+  ///
+  /// 跨多页时先瞬移到目标相邻页再动画最后一页（对齐 guoapp 上游 2.0.4+116
+  /// 的 _follow）：一次跳 7 个类目走的是「一下就位 + 最后一小段滑动」，途中
+  /// 不经过任何中间页，因此不会触发中间页的 onPageChanged 把目标拉回去。
   void _requestPage(PageController controller, int target) {
     if (_animatingTo == target) return;
     _animatingTo = target;
@@ -145,6 +149,10 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
       if ((now - target).abs() <= 0.02) {
         _animatingTo = null;
         return;
+      }
+      final from = now.round();
+      if ((target - from).abs() > 1) {
+        controller.jumpToPage(target > from ? target - 1 : target + 1);
       }
       unawaited(
         controller

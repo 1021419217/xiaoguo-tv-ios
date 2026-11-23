@@ -698,9 +698,7 @@ class ExplorePageState extends State<ExplorePage> {
       builder: (context, constraints) {
         final scrollView = CustomScrollView(
           controller: scroll,
-          // 不写 physics：让它沿用 PullRefresh 注入的 _PullPhysics（已继承
-          // AlwaysScrollableScrollPhysics）。显式传 physics 会被 Flutter 套在
-          // 注入的 physics 外层，把手势消费链路整个屏蔽掉，下拉刷新失效。
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             // 顶栏留白：随内容一起滚动，滚动后卡片进入顶栏背后被模糊透出。
             if (topInset > 0)

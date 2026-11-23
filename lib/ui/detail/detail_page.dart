@@ -631,7 +631,7 @@ class _DetailPageState extends State<DetailPage> {
         edgeOffset: top,
         onRefresh: _refresh,
         child: CustomScrollView(
-          // 不写 physics：交给 PullRefresh 注入的 _PullPhysics，理由同发现页。
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: _withBackdrop(
