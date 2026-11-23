@@ -43,6 +43,9 @@ class PullRefreshState extends State<PullRefresh>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final inherited = ScrollConfiguration.of(context);
+    // 这里注入的 physics 只对「没有显式传 physics」的 ScrollView 生效，
+    // 且会被 ScrollView 的 physics 套在外层——所以调用方不要再写
+    // `physics: AlwaysScrollableScrollPhysics()`，本类已自带该语义。
     _behavior = inherited.copyWith(
       physics: _PullPhysics(this, parent: inherited.getScrollPhysics(context)),
     );
@@ -179,7 +182,12 @@ class PullRefreshState extends State<PullRefresh>
   }
 }
 
-class _PullPhysics extends ScrollPhysics {
+/// 必须继承 [AlwaysScrollableScrollPhysics]：
+/// 一是内容不满一屏时也能下拉（否则 _consume 永远等不到 offset）；
+/// 二是本类会处在 physics 链的最外层，`applyPhysicsToUserOffset` 才能被
+/// ScrollPosition 直接调用——ScrollPhysics 各方法默认不向 parent 转发，
+/// 被别的 physics 套在外层就等于彻底失效。
+class _PullPhysics extends AlwaysScrollableScrollPhysics {
   const _PullPhysics(this.state, {super.parent});
   final PullRefreshState state;
 

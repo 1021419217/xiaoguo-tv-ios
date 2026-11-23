@@ -53,6 +53,9 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     with SingleTickerProviderStateMixin {
   PageController? _pages;
 
+  /// 正在朝哪一页做程序化吸附。非 null 期间不把 PageView 的中间页回传上层。
+  int? _animatingTo;
+
   @override
   void dispose() {
     _pages?.dispose();
@@ -88,36 +91,73 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     final controller = _pages ??= PageController(initialPage: index);
 
     // 点击分类胶囊等「外部改 index」：让 PageView 吸附过去。
-    // 手势翻页触发的 onIndexChanged 也会走到这里，但那时 page 已等于目标，
-    // 用 round 比较避免二次 animate 造成来回抖。
     final current = controller.hasClients ? controller.page : null;
     if (current == null || (current - index).abs() > 0.02) {
-      final target = index;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !controller.hasClients) return;
-        final now = controller.page;
-        if (now == null || (now - target).abs() <= 0.02) return;
-        unawaited(
-          controller.animateToPage(
-            target,
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-          ),
-        );
-      });
+      _requestPage(controller, index);
     }
 
-    return PageView.builder(
-      controller: controller,
-      itemCount: widget.itemCount,
-      physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
-      onPageChanged: (page) {
-        if (page == widget.index) return;
-        unawaited(HapticFeedback.selectionClick());
-        widget.onIndexChanged(page);
+    return NotificationListener<ScrollNotification>(
+      // 用户手指接管滚动时，之前排队的程序化动画立即作废，
+      // 否则它完成时的收尾会把用户刚翻到的那页当成中间页吞掉。
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification &&
+            notification.dragDetails != null) {
+          _animatingTo = null;
+        }
+        return false;
       },
-      itemBuilder: (context, page) => widget.itemBuilder!(context, page),
+      child: PageView.builder(
+        controller: controller,
+        itemCount: widget.itemCount,
+        physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+        onPageChanged: (page) {
+          // 程序化跨类目动画途中会依次经过中间页（0→3 会依次报 1、2）。
+          // 这些不是用户意图，必须忽略：一旦回传上层，上层 index 被逐格
+          // 改写，下一次 build 就把目标拉回中间页，表现为「点第 4 个只挪
+          // 到第 2 个」。只有到达目标页才收尾并解除屏蔽。
+          if (_animatingTo != null) {
+            if (page == _animatingTo) _animatingTo = null;
+            return;
+          }
+          if (page == widget.index) return;
+          unawaited(HapticFeedback.selectionClick());
+          widget.onIndexChanged(page);
+        },
+        itemBuilder: (context, page) => widget.itemBuilder!(context, page),
+      ),
     );
+  }
+
+  /// 朝 [target] 吸附。build 每次都会来问一遍，所以必须去重：动画未完成
+  /// 就重复调 animateToPage 会把进度重置回起点，永远走不到目标页。
+  void _requestPage(PageController controller, int target) {
+    if (_animatingTo == target) return;
+    _animatingTo = target;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final now = controller.hasClients ? controller.page : null;
+      if (now == null) {
+        // 还没挂载（或拿不到 page）就先放掉占用标记，等下一次 build 重新排队，
+        // 否则标记会一直卡住，之后所有吸附请求都会被当成「已在动画中」忽略。
+        _animatingTo = null;
+        return;
+      }
+      if ((now - target).abs() <= 0.02) {
+        _animatingTo = null;
+        return;
+      }
+      unawaited(
+        controller
+            .animateToPage(
+              target,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+            )
+            .whenComplete(() {
+              if (mounted && _animatingTo == target) _animatingTo = null;
+            }),
+      );
+    });
   }
 
   // ---------------------------------------------------------------------

@@ -631,7 +631,7 @@ class _DetailPageState extends State<DetailPage> {
         edgeOffset: top,
         onRefresh: _refresh,
         child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+          // 不写 physics：交给 PullRefresh 注入的 _PullPhysics，理由同发现页。
           slivers: [
             SliverToBoxAdapter(
               child: _withBackdrop(
@@ -2110,11 +2110,9 @@ class _DetailPageState extends State<DetailPage> {
               final low = page.floor().clamp(0, last);
               final high = (low + 1).clamp(0, last);
               return SizedBox(
-                height: lerpDouble(
-                  heightOf(low),
-                  heightOf(high),
-                  page - low,
-                ),
+                // 两页高度按手指位置线性插值，避免切到剧集更少的分组时跳动。
+                height: heightOf(low) +
+                    (heightOf(high) - heightOf(low)) * (page - low),
                 child: child,
               );
             },
