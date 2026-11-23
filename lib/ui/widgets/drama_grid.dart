@@ -299,6 +299,7 @@ class AutoLoadMore extends StatefulWidget {
 
 class _AutoLoadMoreState extends State<AutoLoadMore> {
   BuildContext? _scrollable;
+  bool _pendingLoad = false;
 
   @override
   void initState() {
@@ -337,8 +338,15 @@ class _AutoLoadMoreState extends State<AutoLoadMore> {
     if (depth != 0 || metrics.axis != Axis.vertical) return false;
     _scrollable = context;
     final feed = widget.feed;
-    if (metrics.extentAfter < 600 && feed.canLoadMore) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => feed.loadMore());
+    // 滚动时每帧都会进来，这里只排一次加载请求，避免帧队列被大量回叫堆满
+    // （表现就是滑到某处发涩、卡住不动）。
+    if (metrics.extentAfter < 600 && feed.canLoadMore && !_pendingLoad) {
+      _pendingLoad = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _pendingLoad = false;
+        if (!mounted) return;
+        feed.loadMore();
+      });
     }
     return false;
   }
