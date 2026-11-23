@@ -263,7 +263,7 @@ class DramaCover extends StatelessWidget {
                 ),
               ),
             ),
-          if (details && _qualityLabel(drama) case final quality?)
+          if (details && _qualityLabel(drama) != null)
             Positioned(
               left: 7,
               top: 7,
@@ -274,7 +274,7 @@ class DramaCover extends StatelessWidget {
                   border: Border.all(color: const Color(0x99FFFFFF), width: 0.8),
                 ),
                 child: Text(
-                  quality,
+                  _qualityLabel(drama)!,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 9,
