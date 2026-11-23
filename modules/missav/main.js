@@ -455,8 +455,34 @@ function fetchCatalogPage(page, category, query) {
   return { items, hasMore };
 }
 
+// 排行榜：四个榜的路径固定，分页走 ?page=N（实测 ?page=1/2 都返回 12 张卡片）。
+const BOARDS = {
+  "missav-today": "/cn/today-hot",
+  "missav-weekly": "/cn/weekly-hot",
+  "missav-monthly": "/cn/monthly-hot",
+  "missav-uncensored": "/cn/uncensored-leak",
+};
+
+function rankingPage(boardId, page) {
+  const id = String(boardId === undefined || boardId === null ? "" : boardId).trim();
+  const path = BOARDS[id];
+  if (!path) {
+    throw new Error("未知榜单 " + id);
+  }
+  const index = Math.max(1, Math.min(Math.floor(Number(page) || 1), 1000000));
+  const document = fetchDocument(siteBaseUrl + path + "?page=" + index);
+  const items = parseCards(document);
+  return {
+    boardId: id,
+    page: index,
+    items: items.map((drama, cursor) => ({ rank: cursor + 1, drama: drama })),
+    hasMore: items.length > 0 && hasMorePages(document, index),
+  };
+}
+
 module.exports = {
   validCategory,
+  rankingPage,
 
   categories() {
     const document = fetchDocument(siteBaseUrl + "/cn/genres");
