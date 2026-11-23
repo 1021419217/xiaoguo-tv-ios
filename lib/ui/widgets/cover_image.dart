@@ -263,7 +263,8 @@ class DramaCover extends StatelessWidget {
                 ),
               ),
             ),
-          if (details)
+          // 排行榜有左上角名次时不再叠 HD，避免两个角标压在一起
+          if (details && rank == null)
             if (_qualityLabel(drama) case final quality?)
               Positioned(
                 left: 7,
