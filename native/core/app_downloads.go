@@ -500,10 +500,39 @@ func (manager *nativeDownloads) progress(id string, downloaded, total int64, pro
 	if job == nil || job.State != "downloading" {
 		return
 	}
-	job.Bytes, job.Total, job.Progress = downloaded, total, max(0, min(progress, 1))
+	progress = max(0, min(progress, 1))
+	// HLS 分片是并发下的，先回来的未必是序号靠前的：靠后的分片把进度顶到
+	// 接近 100%，随后靠前的小分片回来又报一个很小的值，进度条就来回跳，
+	// 看着像「下完了又重下一遍」。这里只允许进度和字节数向前走。
+	if progress < job.Progress {
+		progress = job.Progress
+	}
+	if downloaded < job.Bytes {
+		downloaded = job.Bytes
+	}
+	// HLS 分片路径不报总量（传 0），不要因此把已知的总量清掉。
+	if total <= 0 {
+		total = job.Total
+	}
+	if total > 0 && downloaded > total {
+		downloaded = total
+	}
+	job.Bytes, job.Total, job.Progress = downloaded, total, progress
 	if time.Since(manager.lastSaved) >= time.Second {
 		_ = manager.saveLocked()
 	}
+}
+
+// resetProgress 换线路重下前清零：真实的重试要能让进度从头走，
+// 否则界面会停在上一轮的 100% 不动。
+func (manager *nativeDownloads) resetProgress(id string) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	job := manager.jobs[id]
+	if job == nil || job.State != "downloading" {
+		return
+	}
+	job.Bytes, job.Total, job.Progress = 0, 0, 0
 }
 
 func (manager *nativeDownloads) run(ctx context.Context, job nativeDownloadJob) {
@@ -556,9 +585,13 @@ func (manager *nativeDownloads) transfer(ctx context.Context, job nativeDownload
 		return nativeDownloadResult{}, errors.New("该集没有可用的下载地址")
 	}
 	var result nativeDownloadResult
-	for _, option := range choices[:min(3, len(choices))] {
+	for index, option := range choices[:min(3, len(choices))] {
 		if err = ctx.Err(); err != nil {
 			break
+		}
+		if index > 0 {
+			// 换线路重下：上一轮的进度作废，从头开始，免得上一条线路的 100% 挂着不动。
+			manager.resetProgress(job.ID)
 		}
 		result, err = manager.transferMedia(ctx, job, option)
 		if err == nil {

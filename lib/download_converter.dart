@@ -113,13 +113,16 @@ class DownloadConverter extends ChangeNotifier {
       final duration = await _duration(work.input);
       if (_cancelled) return;
       result = 'failed';
+      // 封装占 0→70%，退回转码占 70%→100%：两段合成一条连续进度。
+      // 原来转码从 0 重新开始报，界面上就是「处理到 100% 又重来一遍」。
+      const copyShare = 0.7;
       // 直接复制失败（源流不兼容、分片不规则等）时退回转码，避免整集报废。
       try {
         await executor.run(
           arguments(work),
           duration: duration,
           progress: (value) {
-            _progress = value;
+            _progress = value * copyShare;
             if (!_disposed) notifyListeners();
           },
         );
@@ -132,7 +135,7 @@ class DownloadConverter extends ChangeNotifier {
           arguments(work, transcode: true),
           duration: duration,
           progress: (value) {
-            _progress = value;
+            _progress = copyShare + value * (1 - copyShare);
             if (!_disposed) notifyListeners();
           },
         );

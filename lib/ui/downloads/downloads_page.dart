@@ -967,11 +967,20 @@ class _JobRow extends StatelessWidget {
     final downloading = job.state == 'downloading';
     final failed = job.state == 'failed';
     final converted = (conversion ?? 0) > 0 ? conversion : null;
-    final state = downloading
-        ? '${(job.progress * 100).round()}%'
-        : converted != null
-        ? '${job.stateLabel} ${(converted * 100).round()}%'
-        : job.stateLabel;
+    // 下载占 0→80%，封装/转码占 80%→100%，合成一条总进度。
+    // 原来下载到 100% 后进度条会切到「正在处理」再从 0 走一遍，
+    // 一次下载看起来像下了两三遍。
+    const downloadShare = 0.8;
+    final overall = switch (job.state) {
+      'completed' => 1.0,
+      'converting' => downloadShare + (converted ?? 0) * (1 - downloadShare),
+      _ => job.progress * downloadShare,
+    };
+    final state = switch (job.state) {
+      'downloading' => '${(overall * 100).round()}%',
+      'converting' => '${job.stateLabel} ${(overall * 100).round()}%',
+      _ => job.stateLabel,
+    };
     final detail = switch (job.state) {
       'failed' => job.error,
       'queued' || 'converting' => '',
@@ -1049,7 +1058,7 @@ class _JobRow extends StatelessWidget {
                             ],
                           ),
                           LinearProgressIndicator(
-                            value: job.converting ? converted : job.progress,
+                            value: overall,
                             minHeight: 4,
                             borderRadius: BorderRadius.circular(2),
                             color: downloading || job.converting
