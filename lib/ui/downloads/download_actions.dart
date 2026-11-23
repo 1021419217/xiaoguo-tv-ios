@@ -13,10 +13,31 @@ String formatBytes(int bytes) => bytes >= 1 << 30
     ? '${(bytes / (1 << 20)).toStringAsFixed(1)} MB'
     : '${(bytes / 1024).round()} KB';
 
-void showMessage(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(duration: Duration(milliseconds: 1400), content: Text(text)),
-    );
+/// 统一样式的操作提示：悬浮圆角条 + 图标，跟应用的深色金调保持一致。
+void showMessage(BuildContext context, String text) {
+  final accent = Theme.of(context).colorScheme.primary;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      duration: const Duration(milliseconds: 1600),
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      backgroundColor: const Color(0xFF232320),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      content: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, size: 18, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, color: Color(0xFFE8E3DA)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 Future<bool> downloadEpisodes(
   BuildContext context,
@@ -26,6 +47,32 @@ Future<bool> downloadEpisodes(
 ) async {
   if (episodes.isEmpty) return false;
   final messenger = ScaffoldMessenger.of(context);
+  final accent = Theme.of(context).colorScheme.primary;
+  void notify(String text, {bool error = false}) => messenger.showSnackBar(
+    SnackBar(
+      duration: const Duration(milliseconds: 1600),
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      backgroundColor: const Color(0xFF232320),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      content: Row(
+        children: [
+          Icon(
+            error ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+            size: 18,
+            color: error ? const Color(0xFFD6644A) : accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, color: Color(0xFFE8E3DA)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
   try {
     final added = await enqueueEpisodes(
       AppScope.of(context).repository,
@@ -33,20 +80,10 @@ Future<bool> downloadEpisodes(
       detail,
       episodes,
     );
-    messenger.showSnackBar(
-      SnackBar(
-        duration: Duration(milliseconds: 1400),
-        content: Text(added == 0 ? '所选剧集已在下载列表中' : '已加入下载 $added 集'),
-      ),
-    );
+    notify(added == 0 ? '已在下载列表中' : '已加入下载 $added 集');
     return true;
   } catch (error) {
-    messenger.showSnackBar(
-      SnackBar(
-        duration: Duration(milliseconds: 1400),
-        content: Text(error.toString()),
-      ),
-    );
+    notify(error.toString(), error: true);
     return false;
   }
 }
