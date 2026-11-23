@@ -419,23 +419,30 @@ class _DownloadsPageState extends State<DownloadsPage>
         widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
       ),
     ];
+    void select(int index) {
+      if (index == _tabs.index) return;
+      setState(() => _selection = null);
+      _tabs.animateTo(index);
+    }
+
+    Widget tabs(double? progress) => CategoryTabs<int>(
+      options: options,
+      selected: _tabs.index,
+      progress: progress,
+      onSelected: select,
+    );
+
+    final animation = _tabs.animation;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
       // 把 TabBarView 的滑动进度直接喂给下划线：手指拖到一半，线就跟到一半，
       // 不再等页面停稳、等 index 变化、再补一段动画才追过去。
-      child: AnimatedBuilder(
-        animation: _tabs.animation,
-        builder: (context, _) => CategoryTabs<int>(
-          options: options,
-          selected: _tabs.index,
-          progress: _tabs.animation.value,
-          onSelected: (index) {
-            if (index == _tabs.index) return;
-            setState(() => _selection = null);
-            _tabs.animateTo(index);
-          },
-        ),
-      ),
+      child: animation == null
+          ? tabs(null)
+          : AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) => tabs(animation.value),
+            ),
     );
   }
 
