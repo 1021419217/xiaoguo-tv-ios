@@ -350,29 +350,101 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   }
 }
 
-class _BootScreen extends StatelessWidget {
+class _BootScreen extends StatefulWidget {
   const _BootScreen({this.error, this.onRetry});
   final String? error;
   final VoidCallback? onRetry;
 
   @override
+  State<_BootScreen> createState() => _BootScreenState();
+}
+
+class _BootScreenState extends State<_BootScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..forward();
+
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0, 0.65, curve: Curves.easeOut),
+  );
+
+  late final Animation<double> _scale = Tween<double>(begin: 0.9, end: 1).animate(
+    CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0, 0.8, curve: Curves.easeOutBack),
+    ),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 24,
-          children: [
-            if (error == null) const CircularProgressIndicator(),
-            Text(
-              error ?? '正在打开$appName',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (error != null && onRetry != null)
-              FilledButton(onPressed: onRetry, child: const Text('重新打开')),
-          ],
+    backgroundColor: const Color(0xFF0D0D0F),
+    body: DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0, -0.15),
+          radius: 1.1,
+          colors: [Color(0xFF1F1B14), Color(0xFF0D0D0F)],
+        ),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 22,
+            children: [
+              FadeTransition(
+                opacity: _fade,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Text(
+                    appName,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                      color: const Color(0xFFE8E3DA),
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.error == null)
+                FadeTransition(
+                  opacity: _fade,
+                  child: const SizedBox(
+                    width: 120,
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      backgroundColor: Color(0xFF2A2722),
+                      color: Color(0xFFB2914E),
+                    ),
+                  ),
+                )
+              else ...[
+                Text(
+                  widget.error!,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF8A857D),
+                  ),
+                ),
+                if (widget.onRetry != null)
+                  FilledButton(
+                    onPressed: widget.onRetry,
+                    child: const Text('重新打开'),
+                  ),
+              ],
+            ],
+          ),
         ),
       ),
     ),
