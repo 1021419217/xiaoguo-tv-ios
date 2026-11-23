@@ -62,6 +62,14 @@ abstract final class AppTheme {
             primary: const Color(0xFFF2F2F5),
             onPrimary: const Color(0xFF111114),
             primaryFixedDim: const Color(0xFFFFFFFF),
+            // 选中态的填充同理：M3 默认拿种子色做 container，选集格子、
+            // 分类胶囊、用户卡片都会整块发紫。这里统一成白色轻薄高光。
+            primaryContainer: Colors.white.withValues(alpha: 0.18),
+            onPrimaryContainer: Colors.white,
+            secondaryContainer: Colors.white.withValues(alpha: 0.14),
+            onSecondaryContainer: Colors.white,
+            tertiaryContainer: Colors.white.withValues(alpha: 0.14),
+            onTertiaryContainer: Colors.white,
           )
         : base.copyWith(
             surface: Colors.white,
@@ -74,6 +82,12 @@ abstract final class AppTheme {
             primary: const Color(0xFF1C1C1E),
             onPrimary: Colors.white,
             primaryFixedDim: const Color(0xFF1C1C1E),
+            primaryContainer: Colors.black.withValues(alpha: 0.10),
+            onPrimaryContainer: const Color(0xFF1C1C1E),
+            secondaryContainer: Colors.black.withValues(alpha: 0.08),
+            onSecondaryContainer: const Color(0xFF1C1C1E),
+            tertiaryContainer: Colors.black.withValues(alpha: 0.08),
+            onTertiaryContainer: const Color(0xFF1C1C1E),
           );
 
     // pureBlack 只把「底」压到纯黑，容器层级继续保留玻璃拟态的冷调深灰，
