@@ -185,14 +185,13 @@ class _FollowPageState extends State<FollowPage> {
   }
 
   Widget _unfollowButton(_View view) {
-    final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
       radius: 21,
       child: FilledButton.icon(
+        // 不写 backgroundColor：走全局 filledButtonTheme，深色下是白底黑字，
+        // 不再跟着种子色（紫）走。
         style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
           minimumSize: const Size(0, 42),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: const StadiumBorder(),

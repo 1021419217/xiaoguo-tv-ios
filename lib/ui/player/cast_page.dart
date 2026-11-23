@@ -319,7 +319,7 @@ class _CastPageState extends State<CastPage> {
                         Icon(
                           Icons.cast_connected_rounded,
                           size: 56,
-                          color: colors.primary,
+                          color: colors.onSurface.withValues(alpha: .8),
                         ),
                         Text(
                           widget.device.name,

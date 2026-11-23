@@ -378,8 +378,8 @@ class _EpisodeCell extends StatelessWidget {
             borderRadius: radius,
             side: BorderSide(
               color: selected == true
-                  ? colors.primary
-                  : colors.primary.withValues(alpha: 0),
+                  ? colors.onSurface
+                  : colors.onSurface.withValues(alpha: 0),
               width: 2,
             ),
           ),

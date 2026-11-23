@@ -57,6 +57,11 @@ abstract final class AppTheme {
             surfaceContainerHighest: const Color(0xFF2A2A2E),
             surfaceDim: const Color(0xFF000000),
             surfaceBright: const Color(0xFF303036),
+            // 中性高光：primary 不再跟随种子色。否则深色 + 紫主题下，
+            // 所有按钮、选中态、边框、进度条都会染成紫色，和磨砂玻璃界面割裂。
+            primary: const Color(0xFFF2F2F5),
+            onPrimary: const Color(0xFF111114),
+            primaryFixedDim: const Color(0xFFFFFFFF),
           )
         : base.copyWith(
             surface: Colors.white,
@@ -65,6 +70,10 @@ abstract final class AppTheme {
             surfaceContainer: const Color(0xFFECEAEF),
             surfaceContainerHigh: const Color(0xFFE6E4EA),
             surfaceContainerHighest: const Color(0xFFE0DEE5),
+            // 浅色下同样走中性深灰，而不是种子色。
+            primary: const Color(0xFF1C1C1E),
+            onPrimary: Colors.white,
+            primaryFixedDim: const Color(0xFF1C1C1E),
           );
 
     // pureBlack 只把「底」压到纯黑，容器层级继续保留玻璃拟态的冷调深灰，

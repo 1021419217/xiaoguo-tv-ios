@@ -206,14 +206,13 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _deleteButton(_View view) {
-    final colors = Theme.of(context).colorScheme;
     final selection = view.selection!;
     return FocusRing(
       radius: 21,
       child: FilledButton.icon(
+        // 不写 backgroundColor：走全局 filledButtonTheme（深色=白底黑字），
+        // 避免按钮跟着种子色变紫。
         style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
           minimumSize: const Size(0, 42),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: const StadiumBorder(),

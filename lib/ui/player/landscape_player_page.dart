@@ -850,7 +850,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                   () => _openPanel(_Panel.fit),
                   color: session.videoFit == VideoFit.auto
                       ? null
-                      : Theme.of(context).colorScheme.primary,
+                      : Colors.white,
                 ),
               ),
               _icon(Icons.fullscreen_exit_rounded, '退出全屏', () => _rotate(true)),
@@ -898,7 +898,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       enabled ? Icons.subtitles_rounded : Icons.subtitles_off_rounded,
       enabled ? '关闭弹幕' : '打开弹幕',
       () => _change(_session.toggleDanmaku),
-      color: enabled ? Theme.of(context).colorScheme.primary : null,
+      color: enabled ? Colors.white : null,
       size: 40,
     );
   }
@@ -1087,7 +1087,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       return LinearProgressIndicator(
         value: duration > 0 ? state.position.inMilliseconds / duration : 0,
         minHeight: 2,
-        color: Theme.of(context).colorScheme.primary,
+        color: Colors.white,
         backgroundColor: Colors.white.withValues(alpha: .2),
       );
     },
@@ -1343,7 +1343,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                     fontWeight: value == selected
                         ? FontWeight.w700
                         : FontWeight.w500,
-                    color: value == selected ? colors.primary : Colors.white,
+                    color: value == selected ? Colors.white : Colors.white70,
                   ),
                 ),
               ),

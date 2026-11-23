@@ -329,8 +329,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
+          // 走全局 filledButtonTheme（深色=白底黑字），不跟种子色变紫。
           minimumSize: const Size(0, 42),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: const StadiumBorder(),
@@ -384,8 +383,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
+          // 走全局 filledButtonTheme（深色=白底黑字），不跟种子色变紫。
           minimumSize: const Size(0, 42),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: const StadiumBorder(),
@@ -972,7 +970,10 @@ class _JobRow extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: selected == true
-                ? BorderSide(color: colors.primary, width: 2)
+                ? BorderSide(
+                    color: colors.onSurface.withValues(alpha: .55),
+                    width: 2,
+                  )
                 : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
@@ -1043,7 +1044,7 @@ class _JobRow extends StatelessWidget {
                                   color: failed
                                       ? colors.error
                                       : downloading || job.converting
-                                      ? colors.primary
+                                      ? colors.onSurface
                                       : null,
                                 ),
                               ),
@@ -1181,7 +1182,7 @@ class _MergeRow extends StatelessWidget {
                               color: failed
                                   ? colors.error
                                   : running
-                                  ? colors.primary
+                                  ? colors.onSurface
                                   : null,
                             ),
                           ),

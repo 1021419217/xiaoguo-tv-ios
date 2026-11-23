@@ -956,7 +956,10 @@ class _IndexCard extends StatelessWidget {
         if (entry.description.isNotEmpty)
           Text(entry.description, maxLines: 2, overflow: TextOverflow.ellipsis),
         if (records != null)
-          Text('待恢复：$records', style: TextStyle(color: colors.primary)),
+          Text(
+            '待恢复：$records',
+            style: TextStyle(color: colors.onSurface.withValues(alpha: .85)),
+          ),
       ],
       trailing: Padding(
         padding: const EdgeInsets.only(top: 2, left: 8),

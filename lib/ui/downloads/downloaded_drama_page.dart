@@ -318,8 +318,7 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
       radius: 21,
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.onPrimary,
+          // 走全局 filledButtonTheme（深色=白底黑字），不跟种子色变紫。
           minimumSize: const Size(0, 42),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           shape: const StadiumBorder(),
@@ -974,7 +973,10 @@ class _EpisodeCard extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
             side: selected == true
-                ? BorderSide(color: colors.primary, width: 2)
+                ? BorderSide(
+                    color: colors.onSurface.withValues(alpha: .55),
+                    width: 2,
+                  )
                 : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
@@ -1014,7 +1016,7 @@ class _EpisodeCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: colors.primary,
+                                    color: colors.onSurface,
                                   ),
                                 ),
                               ),

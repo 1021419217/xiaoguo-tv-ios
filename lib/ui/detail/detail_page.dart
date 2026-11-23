@@ -1713,7 +1713,7 @@ class _DetailPageState extends State<DetailPage> {
       radius: 12,
       child: Material(
         color: selected
-            ? colors.primary.withValues(alpha: .16)
+            ? colors.onSurface.withValues(alpha: .12)
             : colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
@@ -1726,7 +1726,7 @@ class _DetailPageState extends State<DetailPage> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected
-                    ? colors.primary.withValues(alpha: .55)
+                    ? colors.onSurface.withValues(alpha: .45)
                     : Colors.transparent,
               ),
             ),
@@ -1739,7 +1739,7 @@ class _DetailPageState extends State<DetailPage> {
                   style: TextStyle(
                     fontSize: m.note,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? colors.primary : colors.onSurface,
+                    color: selected ? colors.onSurface : colors.onSurfaceVariant,
                   ),
                 ),
                 if (trailing.isNotEmpty)
@@ -2395,7 +2395,11 @@ class _SeasonStripState extends State<_SeasonStrip> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              Icon(Icons.layers_rounded, size: 16, color: colors.primary),
+              Icon(
+                Icons.layers_rounded,
+                size: 16,
+                color: colors.onSurface.withValues(alpha: .8),
+              ),
               const SizedBox(width: 6),
               Text(
                 '系列多季',
@@ -2408,12 +2412,15 @@ class _SeasonStripState extends State<_SeasonStrip> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: .16),
+                  color: colors.onSurface.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   '共 ${widget.seasons.length} 季',
-                  style: TextStyle(fontSize: m.tag, color: colors.primary),
+                  style: TextStyle(
+                    fontSize: m.tag,
+                    color: colors.onSurface.withValues(alpha: .85),
+                  ),
                 ),
               ),
               const Spacer(),
