@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -79,17 +80,44 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 		return nativeDownloadResult{}, err
 	}
 	var completedBytes int64
+	var stateMu sync.Mutex
+	var firstErr error
+	downloadCtx, cancelDownloads := context.WithCancel(ctx)
+	defer cancelDownloads()
+	// HLS 分片之间互不依赖，串行下是最主要的慢因；限 4 路并发兼顾速度与站点压力。
+	const parallel = 4
+	slots := make(chan struct{}, parallel)
+	var pending sync.WaitGroup
 	for index, asset := range bundle.assets {
-		if err := ctx.Err(); err != nil {
-			return nativeDownloadResult{}, err
+		if downloadCtx.Err() != nil {
+			break
 		}
 		target := filepath.Join(directory, asset.name)
-		var size int64
 		if asset.data != nil {
-			err = nativeDownloadWrite(target, asset.data)
-			size = int64(len(asset.data))
-		} else {
-			size, err = manager.downloadFile(ctx, asset.address, media.Referer, target, asset.key, func(received, total int64) {
+			if err := nativeDownloadWrite(target, asset.data); err != nil {
+				stateMu.Lock()
+				firstErr = err
+				stateMu.Unlock()
+				cancelDownloads()
+				break
+			}
+			stateMu.Lock()
+			completedBytes += int64(len(asset.data))
+			done := completedBytes
+			stateMu.Unlock()
+			manager.progress(job.ID, done, 0, float64(index+1)/float64(len(bundle.assets)))
+			continue
+		}
+		pending.Add(1)
+		go func(index int, asset nativeDownloadAsset, target string) {
+			defer pending.Done()
+			select {
+			case slots <- struct{}{}:
+			case <-downloadCtx.Done():
+				return
+			}
+			defer func() { <-slots }()
+			size, err := manager.downloadFile(downloadCtx, asset.address, media.Referer, target, asset.key, func(received, total int64) {
 				progress := 0.0
 				if total > 0 {
 					progress = min(1, float64(received)/float64(total))
@@ -101,17 +129,29 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 				if !hls {
 					overallTotal = total
 				}
-				manager.progress(job.ID, completedBytes+received, overallTotal, progress)
+				stateMu.Lock()
+				base := completedBytes
+				stateMu.Unlock()
+				manager.progress(job.ID, base+received, overallTotal, progress)
 			})
-		}
-		if err != nil {
-			return nativeDownloadResult{}, err
-		}
-		completedBytes += size
-		manager.progress(job.ID, completedBytes, 0, float64(index+1)/float64(len(bundle.assets)))
+			stateMu.Lock()
+			defer stateMu.Unlock()
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				cancelDownloads()
+				return
+			}
+			completedBytes += size
+		}(index, asset, target)
 	}
+	pending.Wait()
 	if err := ctx.Err(); err != nil {
 		return nativeDownloadResult{}, err
+	}
+	if firstErr != nil {
+		return nativeDownloadResult{}, firstErr
 	}
 	for name, body := range bundle.playlists {
 		if err := nativeDownloadWrite(filepath.Join(directory, name), body); err != nil {
