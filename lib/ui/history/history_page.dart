@@ -9,6 +9,9 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/category_tabs.dart';
+import '../widgets/choice_panel.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
@@ -197,18 +200,16 @@ class _HistoryPageState extends State<HistoryPage> {
   );
 
   /// 顶栏操作统一成 [ActionPill]：和追剧、下载、模块页同一套胶囊语言。
+  /// 顶部操作收成图标按钮：原来两个带文字的胶囊挤在一行，占位太多。
   List<Widget> _browseActions(_View view) => [
-    ActionPill(
+    BarButton(
       icon: Icons.check_box_outlined,
-      label: '编辑',
-      fontSize: 14,
-      focusNode: _editButton,
+      tooltip: '编辑',
       onPressed: view.shown.isEmpty ? null : _startEditing,
     ),
-    ActionPill(
+    BarButton(
       icon: Icons.delete_sweep_outlined,
-      label: '清空',
-      fontSize: 14,
+      tooltip: '清空',
       onPressed: view.shown.isEmpty
           ? null
           : () => _remove(_ids(view), clear: true),
@@ -317,6 +318,17 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
+  /// 首页同款下划线分类条，替代原来的紫色 ChoiceChip。
+  /// 站源筛选本质就是分类切换，没理由和首页长两套样子。
+  Widget _sourceTabs(_View view) => CategoryTabs<String>(
+    options: [
+      const ChoiceOption('', '全部'),
+      for (final site in view.sources) ChoiceOption(site.id, site.name),
+    ],
+    selected: view.source,
+    onSelected: (id) => setState(() => _source = id),
+  );
+
   /// 左右滑动切换下方「站源」分类，与追剧页、下载页的手势保持一致。
   /// 与追剧、首页同一套横滑层：相邻两页同屏、1:1 跟手。
   ///
@@ -406,13 +418,16 @@ class _HistoryPageState extends State<HistoryPage> {
               context,
               view,
               inset: 16,
+              // 磨砂顶栏浮在内容之上（extendBodyBehindAppBar），正文必须自己
+              // 让出 kToolbarHeight，否则搜索框会被压在顶栏底下。
+              top: kToolbarHeight,
               swipe: true,
               header: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(16, root ? 0 : 4, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
                   child: _search(),
                 ),
-                ?_sources(view, inset: 16, scroll: true),
+                _sourceTabs(view),
               ],
             ),
           ),
