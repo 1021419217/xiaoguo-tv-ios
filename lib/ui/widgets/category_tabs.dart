@@ -297,6 +297,24 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   }
 }
 
+/// 分类条按标签配图标：火（推荐/热门）、时钟（最新）、柱状（排行）、网格（分类）。
+/// 匹配不到就返回 null，只显示文字，避免给每个站源分类乱配图标。
+IconData? _tabIcon(String label) {
+  if (label.contains('推荐') || label.contains('热门')) {
+    return Icons.local_fire_department_rounded;
+  }
+  if (label.contains('最新') || label.contains('最近')) {
+    return Icons.schedule_rounded;
+  }
+  if (label.contains('排行') || label.contains('榜单')) {
+    return Icons.bar_chart_rounded;
+  }
+  if (label.contains('分类') || label.contains('全部')) {
+    return Icons.grid_view_rounded;
+  }
+  return null;
+}
+
 class _Tab extends StatelessWidget {
   const _Tab({
     required this.label,
@@ -334,13 +352,22 @@ class _Tab extends StatelessWidget {
                 ),
                 duration: Motion.of(context, Motion.medium),
                 curve: Motion.standard,
-                builder: (context, color, _) => Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: color,
-                  ),
+                builder: (context, color, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_tabIcon(label) case final icon?) ...[
+                      Icon(icon, size: fontSize + 1, color: color),
+                      const SizedBox(width: 3),
+                    ],
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: fontSize,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: color,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

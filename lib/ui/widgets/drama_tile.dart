@@ -79,6 +79,27 @@ class _PosterButtonState extends State<_PosterButton> {
                       ),
                     ),
                   ),
+                  // 播放浮层：淡半透明圆 + 三角，表示这是可播视频，不抢视线
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0x52000000),
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            size: 24,
+                            color: Color(0xE6FFFFFF),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
