@@ -90,6 +90,10 @@ class PullRefreshState extends State<PullRefresh>
       if (notification.dragDetails != null && metrics.extentBefore == 0) {
         _dragged = 0;
         _threshold = metrics.viewportDimension * _reach;
+      } else {
+        // 不在顶部开始的滚动（例如从中间往上滑）不能沿用上一次下拉的残留量，
+        // 否则 _consume 会持续吃掉向上位移，表现就是滑到某处卡住、进度条还在涨。
+        _dragged = null;
       }
       return false;
     }
