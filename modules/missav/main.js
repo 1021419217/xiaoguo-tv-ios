@@ -497,6 +497,10 @@ module.exports = {
       if (name === "") {
         continue;
       }
+      // VR 是设备专属内容，手机上无片可播，直接不出现在分类里。
+      if (slug === "VR" || name.trim().toUpperCase() === "VR") {
+        continue;
+      }
       if (!Object.prototype.hasOwnProperty.call(names, slug)) {
         names[slug] = name;
         order.push(slug);
