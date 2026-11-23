@@ -6,9 +6,11 @@ import 'package:flutter/services.dart';
 
 import '../../app_device.dart';
 import '../../cover_shape.dart';
+import '../../diary_service.dart';
 import '../../drama_details.dart';
 import '../../local_store.dart';
 import '../../models.dart';
+import '../../verify_repair.dart';
 import '../app_scope.dart';
 import '../downloads/download_actions.dart';
 import '../downloads/download_picker_page.dart';
@@ -1948,16 +1950,21 @@ class _DetailPageState extends State<DetailPage> {
     );
     if (!mounted) return;
     if (!saved) _say('验证结果没能写入，请再试一次');
-    var primed = 0;
-    for (final url in urls) {
-      final pageHost = Uri.tryParse(url)?.host ?? host;
-      final html = await AppDevice.webFetch(url, pageHost);
-      if (html == null || html.isEmpty) continue;
-      if (await repository.setWebPage(url, html)) primed++;
-    }
+    final primed = await primeVerifyPages(repository, urls, host);
     if (!mounted) return;
     _say(primed > 0 ? '已载入 $primed 页，正在重试…' : '验证完成，正在重试…');
     await details.load();
+    // 详情页同样可能不在验证前那一批待抓 URL 里：失败会重新登记，补抓再试。
+    for (var round = 0; round < 2 && (details.error ?? '').isNotEmpty; round++) {
+      if (!mounted) return;
+      if (!await primePendingAfterFailure(repository, host)) break;
+      if (!mounted) return;
+      await details.load();
+    }
+    final remaining = details.error ?? '';
+    if (remaining.isNotEmpty) {
+      DiaryService.add('[验证] 详情补抓重试后仍失败：$remaining');
+    }
   }
 
   void _say(String text) {

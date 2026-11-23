@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app_device.dart';
+import '../../diary_service.dart';
 import '../../drama_feed.dart';
 import '../../explore_feed.dart';
 import '../../local_store.dart';
 import '../../models.dart';
+import '../../verify_repair.dart';
 import '../app_scope.dart';
 import '../cover_blur.dart';
 import '../shell/app_shell.dart';
@@ -596,18 +598,23 @@ class ExplorePageState extends State<ExplorePage> {
     // 关键一步：Go 的客户端指纹和真 WebKit 对不上，光有 cookie 重发还是会被拦。
     // 把刚才被挑战的页面 URL 交给那台验证过的 WKWebView，用同一指纹抓回 HTML，
     // 注入 Go 页缓存——模块下次取页命中缓存，就绕开了 TLS 指纹这一关。
-    var primed = 0;
-    for (final url in urls) {
-      final pageHost = Uri.tryParse(url)?.host ?? host;
-      final html = await AppDevice.webFetch(url, pageHost);
-      if (html == null || html.isEmpty) continue;
-      if (await repository.setWebPage(url, html)) primed++;
-    }
+    final primed = await primeVerifyPages(repository, urls, host);
     if (!mounted) return;
     if (primed > 0) {
       _tell('已载入 $primed 页，正在重试…');
     }
     await feed.reload(force: true);
+    // 验证后第一次请求仍可能被拦（当前分类页往往不在验证前那一批待抓 URL 里）。
+    // 那次失败会重新登记 URL，这里补抓一轮再试，最多两轮。
+    for (var round = 0; round < 2 && feed.error.isNotEmpty; round++) {
+      if (!mounted) return;
+      if (!await primePendingAfterFailure(repository, host)) break;
+      if (!mounted) return;
+      await feed.reload(force: true);
+    }
+    if (feed.error.isNotEmpty) {
+      DiaryService.add('[验证] 补抓重试后仍失败：${feed.error}');
+    }
   }
 
   void _tell(String text) {
