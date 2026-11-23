@@ -5,11 +5,12 @@ import '../../download_collections.dart';
 import '../../download_converter.dart';
 import '../../download_overview.dart';
 import '../../local_store.dart';
-import '../../merge_queue.dart';
 import '../../models.dart';
 import '../../source_modules.dart';
 import '../../watch_history.dart';
 import '../app_scope.dart';
+import '../player/playback_handle.dart';
+import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/action_pill.dart';
@@ -24,8 +25,6 @@ import '../widgets/focus_ring.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
 import 'download_actions.dart';
-import 'downloaded_drama_page.dart';
-import 'merge_actions.dart';
 
 typedef _View = ({
   List<DownloadJob> pending,
@@ -41,13 +40,11 @@ class DownloadsPage extends StatefulWidget {
     required this.store,
     required this.downloads,
     required this.converter,
-    required this.merges,
     this.headerChild,
   });
   final LocalStore store;
   final DownloadOverview downloads;
   final DownloadConverter converter;
-  final MergeQueue merges;
 
   /// 由外层的「追剧 / 最近观看 / 下载」容器传入的分段胶囊，占用标题位置。
   /// 传入时同时把本页当作 tab 根页面处理（不显示返回箭头）。
@@ -59,16 +56,15 @@ class DownloadsPage extends StatefulWidget {
 
 class _DownloadsPageState extends State<DownloadsPage>
     with SingleTickerProviderStateMixin {
-  late final _tabs = TabController(length: 3, vsync: this)
+  late final _tabs = TabController(length: 2, vsync: this)
     ..addListener(_tabChanged);
-  final _sources = ['', '', ''];
+  final _sources = ['', ''];
   Set<String>? _selection;
   bool _busy = false;
   final _enteredJobs = <Object>{};
 
   bool get _pendingTab => _tabs.index == 0;
   bool get _downloadedTab => _tabs.index == 1;
-  bool get _mergeTab => _tabs.index == 2;
 
   @override
   void initState() {
@@ -97,13 +93,11 @@ class _DownloadsPageState extends State<DownloadsPage>
 
   /// 按标签页独立构造数据，供 TabBarView 每页各自渲染、互不串数据。
   _View _viewFor(int page, List<DownloadJob> jobs) {
-    final sources = page == 2
-        ? const <SourceSite>[]
-        : downloadSources(
-            page == 0
-                ? pendingDownloads(jobs)
-                : [for (final job in jobs) if (job.completed) job],
-          );
+    final sources = downloadSources(
+      page == 0
+          ? pendingDownloads(jobs)
+          : [for (final job in jobs) if (job.completed) job],
+    );
     final source = sources.any((site) => site.id == _sources[page])
         ? _sources[page]
         : '';
@@ -132,8 +126,7 @@ class _DownloadsPageState extends State<DownloadsPage>
   /// 按标签页分发内容，供 TabBarView 相邻两页同时构建。
   Widget _page(BuildContext context, int page, _View view) => switch (page) {
     0 => _pendingList(context, view),
-    1 => _downloadedGrid(context, view),
-    _ => _mergeList(context),
+    _ => _downloadedGrid(context, view),
   };
 
   void _toggle(String id) => setState(() {
@@ -141,6 +134,42 @@ class _DownloadsPageState extends State<DownloadsPage>
     if (!selection.remove(id)) selection.add(id);
     _selection = selection;
   });
+
+  /// 已下载点封面直接播：续上次看到的那一集，没记录就看第一集。
+  /// 想选别的集在播放页里切，不再先跳一层列表让用户点第二次。
+  Future<void> _playDownloaded(DownloadedDrama item) async {
+    if (item.episodes.isEmpty) return;
+    final watch = widget.store.watched(item.drama.id);
+    var index = 0;
+    if (watch != null) {
+      final found = item.episodes.indexWhere(
+        (job) => job.episode.number == watch.episode,
+      );
+      if (found >= 0) index = found;
+    }
+    final episode = item.episodes[index].episode;
+    final position = watch?.episode == episode.number && !watch!.finished
+        ? watch.position
+        : 0.0;
+    final handle = PlaybackHandle(
+      repository: AppScope.of(context).repository,
+      store: widget.store,
+      detail: DramaDetail(item.drama, [
+        for (final job in item.episodes) job.episode,
+      ]),
+      index: index,
+      position: position,
+      preopen: widget.store.playbackPreferences.preopens(
+        television: AppScope.of(context).television,
+      ),
+    );
+    handle.session.start(index, position: position);
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlaybackPage(store: widget.store, handle: handle),
+      ),
+    );
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     if (_busy) return;
@@ -195,7 +224,6 @@ class _DownloadsPageState extends State<DownloadsPage>
       widget.store,
       widget.downloads,
       widget.converter,
-      widget.merges,
       _tabs,
     ]),
     builder: (context, _) {
@@ -282,28 +310,6 @@ class _DownloadsPageState extends State<DownloadsPage>
   String _selectedTitle(Set<String> selection) =>
       '已选择 ${selection.length} ${_downloadedTab ? '部' : '集'}';
 
-  Widget _clearMerges() => ActionPill(
-    icon: Icons.clear_all_rounded,
-    label: '清除已结束',
-    onPressed: widget.merges.tasks.any((task) => task.finished)
-        ? widget.merges.clearFinished
-        : null,
-  );
-
-  Future<void> _mergeSelected(_View view) async {
-    final groups = [
-      for (final item in view.downloaded)
-        if (view.selection!.contains(item.drama.id)) item.episodes,
-    ];
-    setState(() => _busy = true);
-    final queued = await enqueueMerges(context, widget.merges, groups);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      if (queued) _selection = null;
-    });
-  }
-
   Future<void> _removeSelected(_View view) async {
     final items = [
       for (final item in view.downloaded)
@@ -328,7 +334,7 @@ class _DownloadsPageState extends State<DownloadsPage>
   }
 
   List<Widget> _selectionActions(_View view) => _downloadedTab
-      ? [_mergeSelectedButton(view), _removeSelectedButton(view)]
+      ? [_removeSelectedButton(view)]
       : [_cancelButton(view)];
 
   Widget _removeSelectedButton(_View view) {
@@ -349,26 +355,6 @@ class _DownloadsPageState extends State<DownloadsPage>
             : () => _removeSelected(view),
         icon: const Icon(Icons.delete_outline_rounded, size: 18),
         label: const Text('删除'),
-      ),
-    );
-  }
-
-  Widget _mergeSelectedButton(_View view) {
-    final selection = view.selection!;
-    return FocusRing(
-      radius: 21,
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 42),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          shape: const StadiumBorder(),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
-        onPressed: selection.isEmpty || _busy
-            ? null
-            : () => _mergeSelected(view),
-        icon: const Icon(Icons.merge_rounded, size: 18),
-        label: Text(selection.isEmpty ? '合并' : '各自合并 ${selection.length} 部'),
       ),
     );
   }
@@ -414,10 +400,6 @@ class _DownloadsPageState extends State<DownloadsPage>
     final options = [
       ChoiceOption(0, pending == 0 ? '下载中' : '下载中 $pending'),
       ChoiceOption(1, downloaded == 0 ? '已下载' : '已下载 $downloaded'),
-      ChoiceOption(
-        2,
-        widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
-      ),
     ];
     void select(int index) {
       if (index == _tabs.index) return;
@@ -478,7 +460,6 @@ class _DownloadsPageState extends State<DownloadsPage>
                 ],
                 if (_downloadedTab && view.downloaded.isNotEmpty)
                   _editButton(view),
-                if (_mergeTab) _clearMerges(),
                 const SizedBox(width: 16),
               ],
               bottom: PreferredSize(
@@ -580,7 +561,7 @@ class _DownloadsPageState extends State<DownloadsPage>
                       ),
                     ),
                   ),
-                  if (view.selection != null || _editable(view) || _mergeTab)
+                  if (view.selection != null || _editable(view))
                     FadeSwitcher(
                       duration: Motion.short,
                       alignment: AlignmentDirectional.centerEnd,
@@ -615,11 +596,6 @@ class _DownloadsPageState extends State<DownloadsPage>
                           ? KeyedSubtree(
                               key: const ValueKey('downloaded'),
                               child: _editButton(view),
-                            )
-                          : _mergeTab
-                          ? KeyedSubtree(
-                              key: const ValueKey('merges'),
-                              child: _clearMerges(),
                             )
                           : const SizedBox.shrink(key: ValueKey('none')),
                     ),
@@ -749,30 +725,6 @@ class _DownloadsPageState extends State<DownloadsPage>
     AppScope.of(context).repository.missingSourceDownloads(),
     '集下载',
   );
-
-  Widget _mergeList(BuildContext context) {
-    final tasks = widget.merges.tasks.reversed.toList();
-    if (tasks.isEmpty) {
-      return const StatusView(
-        title: '没有合并任务',
-        message: '在已下载的剧集里选择多集，或在「已下载」点「编辑」合并整部剧',
-        icon: Icons.merge_rounded,
-      );
-    }
-    final inset = AppScope.formFactorOf(context) == FormFactor.phone
-        ? 16.0
-        : 24.0;
-    return ListView.separated(
-      padding: EdgeInsets.fromLTRB(inset, 12, inset, 32),
-      itemCount: tasks.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _MergeRow(
-        key: ValueKey(tasks[index].id),
-        task: tasks[index],
-        onCancel: () => widget.merges.cancel(tasks[index]),
-      ),
-    );
-  }
 
   (int, double, double) _grid(BuildContext context, double width) {
     if (AppScope.formFactorOf(context) == FormFactor.phone) return (3, 10, 20);
@@ -926,15 +878,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       selected: view.selection?.contains(item.drama.id),
       onTap: view.selection != null
           ? () => _toggle(item.drama.id)
-          : () => openPage<void>(
-              context,
-              (_) => DownloadedDramaPage(
-                store: widget.store,
-                downloads: widget.downloads,
-                merges: widget.merges,
-                drama: item.drama,
-              ),
-            ),
+          : () => _playDownloaded(item),
       onMore: view.selection == null
           ? () => setState(() => _selection = {item.drama.id})
           : null,
@@ -1118,129 +1062,6 @@ class _JobRow extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _remainingLabel(Duration remaining) {
-  final seconds = remaining.inSeconds + 1;
-  if (seconds < 60) return '约剩 $seconds 秒';
-  final minutes = seconds ~/ 60;
-  if (minutes < 60) return '约剩 $minutes 分 ${seconds % 60} 秒';
-  return '约剩 ${minutes ~/ 60} 小时 ${minutes % 60} 分';
-}
-
-class _MergeRow extends StatelessWidget {
-  const _MergeRow({super.key, required this.task, required this.onCancel});
-  final MergeTask task;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final running = task.state == MergeState.running;
-    final failed = task.state == MergeState.failed;
-    final progress = task.progress;
-    final state = switch (task.state) {
-      MergeState.queued => '等待合并',
-      MergeState.running when progress != null =>
-        '${task.status} ${(progress * 100).floor()}%',
-      MergeState.running => task.status,
-      MergeState.done => '已完成',
-      MergeState.failed => '失败',
-      MergeState.cancelled => '已取消',
-    };
-    final detail = switch (task.state) {
-      MergeState.running => switch (task.remaining) {
-        final remaining? => _remainingLabel(remaining),
-        null => '',
-      },
-      MergeState.queued => '${task.jobs.length} 集',
-      _ => task.message,
-    };
-    final secondary = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
-    return Semantics(
-      label: '${task.fileName}，$state${detail.isEmpty ? '' : '，$detail'}',
-      child: Material(
-        color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            spacing: 16,
-            children: [
-              SizedBox(
-                width: 48,
-                height: 72,
-                child: DramaCover(drama: task.drama, radius: 8, details: false),
-              ),
-              Expanded(
-                child: ExcludeSemantics(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 6,
-                    children: [
-                      Text(
-                        task.fileName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      LinearProgressIndicator(
-                        value: switch (task.state) {
-                          MergeState.running => progress,
-                          MergeState.done => 1,
-                          _ => 0,
-                        },
-                        minHeight: 4,
-                        borderRadius: BorderRadius.circular(2),
-                        color: running ? null : colors.outline,
-                      ),
-                      Row(
-                        spacing: 12,
-                        children: [
-                          Text(
-                            state,
-                            style: secondary.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: failed
-                                  ? colors.error
-                                  : running
-                                  ? colors.onSurface
-                                  : null,
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              detail,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (!task.finished)
-                FocusRing(
-                  radius: 20,
-                  child: IconButton.filledTonal(
-                    tooltip: '取消合并',
-                    onPressed: onCancel,
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ),
-            ],
           ),
         ),
       ),

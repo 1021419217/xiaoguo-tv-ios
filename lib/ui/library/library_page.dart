@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../download_converter.dart';
 import '../../download_overview.dart';
 import '../../local_store.dart';
-import '../../merge_queue.dart';
 import '../downloads/downloads_page.dart';
 import '../follow/follow_page.dart';
 import '../history/history_page.dart';
@@ -25,14 +24,12 @@ class LibraryPage extends StatefulWidget {
     required this.store,
     required this.downloads,
     required this.converter,
-    required this.merges,
     required this.entryFocus,
     required this.onExitUp,
   });
   final LocalStore store;
   final DownloadOverview downloads;
   final DownloadConverter converter;
-  final MergeQueue merges;
   final FocusNode entryFocus;
   final VoidCallback onExitUp;
 
@@ -71,7 +68,6 @@ class _LibraryPageState extends State<LibraryPage> {
         store: widget.store,
         downloads: widget.downloads,
         converter: widget.converter,
-        merges: widget.merges,
         headerChild: _switcher,
       ),
     ],

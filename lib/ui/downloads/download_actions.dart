@@ -1,11 +1,76 @@
 import 'package:flutter/material.dart';
 
 import '../../download_collections.dart';
+import '../../download_overview.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
+import '../shell/app_shell.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/glass_dialog.dart';
+import 'downloads_page.dart';
+
+/// 「去下载」：复用 AppShell 里那份下载概览与转换器，直接打开下载管理页。
+/// 不自己再 new 一个，免得两个转换器抢同一集去转码。
+void openDownloadsPage(BuildContext context, LocalStore store) {
+  final overview = DownloadServices.overview;
+  final converter = DownloadServices.converter;
+  if (overview == null || converter == null || !context.mounted) return;
+  openPage<void>(
+    context,
+    (_) => DownloadsPage(
+      store: store,
+      downloads: overview,
+      converter: converter,
+    ),
+  );
+}
+
+/// 提示条右侧的胶囊按钮：半透明底 + 细描边，和提示条本身的圆角一致。
+class _SnackAction extends StatelessWidget {
+  const _SnackAction({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 8),
+    child: Material(
+      color: color.withValues(alpha: 0.16),
+      shape: StadiumBorder(
+        side: BorderSide(color: color.withValues(alpha: 0.34)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 9, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 3,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  letterSpacing: .2,
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 15, color: color),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
 String formatBytes(int bytes) => bytes >= 1 << 30
     ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
@@ -50,7 +115,8 @@ Future<bool> downloadEpisodes(
   final accent = Theme.of(context).colorScheme.primary;
   void notify(String text, {bool error = false}) => messenger.showSnackBar(
     SnackBar(
-      duration: const Duration(milliseconds: 1600),
+      // 带「去下载」时多留一点时间，够手指移过去点。
+      duration: Duration(milliseconds: error ? 1600 : 3200),
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
       backgroundColor: const Color(0xFF232320),
@@ -69,6 +135,15 @@ Future<bool> downloadEpisodes(
               style: const TextStyle(fontSize: 13, color: Color(0xFFE8E3DA)),
             ),
           ),
+          if (!error)
+            _SnackAction(
+              label: '去下载',
+              color: accent,
+              onTap: () {
+                messenger.hideCurrentSnackBar();
+                openDownloadsPage(context, store);
+              },
+            ),
         ],
       ),
     ),
