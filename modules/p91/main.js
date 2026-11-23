@@ -567,6 +567,7 @@ function toDrama(item) {
     sourceId: item.sourceId,
     title: title,
     name: title,
+    durationText: item.duration || '',
     desc: item.duration ? '时长 ' + item.duration : '',
     intro: '',
     cover: item.cover || '',
