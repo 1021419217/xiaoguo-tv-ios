@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../background_keep_alive.dart';
 import '../../download_collections.dart';
 import '../../download_overview.dart';
 import '../../local_store.dart';
@@ -163,6 +164,8 @@ Future<bool> downloadEpisodes(
       detail,
       episodes,
     );
+    // 立刻开后台保活，别等下一次（2 秒）轮询：用户点完就切后台的情况很常见。
+    if (added > 0) BackgroundKeepAlive.sync(true);
     notify(added == 0 ? '已在下载列表中' : '已加入下载 $added 集');
     return true;
   } catch (error) {

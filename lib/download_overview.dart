@@ -73,10 +73,6 @@ class DownloadOverview extends ChangeNotifier {
       return;
     }
     _jobs = jobs;
-    // 有下载 / 转码任务在跑就申请后台保活，全部停下来就释放。
-    BackgroundKeepAlive.sync(
-      jobs.any((job) => job.active || job.converting),
-    );
     if (!_disposed) notifyListeners();
   }
 
@@ -86,7 +82,14 @@ class DownloadOverview extends ChangeNotifier {
     final request = _request;
     try {
       final jobs = await repository.downloads();
-      if (!_disposed && request == _request) _replace(jobs);
+      if (!_disposed && request == _request) {
+        // 每次拉取都对一次保活状态（内部有去重，不会反复调原生）：
+        // 不能只在「任务列表变化」时切，否则前后台切换后可能没人再把开关打开。
+        BackgroundKeepAlive.sync(
+          jobs.any((job) => job.active || job.converting),
+        );
+        _replace(jobs);
+      }
     } catch (_) {
     } finally {
       if (request == _request) _loading = false;

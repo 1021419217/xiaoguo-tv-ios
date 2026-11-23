@@ -14,8 +14,12 @@ import WebKit
 
   /// 下载时的后台保活：循环播一段静音音频。
   /// iOS 切后台几秒后会挂起整个进程，Go 的下载线程也一起停；只有持有一条
-  /// 正在播放的音频通道才能一直在后台跑。mixWithOthers 保证不打断用户正在
-  /// 听的东西，volume 0 保证真的一点声音都没有。
+  /// 正在播放的音频通道才能一直在后台跑。
+  /// 注意两点（踩过的坑）：
+  ///   1. 音频会话必须独占，不能带 .mixWithOthers —— 混音时系统不认为
+  ///      App「正在播放音频」，照样挂起，保活等于没做。
+  ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出；
+  ///      数据本身就是全零 PCM，音量保持 1 即可，听不到声音。
   @discardableResult
   private func setDownloadKeepAlive(_ enabled: Bool) -> Bool {
     let session = AVAudioSession.sharedInstance()
@@ -27,11 +31,11 @@ import WebKit
     }
     if keepAlivePlayer?.isPlaying == true { return true }
     do {
-      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      try session.setCategory(.playback, mode: .default, options: [])
       try session.setActive(true)
-      let player = try AVAudioPlayer(data: Self.silentWav(seconds: 1))
+      let player = try AVAudioPlayer(data: Self.silentWav(seconds: 2))
       player.numberOfLoops = -1
-      player.volume = 0
+      player.volume = 1
       player.prepareToPlay()
       player.play()
       keepAlivePlayer = player
@@ -39,6 +43,16 @@ import WebKit
     } catch {
       return false
     }
+  }
+
+  /// 进后台时补一次激活：音频会话可能刚被系统释放或被来电打断，
+  /// 不重新激活的话保活会在后台断掉。
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    if let player = keepAlivePlayer {
+      try? AVAudioSession.sharedInstance().setActive(true)
+      if !player.isPlaying { player.play() }
+    }
+    super.applicationDidEnterBackground(application)
   }
 
   /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
