@@ -3,9 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/motion.dart';
-import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
-import '../widgets/motion/motion_widgets.dart';
+import '../widgets/glass_dialog.dart';
 
 Future<bool> showPasswordDialog(
   BuildContext context, {
@@ -72,50 +71,39 @@ class _PasswordDialogState extends State<_PasswordDialog>
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.title),
-    content: SizedBox(
-      width: 352,
-      child: AnimatedBuilder(
-        animation: _shake,
-        builder: (context, child) => Transform.translate(
-          offset: Offset(
-            math.sin(_shake.value * math.pi * 4) * 8 * (1 - _shake.value),
-            0,
-          ),
-          child: child,
+  Widget build(BuildContext context) => GlassDialogCard(
+    title: widget.title,
+    content: AnimatedBuilder(
+      animation: _shake,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(
+          math.sin(_shake.value * math.pi * 4) * 8 * (1 - _shake.value),
+          0,
         ),
-        child: FormTextField(
-          controller: _pin,
-          autofocus: true,
-          obscure: true,
-          enabled: !_busy,
-          onSubmitted: (_) => _submit(),
-          decoration: InputDecoration(
-            labelText: '密码',
-            helperText: widget.helper,
-            errorText: _error,
-          ),
+        child: child,
+      ),
+      child: FormTextField(
+        controller: _pin,
+        autofocus: true,
+        obscure: true,
+        enabled: !_busy,
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(
+          labelText: '密码',
+          helperText: widget.helper,
+          errorText: _error,
         ),
       ),
     ),
     actions: [
-      FocusRing(
-        radius: 20,
-        child: TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('取消'),
-        ),
+      GlassAction(
+        label: '取消',
+        onPressed: _busy ? null : () => Navigator.pop<bool>(context, false),
       ),
-      FocusRing(
-        radius: 20,
-        child: FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: FadeSwitcher(
-            duration: Motion.short,
-            child: Text(_busy ? '正在验证…' : '登录', key: ValueKey(_busy)),
-          ),
-        ),
+      GlassAction(
+        label: _busy ? '正在验证…' : '登录',
+        primary: true,
+        onPressed: _busy ? null : _submit,
       ),
     ],
   );

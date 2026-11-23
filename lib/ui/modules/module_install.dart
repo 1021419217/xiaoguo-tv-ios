@@ -5,7 +5,7 @@ import '../../local_store.dart';
 import '../../models.dart';
 import '../../source_modules.dart';
 import '../app_scope.dart';
-import '../widgets/focus_ring.dart';
+import '../widgets/glass_dialog.dart';
 
 Future<String?> applyModuleInstall(
   AppRepository repository,
@@ -105,16 +105,14 @@ Future<void> offerRestoredModules(
     return;
   }
   if (entries.isEmpty || !context.mounted) return;
-  final accepted = await showDialog<bool>(
-    context: context,
-    builder: (_) => BatchInstallDialog(
-      entries: entries,
-      title: '安装备份里的模块？',
-      message: [
-        '备份里有 ${entries.length} 个模块本机还没有安装，安装后按备份里的站源开关启用。',
-        if (unknown.isNotEmpty) '另有 ${unknown.length} 个模块不在仓库里，需要手动安装。',
-      ].join(''),
-    ),
+  final accepted = await showBatchInstallDialog(
+    context,
+    entries: entries,
+    title: '安装备份里的模块？',
+    message: [
+      '备份里有 ${entries.length} 个模块本机还没有安装，安装后按备份里的站源开关启用。',
+      if (unknown.isNotEmpty) '另有 ${unknown.length} 个模块不在仓库里，需要手动安装。',
+    ].join(''),
   );
   if (accepted != true) return;
   messenger.showSnackBar(SnackBar(content: Text('正在安装 ${entries.length} 个模块')));
@@ -127,63 +125,49 @@ Future<void> offerRestoredModules(
   messenger.showSnackBar(SnackBar(content: Text(summary)));
 }
 
-class BatchInstallDialog extends StatelessWidget {
-  const BatchInstallDialog({
-    super.key,
-    required this.entries,
-    required this.title,
-    required this.message,
-  });
-  final List<ModuleIndexEntry> entries;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final adult = entries.where((entry) => entry.adult).length;
-    return AlertDialog(
-      title: Text(title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 8,
-          children: [
-            Text(message),
-            const Text('各站源可访问的域名和功能，安装后可在「已安装」里查看。'),
-            for (final entry in entries)
-              Row(
-                spacing: 8,
-                children: [
-                  Expanded(child: Text('${entry.name} · ${entry.version}')),
-                  if (entry.adult)
-                    Text('限制级', style: TextStyle(color: colors.error)),
-                ],
-              ),
-            if (adult > 0)
-              Text('包含 $adult 个限制级站源。', style: TextStyle(color: colors.error)),
-            const Text('安装失败的会跳过，完成后提示结果。'),
-          ],
-        ),
-      ),
-      actions: [
-        FocusRing(
-          radius: 20,
-          child: TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+/// 批量安装确认：磨砂玻璃 + 可滚动清单，长列表不会把弹窗顶爆。
+Future<bool?> showBatchInstallDialog(
+  BuildContext context, {
+  required List<ModuleIndexEntry> entries,
+  required String title,
+  required String message,
+}) {
+  final colors = Theme.of(context).colorScheme;
+  final adult = entries.where((entry) => entry.adult).length;
+  return showGlassCard<bool>(
+    context: context,
+    title: title,
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 8,
+      children: [
+        Text(message),
+        const Text('各站源可访问的域名和功能，安装后可在「已安装」里查看。'),
+        for (final entry in entries)
+          Row(
+            spacing: 8,
+            children: [
+              Expanded(child: Text('${entry.name} · ${entry.version}')),
+              if (entry.adult)
+                Text('限制级', style: TextStyle(color: colors.error)),
+            ],
           ),
-        ),
-        FocusRing(
-          radius: 20,
-          child: FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('全部安装'),
-          ),
-        ),
+        if (adult > 0)
+          Text('包含 $adult 个限制级站源。', style: TextStyle(color: colors.error)),
+        const Text('安装失败的会跳过，完成后提示结果。'),
       ],
-    );
-  }
+    ),
+    actions: [
+      GlassAction(
+        label: '取消',
+        onPressed: () => Navigator.pop<bool>(context, false),
+      ),
+      GlassAction(
+        label: '全部安装',
+        primary: true,
+        onPressed: () => Navigator.pop<bool>(context, true),
+      ),
+    ],
+  );
 }

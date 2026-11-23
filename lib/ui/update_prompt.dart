@@ -8,7 +8,7 @@ import '../app_update.dart';
 import '../core_bridge.dart';
 import '../local_store.dart';
 import 'app_scope.dart';
-import 'widgets/focus_ring.dart';
+import 'widgets/glass_dialog.dart';
 
 var _checked = false;
 const _manualCooldown = Duration(seconds: 30);
@@ -97,37 +97,29 @@ Future<_UpdateChoice?> _askUpdate(
   AppUpdate update, {
   required bool manual,
 }) {
-  return showDialog<_UpdateChoice>(
+  return showGlassCard<_UpdateChoice>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text('发现新版本 ${update.version}'),
-      content: Text(
-        manual ? '当前版本 $current。' : '当前版本 $current。选「不再提醒」后可在设置 › 关于中重新打开检查更新。',
-      ),
-      actions: [
-        for (final (choice, label) in [
-          if (!manual) (_UpdateChoice.mute, '不再提醒'),
-          if (!manual) (_UpdateChoice.skip, '忽略此版本'),
-          (_UpdateChoice.dismiss, '忽略'),
-        ])
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              onPressed: () => Navigator.pop(dialogContext, choice),
-              child: Text(label),
-            ),
-          ),
-        FocusRing(
-          radius: 20,
-          child: FilledButton(
-            autofocus: true,
-            onPressed: () =>
-                Navigator.pop(dialogContext, _UpdateChoice.download),
-            child: const Text('更新'),
-          ),
+    title: '发现新版本 ${update.version}',
+    message: manual
+        ? '当前版本 $current。'
+        : '当前版本 $current。选「不再提醒」后可在设置 › 关于中重新打开检查更新。',
+    actions: [
+      for (final (choice, label) in [
+        if (!manual) (_UpdateChoice.mute, '不再提醒'),
+        if (!manual) (_UpdateChoice.skip, '忽略此版本'),
+        (_UpdateChoice.dismiss, '忽略'),
+      ])
+        GlassAction(
+          label: label,
+          onPressed: () => Navigator.pop<_UpdateChoice>(context, choice),
         ),
-      ],
-    ),
+      GlassAction(
+        label: '更新',
+        primary: true,
+        onPressed: () =>
+            Navigator.pop<_UpdateChoice>(context, _UpdateChoice.download),
+      ),
+    ],
   );
 }
 

@@ -108,12 +108,14 @@ class _StorageViewState extends State<StorageView> {
       barrierDismissible: false,
       builder: (context) => const PopScope(
         canPop: false,
-        child: AlertDialog(
+        child: GlassDialogCard(
+          title: '正在迁移',
+          message: '请保持应用运行，迁移完成前不要退出。',
           content: Row(
-            spacing: 20,
+            spacing: 16,
             children: [
               CircularProgressIndicator(),
-              Expanded(child: Text('正在迁移，请保持应用运行…')),
+              Expanded(child: Text('正在复制下载内容…')),
             ],
           ),
         ),
@@ -133,16 +135,16 @@ class _StorageViewState extends State<StorageView> {
     if (leftover.path.isEmpty || !mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('旧下载目录没有删干净'),
+      builder: (context) => GlassDialogCard(
+        title: '旧下载目录没有删干净',
         content: SelectableText(
           '下载内容已迁移到新位置，但旧目录没能删除，仍然占用空间：\n${leftover.path}\n\n系统报错：${leftover.reason}\n\n常见原因是文件被其他程序占用、只读或没有权限，处理后请手动删除该文件夹。',
         ),
         actions: [
-          FilledButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context),
-            child: const Text('知道了'),
+          GlassAction(
+            label: '知道了',
+            primary: true,
+            onPressed: () => Navigator.pop<void>(context),
           ),
         ],
       ),

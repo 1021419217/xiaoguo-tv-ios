@@ -23,6 +23,7 @@ import '../theme/motion.dart';
 import '../widgets/glass_app_bar.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/focus_ring.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
 import 'download_actions.dart';
@@ -150,8 +151,8 @@ class _DownloadedDramaPageState extends State<DownloadedDramaPage> {
       barrierDismissible: false,
       builder: (context) => PopScope(
         canPop: false,
-        child: AlertDialog(
-          title: const Text('导出到 Movies'),
+        child: GlassDialogCard(
+          title: '导出到 Movies',
           content: ValueListenableBuilder(
             valueListenable: exported,
             builder: (context, count, _) => Column(
@@ -861,18 +862,10 @@ class _FillDialog extends StatelessWidget {
     String label, {
     DownloadFill? result,
     bool primary = false,
-  }) => FocusRing(
-    radius: 20,
-    child: primary
-        ? FilledButton(
-            onPressed: () => Navigator.pop(context, result),
-            child: Text(label),
-          )
-        : TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, result),
-            child: Text(label),
-          ),
+  }) => GlassAction(
+    label: label,
+    primary: primary,
+    onPressed: () => Navigator.pop<DownloadFill>(context, result),
   );
 
   @override
@@ -919,8 +912,8 @@ class _FillDialog extends StatelessWidget {
               ];
       }
       final state = snapshot.hasError ? 2 : (plan == null ? 0 : 1);
-      return AlertDialog(
-        title: const Text('补齐缺集'),
+      return GlassDialogCard(
+        title: '补齐缺集',
         content: AnimatedSize(
           duration: Motion.of(context, Motion.medium),
           curve: Motion.standard,

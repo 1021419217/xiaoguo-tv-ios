@@ -6,7 +6,6 @@ import '../../cover_loader.dart';
 import '../../local_store.dart';
 import '../app_scope.dart';
 import '../users/password_dialog.dart';
-import '../widgets/focus_ring.dart';
 import '../widgets/group_card.dart';
 import 'settings_rows.dart';
 import 'storage_view.dart';
@@ -82,12 +81,14 @@ class _DataCardState extends State<DataCard> {
       barrierDismissible: false,
       builder: (context) => const PopScope(
         canPop: false,
-        child: AlertDialog(
+        child: GlassDialogCard(
+          title: '正在删除',
+          message: '请保持应用运行，删除完成前不要退出。',
           content: Row(
-            spacing: 20,
+            spacing: 16,
             children: [
               CircularProgressIndicator(),
-              Expanded(child: Text('正在删除，请保持应用运行…')),
+              Expanded(child: Text('正在清理用户数据…')),
             ],
           ),
         ),
@@ -113,8 +114,8 @@ class _DataCardState extends State<DataCard> {
       barrierDismissible: false,
       builder: (context) => PopScope(
         canPop: false,
-        child: AlertDialog(
-          title: const Text('数据已删除'),
+        child: GlassDialogCard(
+          title: '数据已删除',
           content: SelectableText(
             [
               if (leftover.isNotEmpty)
@@ -124,10 +125,10 @@ class _DataCardState extends State<DataCard> {
           ),
           actions: [
             if (!Platform.isIOS)
-              FilledButton(
-                autofocus: true,
+              GlassAction(
+                label: '退出应用',
+                primary: true,
                 onPressed: () => exit(0),
-                child: const Text('退出应用'),
               ),
           ],
         ),

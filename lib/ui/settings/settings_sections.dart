@@ -17,7 +17,6 @@ import '../app_scope.dart';
 import '../player/danmaku_settings.dart';
 import '../update_prompt.dart';
 import '../users/users_view.dart';
-import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
 import '../widgets/group_card.dart';
 import 'appearance_settings.dart';
@@ -746,33 +745,24 @@ class _ProxyDialogState extends State<_ProxyDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('代理地址'),
-    content: SizedBox(
-      width: 420,
-      child: FormTextField(
-        controller: _address,
-        autofocus: true,
-        url: true,
-        onSubmitted: (_) => _submit(),
-        decoration: const InputDecoration(
-          hintText: 'http://127.0.0.1:7890',
-          helperText: '支持 HTTP、HTTPS、SOCKS5',
-        ),
+  Widget build(BuildContext context) => GlassDialogCard(
+    title: '代理地址',
+    content: FormTextField(
+      controller: _address,
+      autofocus: true,
+      url: true,
+      onSubmitted: (_) => _submit(),
+      decoration: const InputDecoration(
+        hintText: 'http://127.0.0.1:7890',
+        helperText: '支持 HTTP、HTTPS、SOCKS5',
       ),
     ),
     actions: [
-      FocusRing(
-        radius: 20,
-        child: TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
+      GlassAction(
+        label: '取消',
+        onPressed: () => Navigator.pop<String>(context),
       ),
-      FocusRing(
-        radius: 20,
-        child: FilledButton(onPressed: _submit, child: const Text('保存')),
-      ),
+      GlassAction(label: '保存', primary: true, onPressed: _submit),
     ],
   );
 }

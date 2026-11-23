@@ -6,7 +6,7 @@ import '../models.dart';
 import 'app_scope.dart';
 import 'settings/settings_page.dart';
 import 'update_prompt.dart';
-import 'widgets/focus_ring.dart';
+import 'widgets/glass_dialog.dart';
 
 var _devicesReady = false;
 
@@ -119,8 +119,8 @@ class _RegistrationDialogState extends State<_RegistrationDialog> {
     final error = _error;
     return PopScope(
       canPop: false,
-      child: AlertDialog(
-        title: Text(error == null ? '正在注册设备...' : '设备注册失败'),
+      child: GlassDialogCard(
+        title: error == null ? '正在注册设备…' : '设备注册失败',
         content: error == null
             ? Row(
                 spacing: 16,
@@ -136,25 +136,14 @@ class _RegistrationDialogState extends State<_RegistrationDialog> {
                   ),
                 ],
               )
-            : Text('$error\n\n可以直接重试，或在网络设置中修改代理后重试。'),
+            : Text('$error
+
+可以直接重试，或在网络设置中修改代理后重试。'),
         actions: error == null
             ? null
             : [
-                FocusRing(
-                  radius: 20,
-                  child: TextButton(
-                    onPressed: _openProxy,
-                    child: const Text('网络设置'),
-                  ),
-                ),
-                FocusRing(
-                  radius: 20,
-                  child: FilledButton(
-                    autofocus: true,
-                    onPressed: _register,
-                    child: const Text('重试'),
-                  ),
-                ),
+                GlassAction(label: '网络设置', onPressed: _openProxy),
+                GlassAction(label: '重试', primary: true, onPressed: _register),
               ],
       ),
     );

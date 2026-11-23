@@ -5,6 +5,7 @@ import '../../playback_preferences.dart';
 import '../../playback_session.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/slider_tile.dart';
 
 const _colorLabels = ['白色', '黄色', '青色', '粉色', '绿色'];
@@ -313,87 +314,75 @@ class _WordsDialogState extends State<_WordsDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: const Text('弹幕屏蔽词'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              spacing: 8,
-              children: [
-                Expanded(
-                  child: FormTextField(
-                    controller: _controller,
-                    maxLength: danmakuWordLength,
-                    decoration: const InputDecoration(
-                      hintText: '输入要屏蔽的词',
-                      counterText: '',
-                    ),
-                    onSubmitted: (_) => _add(),
+    return GlassDialogCard(
+      title: '弹幕屏蔽词',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            spacing: 8,
+            children: [
+              Expanded(
+                child: FormTextField(
+                  controller: _controller,
+                  maxLength: danmakuWordLength,
+                  decoration: const InputDecoration(
+                    hintText: '输入要屏蔽的词',
+                    counterText: '',
                   ),
+                  onSubmitted: (_) => _add(),
                 ),
-                FilledButton(onPressed: _add, child: const Text('添加')),
+              ),
+              FilledButton(onPressed: _add, child: const Text('添加')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_error case final error?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                error,
+                style: TextStyle(fontSize: 13, color: colors.error),
+              ),
+            ),
+          if (_words.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                '还没有屏蔽词',
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
+            )
+          else
+            // 列表长了交给弹窗自身滚动，不再在里面再套一层滚动区。
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final word in _words)
+                  InputChip(
+                    label: Text(word),
+                    onDeleted: () => setState(
+                      () => _words = [
+                        for (final entry in _words)
+                          if (entry != word) entry,
+                      ],
+                    ),
+                  ),
               ],
             ),
-            const SizedBox(height: 8),
-            if (_error case final error?)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  error,
-                  style: TextStyle(fontSize: 13, color: colors.error),
-                ),
-              ),
-            if (_words.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  '还没有屏蔽词',
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 260),
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final word in _words)
-                        InputChip(
-                          label: Text(word),
-                          onDeleted: () => setState(
-                            () => _words = [
-                              for (final entry in _words)
-                                if (entry != word) entry,
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
       actions: [
-        FocusRing(
-          radius: 20,
-          child: TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
+        GlassAction(
+          label: '取消',
+          onPressed: () => Navigator.pop<List<String>>(context),
         ),
-        FocusRing(
-          radius: 20,
-          child: FilledButton(
-            onPressed: () => Navigator.pop(context, _words),
-            child: const Text('保存'),
-          ),
+        GlassAction(
+          label: '保存',
+          primary: true,
+          onPressed: () => Navigator.pop<List<String>>(context, _words),
         ),
       ],
     );

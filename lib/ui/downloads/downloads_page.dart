@@ -14,7 +14,8 @@ import '../shell/app_shell.dart';
 import '../theme/motion.dart';
 import '../widgets/action_pill.dart';
 import '../widgets/bar_button.dart';
-import '../widgets/capsule_tabs.dart';
+import '../widgets/category_tabs.dart';
+import '../widgets/choice_panel.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/glass_app_bar.dart';
 import '../widgets/drama_grid.dart';
@@ -396,27 +397,28 @@ class _DownloadsPageState extends State<DownloadsPage>
     );
   }
 
+  /// 主标签换成与首页 / 追剧 / 历史同一套下划线 [CategoryTabs]。
+  /// 原来这里是自定义胶囊 + `_tabs.animation` 交叉淡入，和全站其它页两套观感。
   Widget _tabBar(double inset) {
     final pending = pendingDownloads(widget.downloads.jobs).length;
     final downloaded = downloadedDramas(widget.downloads.jobs).length;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: CapsuleTabs(
-          labels: [
-            pending == 0 ? '下载中' : '下载中 $pending',
-            downloaded == 0 ? '已下载' : '已下载 $downloaded',
+      child: CategoryTabs<int>(
+        options: [
+          ChoiceOption(0, pending == 0 ? '下载中' : '下载中 $pending'),
+          ChoiceOption(1, downloaded == 0 ? '已下载' : '已下载 $downloaded'),
+          ChoiceOption(
+            2,
             widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
-          ],
-          index: _tabs.index,
-          animation: _tabs.animation,
-          onChanged: (index) {
-            if (index == _tabs.index) return;
-            setState(() => _selection = null);
-            _tabs.animateTo(index);
-          },
-        ),
+          ),
+        ],
+        selected: _tabs.index,
+        onSelected: (index) {
+          if (index == _tabs.index) return;
+          setState(() => _selection = null);
+          _tabs.animateTo(index);
+        },
       ),
     );
   }
@@ -457,11 +459,8 @@ class _DownloadsPageState extends State<DownloadsPage>
                 const SizedBox(width: 16),
               ],
               bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(50),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _tabBar(16),
-                ),
+                preferredSize: const Size.fromHeight(48),
+                child: _tabBar(0),
               ),
             )
           : glassAppBar(
@@ -644,12 +643,12 @@ class _DownloadsPageState extends State<DownloadsPage>
     if (scroll) {
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.fromLTRB(inset, 8, inset, 4),
+        padding: EdgeInsets.fromLTRB(inset, 12, inset, 4),
         child: Row(spacing: 8, children: chips),
       );
     }
     return Padding(
-      padding: EdgeInsets.fromLTRB(inset, 8, inset, 4),
+      padding: EdgeInsets.fromLTRB(inset, 12, inset, 4),
       child: Wrap(spacing: 8, runSpacing: 8, children: chips),
     );
   }

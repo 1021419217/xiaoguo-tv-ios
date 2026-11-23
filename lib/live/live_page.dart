@@ -7,8 +7,10 @@ import '../ui/app_scope.dart';
 import '../local_store.dart';
 
 import '../ui/widgets/bar_button.dart';
-import '../ui/widgets/frosted_header.dart';
+import '../ui/widgets/category_tabs.dart';
+import '../ui/widgets/choice_panel.dart';
 import '../ui/widgets/focus_ring.dart';
+import '../ui/widgets/glass_app_bar.dart';
 import '../ui/widgets/status_view.dart';
 import 'live_models.dart';
 import 'live_player_page.dart';
@@ -58,14 +60,26 @@ class _LivePageState extends State<LivePage> {
   String? _error;
   int _generation = 0;
   final _pager = PageController(initialPage: 1);
-  final _categoryScroll = ScrollController();
-  final _categoryKeys = <String, GlobalKey>{};
-  final _channelOwners = <String, String>{};
   final _emptyPlatforms = <String>{};
+
+  /// 每个分类的频道列表缓存，只给「非当前页」用：横滑时相邻页直接出内容，
+  /// 不再显示转圈。key 由 [_cacheKey] 生成（源 + 分类），切源时整体清空。
+  final _pageCache = <String, List<LiveChannel>>{};
+
+  /// 正在后台预取 / 已排队预取的 cache key，避免同一页被反复触发。
+  final _prefetching = <String>{};
+  final _pendingPrefetch = <String>{};
+
+  /// 预取失败或为空的 key。没有它的话，页面每次重建都会再发一次请求，
+  /// 断网时会变成一直空转；下拉刷新（force）会把它清掉。
+  final _prefetchFailed = <String>{};
 
   String _liveKey(String name) => name
       .replaceAll(RegExp(r'[\s\u200b-\u200d\ufeff]+'), '')
       .toLowerCase();
+
+  /// 缓存 key 带上直播源 id：不同源可能有同名分类，混用会把内容串在一起。
+  String _cacheKey(String platformId) => '${_source?.id ?? ''}\u0000$platformId';
 
   List<LiveSource> get _sources => LiveSource.visible(widget.greenMode);
 
@@ -97,7 +111,6 @@ class _LivePageState extends State<LivePage> {
   void dispose() {
     widget.store.removeListener(_storeChanged);
     _pager.dispose();
-    _categoryScroll.dispose();
     super.dispose();
   }
 
@@ -114,8 +127,10 @@ class _LivePageState extends State<LivePage> {
   Future<void> _loadPlatforms({bool force = false}) async {
     final source = _source;
     if (source == null) return;
-    _channelOwners.clear();
     _emptyPlatforms.clear();
+    _pageCache.clear();
+    _pendingPrefetch.clear();
+    _prefetchFailed.clear();
     final token = ++_generation;
     setState(() {
       _loading = true;
@@ -144,9 +159,9 @@ class _LivePageState extends State<LivePage> {
       }
       final first = visible.first;
       setState(() => _platform = first.id);
-      _revealCategory(first.id);
       if (_pager.hasClients) _pager.jumpToPage(1);
       await _loadPlatform(first);
+      _prefetchNeighbors(1);
     } catch (error) {
       if (!mounted || token != _generation) return;
       setState(() {
@@ -179,16 +194,12 @@ class _LivePageState extends State<LivePage> {
         force: force,
       );
       if (!mounted || token != _generation) return;
+      // 只在本分类内按主播名去重。原来跨分类共用一个 owner 表，会让先访问的
+      // 分类抢走重名主播、后访问的分类内容莫名变少，而且和预取缓存对不上。
       final visible = <LiveChannel>[];
+      final seen = <String>{};
       for (final channel in channels) {
-        final key = _liveKey(channel.name);
-        final owner = _channelOwners[key];
-        if (owner == null) {
-          _channelOwners[key] = platform.id;
-          visible.add(channel);
-        } else if (owner == platform.id) {
-          visible.add(channel);
-        }
+        if (seen.add(_liveKey(channel.name))) visible.add(channel);
       }
       _emptyPlatforms.remove(platform.id);
       setState(() {
@@ -197,6 +208,8 @@ class _LivePageState extends State<LivePage> {
         _lastGoodPlatform = platform.id;
         _loading = false;
         _failed = visible.isEmpty;
+        _pageCache[_cacheKey(platform.id)] = visible;
+        _prefetchFailed.remove(_cacheKey(platform.id));
       });
       if (visible.isEmpty) unawaited(_removeEmptyCategory(platform));
       final at = _visiblePlatforms.indexWhere(
@@ -243,6 +256,98 @@ class _LivePageState extends State<LivePage> {
     return _loadPlatforms(force: true);
   }
 
+  /// 刷新指定分类：当前页走原来的 [_loadPlatform]，非当前页只更新它自己的
+  /// 缓存，不去动 [_channels]，避免把当前页内容冲掉。
+  Future<void> _refreshPlatform(String id) async {
+    if (id == _favouritesId) {
+      if (mounted) setState(() {});
+      return;
+    }
+    final platform = _platforms.where((item) => item.id == id).firstOrNull;
+    if (platform == null) return;
+    if (id == _platform) return _loadPlatform(platform, force: true);
+    await _prefetchPlatform(id, force: true);
+  }
+
+  /// 后台预取某个分类的频道，只写 [_pageCache]。
+  ///
+  /// 刻意 **不碰** [_channels]、不递增 [_generation]：前者会把当前页数据
+  /// 冲掉，后者会取消正在进行的请求，表现为「滑到哪页哪页白一下」。
+  Future<void> _prefetchPlatform(String id, {bool force = false}) async {
+    if (id == _favouritesId || id == _platform) return;
+    final source = _source;
+    if (source == null) return;
+    final key = _cacheKey(id);
+    if (_prefetching.contains(key)) return;
+    if (!force && _pageCache.containsKey(key)) return;
+    if (!force && _prefetchFailed.contains(key)) return;
+    final platform = _platforms.where((item) => item.id == id).firstOrNull;
+    if (platform == null) {
+      // 分类对象都找不到，重试也没意义，标记掉避免每一帧都排队一次。
+      _prefetchFailed.add(key);
+      return;
+    }
+    _prefetching.add(key);
+    if (force) _prefetchFailed.remove(key);
+    final sourceId = source.id;
+    try {
+      final channels = await widget.repository.channels(
+        source,
+        platform,
+        force: force,
+      );
+      if (!mounted || _source?.id != sourceId) return;
+      // 平台内按名去重，与当前页展示形态保持一致。
+      final seen = <String>{};
+      final list = <LiveChannel>[
+        for (final channel in channels)
+          if (seen.add(_liveKey(channel.name))) channel,
+      ];
+      if (list.isEmpty) {
+        // 空结果也写缓存：让这一页显示「暂时没有频道」，而不是一直骨架屏。
+        _prefetchFailed.add(key);
+        setState(() => _pageCache[key] = const []);
+        return;
+      }
+      setState(() {
+        _pageCache[key] = list;
+        _prefetchFailed.remove(key);
+      });
+    } catch (_) {
+      // 预取失败静默忽略，标记后不再自动重试；用户滑到该页下拉可手动刷新。
+      if (mounted) _prefetchFailed.add(key);
+    } finally {
+      _prefetching.remove(key);
+    }
+  }
+
+  /// 预取当前页左右各一页，滑过去就有内容。
+  void _prefetchNeighbors(int page) {
+    if (_visiblePlatforms.isEmpty) return;
+    for (final at in [page - 1, page + 1]) {
+      final id = _idAtPage(at);
+      if (id == null) continue;
+      unawaited(_prefetchPlatform(id));
+    }
+  }
+
+  /// build 期间不能直接发请求，推到下一帧再预取；同一页只排一次。
+  void _schedulePrefetch(String id) {
+    if (id == _favouritesId) return;
+    final key = _cacheKey(id);
+    if (_pageCache.containsKey(key) ||
+        _prefetchFailed.contains(key) ||
+        _pendingPrefetch.contains(key)) {
+      return;
+    }
+    _pendingPrefetch.add(key);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingPrefetch.remove(key);
+      if (!mounted) return;
+      unawaited(_prefetchPlatform(id));
+    });
+  }
+
   void _selectSource(LiveSource source) {
     if (source.id == _source?.id) return;
     if (_pager.hasClients) _pager.jumpToPage(1);
@@ -250,8 +355,10 @@ class _LivePageState extends State<LivePage> {
     setState(() {
       _source = source;
       _platform = '';
-      _channelOwners.clear();
       _emptyPlatforms.clear();
+      _pageCache.clear();
+      _pendingPrefetch.clear();
+      _prefetchFailed.clear();
       _platforms = const [];
       _visiblePlatforms = const [];
       _channels = const [];
@@ -279,13 +386,15 @@ class _LivePageState extends State<LivePage> {
         _failed = false;
         _error = null;
       });
-      _revealCategory(_favouritesId);
       return;
     }
     final platform = _platforms
         .where((platform) => platform.id == id)
         .firstOrNull;
     if (platform == null) return;
+    // 预取过就直接把缓存铺上去：翻页瞬间看到的是这一页自己的内容，
+    // 而不是上一页的残留或转圈；随后 _loadPlatform 再用最新结果覆盖。
+    final cached = _pageCache[_cacheKey(id)];
     var at = _visiblePlatforms.indexWhere((item) => item.id == id);
     if (at < 0) {
       // 从「全部分类」里选的冷门分类临时放进顶栏，最多保留 11 个常用项。
@@ -296,9 +405,13 @@ class _LivePageState extends State<LivePage> {
       setState(() {
         _visiblePlatforms = next;
         _platform = id;
+        if (cached != null) _channels = cached;
       });
     } else {
-      setState(() => _platform = id);
+      setState(() {
+        _platform = id;
+        if (cached != null) _channels = cached;
+      });
     }
     if (!fromSwipe && _pager.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -310,72 +423,31 @@ class _LivePageState extends State<LivePage> {
         );
       });
     }
-    _revealCategory(id);
     unawaited(_loadPlatform(platform));
-  }
-
-  void _revealCategory(String id) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_categoryScroll.hasClients || _visiblePlatforms.isEmpty) {
-        return;
-      }
-      final key = _categoryKeys[id];
-      final target = key?.currentContext;
-      if (target != null) {
-        final box = target.findRenderObject();
-        final viewport = _categoryScroll.position.context.storageContext
-            .findRenderObject();
-        if (box is! RenderBox || viewport is! RenderBox) return;
-        final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
-        final width = _categoryScroll.position.viewportDimension;
-        final right = left + box.size.width;
-        if (left >= -16 && right <= width + 16) return;
-        final atStart = left < 0;
-        Scrollable.ensureVisible(
-          target,
-          alignment: atStart ? 0 : 1,
-          alignmentPolicy: atStart
-              ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
-              : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-        );
-        return;
-      }
-      final index = id == _favouritesId
-          ? 0
-          : _visiblePlatforms.indexWhere((platform) => platform.id == id) + 1;
-      if (index <= 0) return;
-      final max = _categoryScroll.position.maxScrollExtent;
-      final fallback = (max * index / _visiblePlatforms.length).clamp(0.0, max);
-      _categoryScroll.animateTo(
-        fallback,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    });
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     // 与首页同一套顶栏逻辑：内容延伸到屏顶，从磨砂玻璃背后透出。
     extendBodyBehindAppBar: true,
-    appBar: AppBar(
-      surfaceTintColor: Colors.transparent,
-      flexibleSpace: const FrostedHeader(fill: true),
+    appBar: glassAppBar(
       titleSpacing: 16,
-      title: const GlassTitle(title: '直播'),
+      title: '直播',
       actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: BarButton(
-            icon: Icons.refresh_rounded,
-            tooltip: '刷新',
-            onPressed: _loading
-                ? null
-                : () => unawaited(_loadPlatforms(force: true)),
+        if (_sources.length > 1)
+          BarButton(
+            icon: Icons.dns_outlined,
+            tooltip: '切换直播源',
+            onPressed: () => unawaited(_pickSource(_sources)),
           ),
+        BarButton(
+          icon: Icons.refresh_rounded,
+          tooltip: '刷新',
+          onPressed: _loading
+              ? null
+              : () => unawaited(_loadPlatforms(force: true)),
         ),
+        const SizedBox(width: 20),
       ],
     ),
     // SafeArea 已经把「状态栏 + 顶栏」一起让出来了（extendBodyBehindAppBar
@@ -384,136 +456,38 @@ class _LivePageState extends State<LivePage> {
     body: SafeArea(top: true, bottom: false, child: _body(context)),
   );
 
-  /// 分类条：收藏 + 源里每个分类各一枚，横向滚动；不再把所有分类
-  /// 合并成一个「全部频道」。
+  /// 分类条：与首页 / 追剧 / 历史同一套下划线 [CategoryTabs]，收藏排最前。
+  /// 「全部分类」走分类条右端的固定入口，「切换直播源」收进顶栏图标，
+  /// 不再在分类条尾部并排挤三个胶囊。
   Widget _platformBar() {
     final favourites = widget.store.favourites.length;
-    final colors = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 62,
-      child: Row(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ListView.separated(
-                  controller: _categoryScroll,
-                  scrollDirection: Axis.horizontal,
-                  cacheExtent: 12000,
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                  itemCount: _visiblePlatforms.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return KeyedSubtree(
-                        key: _categoryKeys.putIfAbsent(
-                          _favouritesId,
-                          GlobalKey.new,
-                        ),
-                        child: GlassChip(
-                          label: favourites == 0 ? '收藏' : '收藏 $favourites',
-                          selected: _platform == _favouritesId,
-                          height: 42,
-                          onTap: () => _selectPlatform(_favouritesId),
-                        ),
-                      );
-                    }
-                    final platform = _visiblePlatforms[index - 1];
-                    return KeyedSubtree(
-                      key: _categoryKeys.putIfAbsent(
-                        platform.id,
-                        GlobalKey.new,
-                      ),
-                      child: GlassChip(
-                        label: platform.name,
-                        selected: _platform == platform.id,
-                        height: 42,
-                        onTap: () => _selectPlatform(platform.id),
-                      ),
-                    );
-                  },
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  width: 24,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            colors.surface.withValues(alpha: 0),
-                            colors.surface,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          GlassChip(
-            label: '全部分类',
-            selected: false,
-            height: 42,
-            onTap: () => unawaited(_pickCategory()),
-          ),
-          const SizedBox(width: 8),
-          if (_sources.length > 1) ...[
-            GlassChip(
-              label: _source?.name ?? '直播源',
-              selected: false,
-              height: 42,
-              onTap: () => unawaited(_pickSource(_sources)),
-            ),
-            const SizedBox(width: 16),
-          ],
-        ],
-      ),
+    return CategoryTabs<String>(
+      options: [
+        ChoiceOption(
+          _favouritesId,
+          favourites == 0 ? '收藏' : '收藏 $favourites',
+        ),
+        for (final platform in _visiblePlatforms)
+          ChoiceOption(platform.id, platform.name),
+      ],
+      selected: _platform,
+      onSelected: _selectPlatform,
+      onShowAll: _pickCategory,
     );
   }
 
-  Future<void> _pickCategory() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => SizedBox(
-        height: MediaQuery.sizeOf(sheetContext).height * 0.78,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: Text(
-                  '全部分类',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _availableCategories.length,
-                  itemBuilder: (context, index) {
-                    final platform = _availableCategories[index];
-                    return ListTile(
-                      title: Text(platform.name),
-                      subtitle: Text('${platform.count} 个频道'),
-                      trailing: platform.id == _platform
-                          ? const Icon(Icons.check_rounded)
-                          : null,
-                      onTap: () => Navigator.pop(sheetContext, platform.id),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  /// 全部分类：走与首页同一个 ChoicePanel（手机底部弹层、平板锚定面板），
+  /// 不再自己拼一个 ListView 弹层。
+  Future<void> _pickCategory(BuildContext anchor) async {
+    final picked = await showChoicePanel<String>(
+      context: anchor,
+      title: '全部分类',
+      options: [
+        for (final platform in _availableCategories)
+          ChoiceOption(platform.id, platform.name),
+      ],
+      selected: _platform,
+      grid: ChoiceGrid.categories,
     );
     if (picked != null && mounted) _selectPlatform(picked);
   }
@@ -623,31 +597,102 @@ class _LivePageState extends State<LivePage> {
       itemCount: _visiblePlatforms.length + 1,
       onPageChanged: (page) {
         unawaited(HapticFeedback.selectionClick());
-        final id = page == 0
-            ? _favouritesId
-            : _visiblePlatforms[page - 1].id;
+        final id = _idAtPage(page);
+        if (id == null) return;
         _selectPlatform(id, fromSwipe: true);
+        _prefetchNeighbors(page);
       },
       itemBuilder: (context, page) {
-        final id = page == 0
-            ? _favouritesId
-            : _visiblePlatforms[page - 1].id;
-        if (id != _platform) {
-          return const Center(child: CircularProgressIndicator());
+        final id = _idAtPage(page);
+        // 分类被移除时 PageView 可能还拿着旧索引问一帧，直接给空。
+        if (id == null) return const SizedBox.shrink();
+        if (id == _platform) return _currentPage();
+        // 非当前页（手指正在拖过来的那一页）优先读缓存，让翻页真跟手。
+        final cached = id == _favouritesId
+            ? widget.store.favourites
+            : _pageCache[_cacheKey(id)];
+        if (cached == null) {
+          _schedulePrefetch(id);
+          return _channelSkeleton();
         }
-        if (_loading && _channels.isEmpty) {
-          return const StatusView.loading(title: '正在加载分类');
+        if (cached.isEmpty) {
+          return id == _favouritesId ? _favouritesEmpty() : _emptyPage(id);
         }
-        if (_channels.isEmpty) return _categoryStatus();
         return RefreshIndicator(
-          onRefresh: _refreshCurrent,
+          onRefresh: () => _refreshPlatform(id),
           child: _grid(
-            _channels,
+            cached,
             top: 12,
             bottom: 12 + widget.bottomInset,
           ),
         );
       },
+    );
+  }
+
+  /// 页码 → 分类 id。0 是收藏页，1..n 对应 [_visiblePlatforms]。
+  String? _idAtPage(int page) {
+    if (page == 0) return _favouritesId;
+    final index = page - 1;
+    if (index < 0 || index >= _visiblePlatforms.length) return null;
+    return _visiblePlatforms[index].id;
+  }
+
+  /// 当前页内容：保持改造前的加载 / 空态 / 网格三态判断。
+  Widget _currentPage() {
+    if (_loading && _channels.isEmpty) {
+      return const StatusView.loading(title: '正在加载分类');
+    }
+    if (_channels.isEmpty) return _categoryStatus();
+    return RefreshIndicator(
+      onRefresh: _refreshCurrent,
+      child: _grid(
+        _channels,
+        top: 12,
+        bottom: 12 + widget.bottomInset,
+      ),
+    );
+  }
+
+  Widget _favouritesEmpty() => const StatusView(
+    title: '还没有收藏频道',
+    message: '在播放页点收藏，之后可以在这里快速找到。',
+    icon: Icons.star_border_rounded,
+  );
+
+  /// 非当前页的空态：只针对这一页给重试，不影响当前页状态。
+  Widget _emptyPage(String id) {
+    final platform = _platforms.where((item) => item.id == id).firstOrNull;
+    return StatusView(
+      title: '这个分类暂时没有频道',
+      message: '下拉刷新或稍后再试。',
+      icon: Icons.tv_off_rounded,
+      action: platform == null ? null : '重试',
+      onAction: platform == null
+          ? null
+          : () => unawaited(_refreshPlatform(id)),
+    );
+  }
+
+  /// 预取未就绪时的占位：与频道网格同构的灰块，比转圈更像「内容在路上」。
+  Widget _channelSkeleton() {
+    final colors = Theme.of(context).colorScheme;
+    return GridView.builder(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + widget.bottomInset),
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 280,
+        mainAxisExtent: 172,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(18),
+        ),
+      ),
     );
   }
 

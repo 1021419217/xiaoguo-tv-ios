@@ -2794,27 +2794,19 @@ class _DescriptionDialogState extends State<_DescriptionDialog> {
     canRequestFocus: false,
     skipTraversal: true,
     onKeyEvent: (_, event) => _onKey(event),
-    child: AlertDialog(
-      title: Text(widget.drama.title),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          controller: _scroll,
-          child: Text(
-            widget.drama.description,
-            style: const TextStyle(fontSize: 16, height: 1.7),
-          ),
+    child: GlassDialogCard(
+      title: widget.drama.title,
+      // 简介自己带 ScrollController（遥控器上下键滚动），不再套第二层滚动。
+      scrollable: false,
+      content: SingleChildScrollView(
+        controller: _scroll,
+        child: Text(
+          widget.drama.description,
+          style: const TextStyle(fontSize: 16, height: 1.7),
         ),
       ),
       actions: [
-        FocusRing(
-          radius: 20,
-          child: TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
-          ),
-        ),
+        GlassAction(label: '关闭', onPressed: () => Navigator.of(context).pop()),
       ],
     ),
   );

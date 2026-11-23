@@ -10,6 +10,7 @@ import '../../sorani_account.dart';
 import '../app_scope.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
+import '../widgets/glass_dialog.dart';
 
 const _soraniSite = 'https://www.sorani.net/';
 
@@ -255,42 +256,28 @@ class _SoraniLoginDialogState extends State<_SoraniLoginDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(_verifying ? '安全验证' : '登录青空'),
-    content: SizedBox(
-      width: 352,
-      child: SingleChildScrollView(
-        child: _verifying ? _verification() : _form(),
-      ),
-    ),
+  Widget build(BuildContext context) => GlassDialogCard(
+    title: _verifying ? '安全验证' : '登录青空',
+    content: _verifying ? _verification() : _form(),
     actions: [
-      FocusRing(
-        radius: 20,
-        child: TextButton(
-          onPressed: _busy
-              ? null
-              : _verifying
-              ? () => setState(() {
-                  _verifying = false;
-                  _error = null;
-                })
-              : () => Navigator.pop(context),
-          child: Text(_verifying ? '返回' : '取消'),
-        ),
+      GlassAction(
+        label: _verifying ? '返回' : '取消',
+        onPressed: _busy
+            ? null
+            : _verifying
+            ? () => setState(() {
+                _verifying = false;
+                _error = null;
+              })
+            : () => Navigator.pop(context),
       ),
       if (_verifying)
-        FocusRing(
-          radius: 20,
-          child: TextButton(
-            onPressed: _busy ? null : _reload,
-            child: const Text('换一张'),
-          ),
+        GlassAction(
+          label: '换一张',
+          onPressed: _busy ? null : _reload,
         )
       else
-        FocusRing(
-          radius: 20,
-          child: FilledButton(onPressed: _next, child: const Text('下一步')),
-        ),
+        GlassAction(label: '下一步', primary: true, onPressed: _next),
     ],
   );
 }

@@ -24,24 +24,115 @@ Future<bool?> showGlassDialog({
   context: context,
   barrierDismissible: barrierDismissible,
   barrierColor: Colors.black.withValues(alpha: 0.42),
-  builder: (dialogContext) => _GlassDialogBody(
+  builder: (dialogContext) => GlassDialogCard(
     title: title,
     message: message,
     content: content,
     cancelLabel: cancelLabel,
     confirmLabel: confirmLabel,
     danger: danger,
+    defaultActions: true,
   ),
 );
 
-class _GlassDialogBody extends StatelessWidget {
-  const _GlassDialogBody({
+/// 通用版磨砂弹窗：按钮由调用方用 [GlassAction] 自己拼，可选「处理中」态，
+/// 返回值类型自定（[showGlassDialog] 只服务「确认 / 取消」这一种）。
+///
+/// - 输入框、表单：把原布局塞进 [content]，按钮塞进 [actions]。
+/// - 进度类：`loading: true`，底部换成一个 24 的细进度圈、按钮全部隐藏；
+///   结束时调用方自己 `Navigator.pop` 关掉。
+Future<T?> showGlassCard<T>({
+  required BuildContext context,
+  required String title,
+  String? message,
+  Widget? content,
+  List<Widget> actions = const [],
+  bool loading = false,
+  bool barrierDismissible = true,
+}) => showDialog<T>(
+  context: context,
+  barrierDismissible: barrierDismissible,
+  barrierColor: Colors.black.withValues(alpha: 0.42),
+  builder: (dialogContext) => GlassDialogCard(
+    title: title,
+    message: message,
+    content: content,
+    cancelLabel: '取消',
+    confirmLabel: '确定',
+    danger: false,
+    actions: actions,
+    loading: loading,
+    defaultActions: false,
+  ),
+);
+
+/// 磨砂弹窗里统一的动作按钮：胶囊形状，[primary] 为高对比实心，
+/// [danger] 用错误色，其余是低对比文字按钮。原来每个弹窗各写一套样式，
+/// 换成磨砂后颜色对不上，改这里一处即可全局生效。
+class GlassAction extends StatelessWidget {
+  const GlassAction({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.primary = false,
+    this.danger = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool primary;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final ink = dark ? Colors.white : colors.onSurface;
+    if (!primary && !danger) {
+      return TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: ink.withValues(alpha: 0.62),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        child: Text(label),
+      );
+    }
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: danger
+            ? colors.errorContainer
+            : (dark ? const Color(0xFFF2F2F5) : colors.primary),
+        foregroundColor: danger
+            ? colors.onErrorContainer
+            : (dark ? const Color(0xFF111114) : colors.onPrimary),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        elevation: 0,
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+/// 磨砂弹窗卡片本体：可直接塞进 `showDialog` 的 builder，
+/// 适合内容需要自己持有 State（输入框、动态列表）的场景。
+class GlassDialogCard extends StatelessWidget {
+  const GlassDialogCard({
     required this.title,
     this.message,
     this.content,
-    required this.cancelLabel,
-    required this.confirmLabel,
-    required this.danger,
+    this.cancelLabel = '取消',
+    this.confirmLabel = '确定',
+    this.danger = false,
+    this.actions,
+    this.loading = false,
+    this.defaultActions = false,
+    this.scrollable = true,
   });
 
   final String title;
@@ -50,6 +141,17 @@ class _GlassDialogBody extends StatelessWidget {
   final String cancelLabel;
   final String confirmLabel;
   final bool danger;
+
+  /// 自定义按钮组；给了就不再用默认的「取消 / 确定」。
+  final List<Widget>? actions;
+  final bool loading;
+
+  /// 是否渲染默认双按钮（只有 [showGlassDialog] 走这条路，返回值是 bool）。
+  final bool defaultActions;
+
+  /// content 是否由卡片自动套一层滚动区。内容自己带 ScrollController
+  /// （需要键盘 / 摇杆滚动）时传 false，避免两层滚动打架。
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
@@ -109,59 +211,72 @@ class _GlassDialogBody extends StatelessWidget {
                 ],
                 if (content != null) ...[
                   const SizedBox(height: 14),
-                  content!,
+                  // 长内容（安装详情、屏蔽词列表、剧集选择）不会把弹窗顶爆，
+                  // 只有内容本身超出可用高度时才在弹窗内部滚动。
+                  Flexible(
+                    child: scrollable
+                        ? SingleChildScrollView(child: content!)
+                        : content!,
+                  ),
                 ],
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop<bool>(context, false),
-                      style: TextButton.styleFrom(
-                        foregroundColor: ink.withValues(alpha: 0.62),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        shape: const StadiumBorder(),
-                        textStyle: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      child: Text(cancelLabel),
-                    ),
-                    const SizedBox(width: 6),
-                    FilledButton(
-                      onPressed: () => Navigator.pop<bool>(context, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: danger
-                            ? colors.errorContainer
-                            : (dark ? const Color(0xFFF2F2F5) : colors.primary),
-                        foregroundColor: danger
-                            ? colors.onErrorContainer
-                            : (dark
-                                  ? const Color(0xFF111114)
-                                  : colors.onPrimary),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 22,
-                          vertical: 12,
-                        ),
-                        elevation: 0,
-                        textStyle: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      child: Text(confirmLabel),
-                    ),
-                  ],
-                ),
+                ..._footer(context),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  List<Widget> _footer(BuildContext context) {
+    if (loading) {
+      return const [
+        SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      ];
+    }
+    final actions = this.actions;
+    if (actions != null && actions.isNotEmpty) {
+      return [
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerRight,
+          // 选项多的时候自动换行，不会把弹窗横向撑破。
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 6,
+            runSpacing: 6,
+            children: actions,
+          ),
+        ),
+      ];
+    }
+    if (!defaultActions) return const [SizedBox(height: 6)];
+    return [
+      const SizedBox(height: 18),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          GlassAction(
+            label: cancelLabel,
+            onPressed: () => Navigator.pop<bool>(context, false),
+          ),
+          const SizedBox(width: 6),
+          GlassAction(
+            label: confirmLabel,
+            primary: true,
+            danger: danger,
+            onPressed: () => Navigator.pop<bool>(context, true),
+          ),
+        ],
+      ),
+    ];
   }
 }

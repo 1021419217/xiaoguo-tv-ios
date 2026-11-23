@@ -184,9 +184,21 @@ class _ModulesPageState extends State<ModulesPage>
 
   Future<void> _install(SourceModule module) async {
     if (!mounted) return;
-    final accepted = await showDialog<bool>(
+    final accepted = await showGlassCard<bool>(
       context: context,
-      builder: (_) => _ModuleDialog(module: module, install: true),
+      title: _moduleDialogTitle(module, true),
+      content: _moduleDetails(context, module, install: true),
+      actions: [
+        GlassAction(
+          label: '取消',
+          onPressed: () => Navigator.pop<bool>(context, false),
+        ),
+        GlassAction(
+          label: module.installed ? '更新' : '安装',
+          primary: true,
+          onPressed: () => Navigator.pop<bool>(context, true),
+        ),
+      ],
     );
     if (accepted != true) return;
     _show(await _applyInstall(module) ?? '${module.name} 已安装');
@@ -196,13 +208,11 @@ class _ModulesPageState extends State<ModulesPage>
       applyModuleInstall(_repository, _store, module);
 
   Future<void> _installAll(List<ModuleIndexEntry> entries) async {
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (_) => BatchInstallDialog(
-        entries: entries,
-        title: '安装 ${entries.length} 个站源？',
-        message: '这些站源会逐个安装并启用。',
-      ),
+    final accepted = await showBatchInstallDialog(
+      context,
+      entries: entries,
+      title: '安装 ${entries.length} 个站源？',
+      message: '这些站源会逐个安装并启用。',
     );
     if (accepted != true) return;
     await _run(
@@ -279,9 +289,13 @@ class _ModulesPageState extends State<ModulesPage>
     });
   }
 
-  Future<void> _details(SourceModule module) => showDialog<void>(
+  Future<void> _details(SourceModule module) => showGlassCard<void>(
     context: context,
-    builder: (_) => _ModuleDialog(module: module, install: false),
+    title: module.name,
+    content: _moduleDetails(context, module, install: false),
+    actions: [
+      GlassAction(label: '关闭', onPressed: () => Navigator.pop<void>(context)),
+    ],
   );
 
   Widget _list(List<Widget> children) => ListView.separated(
@@ -1012,89 +1026,52 @@ class _ModuleTitle extends StatelessWidget {
   }
 }
 
-class _ModuleDialog extends StatelessWidget {
-  const _ModuleDialog({required this.module, required this.install});
-  final SourceModule module;
-  final bool install;
+String _moduleDialogTitle(SourceModule module, bool install) => !install
+    ? module.name
+    : module.installed
+    ? '更新 ${module.name}？'
+    : '安装 ${module.name}？';
 
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final version = module.version.isEmpty ? '未标注' : module.version;
-    final capabilities = [
-      for (final name in module.capabilities)
-        moduleCapabilityNames[name] ?? name,
-    ];
-    Widget section(String title, String body) => Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 4,
-        children: [
-          Text(title, style: text.labelLarge),
-          Text(body),
-        ],
-      ),
-    );
-    return AlertDialog(
-      title: Text(
-        !install
-            ? module.name
-            : module.installed
-            ? '更新 ${module.name}？'
-            : '安装 ${module.name}？',
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (module.description.isNotEmpty) Text(module.description),
-            section(
-              '版本',
-              install && module.installed
-                  ? '${module.previous.isEmpty ? '未标注' : module.previous} → $version'
-                  : version,
-            ),
-            section('标识', module.id),
-            section('内容分级', module.adult ? '限制级' : '非限制级'),
-            section(
-              '可访问的域名',
-              module.hosts.isEmpty ? '无' : module.hosts.join('\n'),
-            ),
-            section('提供的功能', ['目录、详情和播放', ...capabilities].join('、')),
-          ],
-        ),
-      ),
-      actions: [
-        if (install) ...[
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(module.installed ? '更新' : '安装'),
-            ),
-          ),
-        ] else
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context),
-              child: const Text('关闭'),
-            ),
-          ),
+/// 模块详情正文：安装确认与「查看详情」共用同一份，原来各写了一遍。
+Widget _moduleDetails(
+  BuildContext context,
+  SourceModule module, {
+  required bool install,
+}) {
+  final text = Theme.of(context).textTheme;
+  final version = module.version.isEmpty ? '未标注' : module.version;
+  final capabilities = [
+    for (final name in module.capabilities)
+      moduleCapabilityNames[name] ?? name,
+  ];
+  Widget section(String title, String body) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 4,
+      children: [
+        Text(title, style: text.labelLarge),
+        Text(body),
       ],
-    );
-  }
+    ),
+  );
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (module.description.isNotEmpty) Text(module.description),
+      section(
+        '版本',
+        install && module.installed
+            ? '${module.previous.isEmpty ? '未标注' : module.previous} → $version'
+            : version,
+      ),
+      section('标识', module.id),
+      section('内容分级', module.adult ? '限制级' : '非限制级'),
+      section('可访问的域名', module.hosts.isEmpty ? '无' : module.hosts.join('\n')),
+      section('提供的功能', ['目录、详情和播放', ...capabilities].join('、')),
+    ],
+  );
 }
 
 class _AddressDialog extends StatefulWidget {
@@ -1116,8 +1093,8 @@ class _AddressDialogState extends State<_AddressDialog> {
   void _submit() => Navigator.pop(context, _controller.text.trim());
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('从地址安装'),
+  Widget build(BuildContext context) => GlassDialogCard(
+    title: '从地址安装',
     content: FormTextField(
       controller: _controller,
       autofocus: true,
@@ -1126,17 +1103,11 @@ class _AddressDialogState extends State<_AddressDialog> {
       onSubmitted: (_) => _submit(),
     ),
     actions: [
-      FocusRing(
-        radius: 20,
-        child: TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
+      GlassAction(
+        label: '取消',
+        onPressed: () => Navigator.pop<String>(context),
       ),
-      FocusRing(
-        radius: 20,
-        child: FilledButton(onPressed: _submit, child: const Text('下一步')),
-      ),
+      GlassAction(label: '下一步', primary: true, onPressed: _submit),
     ],
   );
 }

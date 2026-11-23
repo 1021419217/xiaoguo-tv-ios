@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/group_card.dart';
 
 class UserEditor extends StatefulWidget {
@@ -81,33 +82,12 @@ class _UserEditorState extends State<UserEditor> {
 
   Future<void> _delete() async {
     final profile = _profile!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('删除 ${profile.name}？'),
-        content: const Text('会同时删除该用户的追剧和观看记录，下载文件保留。'),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('删除'),
-            ),
-          ),
-        ],
-      ),
+      title: '删除 ${profile.name}？',
+      message: '会同时删除该用户的追剧和观看记录，下载文件保留。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (confirmed == true && mounted) {
       await _run(() => widget.store.deleteProfile(profile.id));
