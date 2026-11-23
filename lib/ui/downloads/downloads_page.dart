@@ -911,20 +911,18 @@ class _JobRow extends StatelessWidget {
     final downloading = job.state == 'downloading';
     final failed = job.state == 'failed';
     final converted = (conversion ?? 0) > 0 ? conversion : null;
-    // 下载占 0→80%，封装/转码占 80%→100%，合成一条总进度。
-    // 原来下载到 100% 后进度条会切到「正在处理」再从 0 走一遍，
-    // 一次下载看起来像下了两三遍。
-    const downloadShare = 0.8;
+    // 进度条只表示「下载」这一段的真实进度（0-100%），不再压到 80%：
+    // 压缩之后条走到头也不代表下完了，和体积对不上，看着像虚高。
+    // 下载完成后文件已落盘，条保持满格，处理进度用文案单独显示。
     final overall = switch (job.state) {
       'completed' => 1.0,
-      'converting' => downloadShare + (converted ?? 0) * (1 - downloadShare),
-      _ => job.progress * downloadShare,
+      'converting' => 1.0,
+      _ => job.progress,
     };
-    // 每一步都摊开写：左边阶段 + 总进度，右边体积（已下 / 总体积）。
-    // 阶段名不能省——只显示一个百分数时，下载、封装、转码三段看起来像同一件事。
+    // 每一步都摊开写：左边阶段 + 该阶段的百分比，右边体积（已下 / 总体积）。
     final state = switch (job.state) {
-      'downloading' => '下载中 ${(overall * 100).round()}%',
-      'converting' => '处理中 ${(overall * 100).round()}%',
+      'downloading' => '下载中 ${(job.progress * 100).round()}%',
+      'converting' => '处理中 ${((converted ?? 0) * 100).round()}%',
       _ => job.stateLabel,
     };
     final detail = switch (job.state) {

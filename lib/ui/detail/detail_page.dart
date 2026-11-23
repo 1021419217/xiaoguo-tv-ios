@@ -11,6 +11,7 @@ import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
 import '../downloads/download_actions.dart';
+import '../downloads/download_picker_page.dart';
 import '../player/playback_handle.dart';
 import '../player/playback_page.dart';
 import '../shell/app_shell.dart';
@@ -495,10 +496,24 @@ class _DetailPageState extends State<DetailPage> {
   void _download() {
     final details = _details;
     if (details == null || details.episodes.isEmpty) return;
-    // 直接下当前这一集，不再弹选集/确认页。
-    final index = (details.currentIndex ?? 0).clamp(0, details.episodes.length - 1);
+    // 单集直接下；多集先进选集页（支持全选），一集一集点太麻烦。
+    if (details.episodes.length <= 1) {
+      final index = (details.currentIndex ?? 0).clamp(
+        0,
+        details.episodes.length - 1,
+      );
+      unawaited(
+        downloadEpisodes(context, widget.store, _detail, [
+          details.episodes[index],
+        ]),
+      );
+      return;
+    }
     unawaited(
-      downloadEpisodes(context, widget.store, _detail, [details.episodes[index]]),
+      openPage<void>(
+        context,
+        (_) => DownloadPickerPage(store: widget.store, detail: _detail),
+      ),
     );
   }
 

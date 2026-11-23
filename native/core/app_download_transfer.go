@@ -115,7 +115,11 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 			chunks := completedChunks
 			stateMu.Unlock()
 			total := estimateChunkedTotal(done, chunks, len(bundle.assets))
-			manager.progress(job.ID, done, total, float64(index+1)/float64(len(bundle.assets)))
+			progress := 0.0
+			if n := len(bundle.assets); n > 0 {
+				progress = float64(chunks) / float64(n)
+			}
+			manager.progress(job.ID, done, total, progress)
 			continue
 		}
 		pending.Add(1)
@@ -128,25 +132,28 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 			}
 			defer func() { <-slots }()
 			size, err := manager.downloadFile(downloadCtx, asset.address, media.Referer, target, asset.key, hls, func(received, total int64) {
-				progress := 0.0
-				if total > 0 {
-					progress = min(1, float64(received)/float64(total))
-				}
-				if hls {
-					progress = (float64(index) + progress) / float64(len(bundle.assets))
-				}
 				stateMu.Lock()
 				base := completedBytes
 				chunks := completedChunks
 				stateMu.Unlock()
+				progress := 0.0
 				overallTotal := total
 				if hls {
-					// 分片大小没有统一清单，用「已完成分片的平均大小 × 总片数」估算总量，
-					// 下几片就能收敛，界面才能显示「已下 / 总体积」。
-					overallTotal = estimateChunkedTotal(base, chunks, len(bundle.assets))
+					// 分片是 8 路并发下的：按「分片序号 + 片内进度」算，先回来的
+					// 大序号分片会把进度直接顶到很高（看着一下冲到 80%，其实没下多少），
+					// 而且序号靠后的先完成会让进度来回跳。改成用真正完成的分片数算，
+					// 8 路一起完成时每次只前进零点几个百分点，和实际下载量对得上。
+					n := len(bundle.assets)
+					if n > 0 {
+						progress = float64(chunks) / float64(n)
+					}
+					// 分片大小没有统一清单，用「已完成分片的平均大小 × 总片数」估算总量。
+					overallTotal = estimateChunkedTotal(base, chunks, n)
 					if overallTotal > 0 && base+received > overallTotal {
 						overallTotal = base + received
 					}
+				} else if total > 0 {
+					progress = min(1, float64(received)/float64(total))
 				}
 				manager.progress(job.ID, base+received, overallTotal, progress)
 			})
