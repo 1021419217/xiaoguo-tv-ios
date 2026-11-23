@@ -7,6 +7,13 @@ enum FormFactor { phone, pad, window, television }
 
 const televisionInset = 58.0;
 
+/// 全局根导航器。
+///
+/// 吐司（SnackBar）挂在全局，页面关了它还在；这时用户点吐司上的按钮，
+/// 原来那个页面的 context 已经销毁，不能再拿它去 Navigator.of。
+/// 这类「浮层上的导航」统一走这个 key。
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 bool get desktopPlatform => switch (defaultTargetPlatform) {
   TargetPlatform.windows ||
   TargetPlatform.macOS ||

@@ -133,6 +133,7 @@ class _AppShellState extends State<AppShell>
     // 登记给详情页等其它入口用（「已加入下载」提示里的「去下载」）。
     DownloadServices.overview = _downloads;
     DownloadServices.converter = _converter;
+    DownloadServices.repository = AppScope.of(context).repository;
     _followUpdater ??= FollowUpdater(
       AppScope.of(context).repository,
       widget.store,
@@ -161,6 +162,7 @@ class _AppShellState extends State<AppShell>
     if (identical(DownloadServices.overview, _downloads)) {
       DownloadServices.overview = null;
       DownloadServices.converter = null;
+      DownloadServices.repository = null;
     }
     _converter?.dispose();
     _downloads?.dispose();

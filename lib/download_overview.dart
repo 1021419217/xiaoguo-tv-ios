@@ -113,6 +113,7 @@ class DownloadServices {
 
   static DownloadOverview? overview;
   static DownloadConverter? converter;
+  static AppRepository? repository;
 
   static bool get ready => overview != null && converter != null;
 }

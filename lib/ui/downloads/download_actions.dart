@@ -5,7 +5,6 @@ import '../../download_overview.dart';
 import '../../local_store.dart';
 import '../../models.dart';
 import '../app_scope.dart';
-import '../shell/app_shell.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/glass_dialog.dart';
 import 'downloads_page.dart';
@@ -13,19 +12,24 @@ import 'downloads_page.dart';
 /// 「去下载」：复用 AppShell 里那份下载概览与转换器，直接打开下载管理页。
 /// 不自己再 new 一个转换器，免得两个转换器抢同一集去转码。
 void openDownloadsPage(BuildContext context, LocalStore store) {
-  if (!context.mounted) return;
   final overview = DownloadServices.overview;
   final converter = DownloadServices.converter;
+  final repository = DownloadServices.repository;
   // 服务还没登记上（AppShell 未就绪 / 正在重建）时也别让按钮点了没反应：
   // 现场建一份只读概览，转换器缺失只是暂时看不到处理进度。
   final downloads =
-      overview ?? DownloadOverview(AppScope.of(context).repository, store);
-  openPage<void>(
-    context,
-    (_) => DownloadsPage(
-      store: store,
-      downloads: downloads,
-      converter: converter,
+      overview ?? (repository == null ? null : DownloadOverview(repository, store));
+  if (downloads == null) return;
+  // 选集页下载完会 pop 掉自己，吐司挂在全局还留在屏幕上；这时原来的
+  // context 已经失效，必须走全局根导航器，否则点了完全没反应。
+  final navigator = context.mounted
+      ? Navigator.of(context, rootNavigator: true)
+      : rootNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          DownloadsPage(store: store, downloads: downloads, converter: converter),
     ),
   );
 }
