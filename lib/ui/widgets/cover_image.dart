@@ -263,27 +263,34 @@ class DramaCover extends StatelessWidget {
                 ),
               ),
             ),
-          if (details && _qualityLabel(drama) case final quality?)
-            Positioned(
-              left: 7,
-              top: 7,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
-                  border: Border.all(color: const Color(0x99FFFFFF), width: 0.8),
-                ),
-                child: Text(
-                  quality,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
+          if (details)
+            if (_qualityLabel(drama) case final quality?)
+              Positioned(
+                left: 7,
+                top: 7,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(
+                      color: const Color(0x99FFFFFF),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Text(
+                    quality,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
               ),
-            ),
         ],
       ),
     );
