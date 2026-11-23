@@ -62,6 +62,7 @@ class ExplorePageState extends State<ExplorePage> {
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
   final _headerKey = GlobalKey();
   double _headerH = 0;
+  double _headerWidth = 0;
   String _shown = '';
 
   /// 下滑列表时收起顶栏第一行（站源/搜索），只留分类栏可见，
@@ -125,26 +126,21 @@ class ExplorePageState extends State<ExplorePage> {
   void _measureHeader() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // 下滑时顶栏第一行会收起，这时量到的是矮高度。首屏留白必须按展开态算，
+      // 否则回到顶部时内容少让出一行，第一排封面被顶栏压掉一截（且已经在最顶，
+      // 上滑也拉不动，看起来像卡住）。
+      if (_barsHidden) return;
       final box = _headerKey.currentContext?.findRenderObject();
       if (box is! RenderBox || !box.hasSize) return;
       final height = box.size.height;
-      final delta = height - _headerH;
-      if (delta.abs() < 0.5) return;
-      setState(() => _headerH = height);
-      // 顶栏收起/展开会改变顶部留白的高度，滚动内容整体上移/下移；
-      // 若不补偿滚动位置，就会卡在某个位置滑不上去（表现为一卡一咔）。
-      if (delta.abs() > 0.5 && _scroll.hasClients) {
-        final position = _scroll.position;
-        if (position.pixels > position.minScrollExtent + 0.5) {
-          final target = (position.pixels + delta).clamp(
-            position.minScrollExtent,
-            position.maxScrollExtent,
-          );
-          if ((target - position.pixels).abs() > 0.5) {
-            _scroll.jumpTo(target);
-          }
-        }
+      if (height <= 0) return;
+      // 展开动画会经过中间值，只往大里记；宽度变了（旋转 / 分屏）就重新量。
+      if ((box.size.width - _headerWidth).abs() > 1) {
+        _headerWidth = box.size.width;
+        setState(() => _headerH = height);
+        return;
       }
+      if (height > _headerH + 0.5) setState(() => _headerH = height);
     });
   }
 
@@ -229,6 +225,11 @@ class ExplorePageState extends State<ExplorePage> {
     if (shown == _shown) return;
     final switched = _shown.startsWith(source);
     _shown = shown;
+    // 换分类 / 换站源等于换了一页，顶栏也要回到展开态：
+    // 收起态的矮顶栏会让新页首屏留白少算一行。
+    // 注意这里在 build 流程里，直接改字段即可（顶栏在本方法之后才构建），
+    // 不能 setState，否则会报 "setState() called during build"。
+    _barsHidden = false;
     if (deferred && switched) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => _toTop());
   }
@@ -503,6 +504,8 @@ class ExplorePageState extends State<ExplorePage> {
   }
 
   void _toTop() {
+    // 回顶后顶栏一定是展开的，先把它恢复，留白才和实际顶栏高度对得上。
+    if (_barsHidden) setState(() => _barsHidden = false);
     final explore = _explore;
     if (explore != null) {
       final controller = _scrollFor(explore.tab.id);
@@ -661,24 +664,19 @@ class ExplorePageState extends State<ExplorePage> {
   Widget _pageBackdrop(Drama drama) {
     final surface = Theme.of(context).colorScheme.surface;
     return IgnorePointer(
-      // RepaintBoundary + 稳定 key：整页重建时不重新做全屏高斯模糊，
-      // 只有换片时才重算，避免滚动时每帧重绘模糊导致发涩卡顿。
-      child: RepaintBoundary(
-        key: ValueKey('backdrop-${drama.id}'),
-        child: CoverBackdrop(
-          drama: drama,
-          sigma: 24,
-          opacity: 0.22,
-          overlay: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: const [0, 0.45, 1],
-            colors: [
-              surface.withValues(alpha: 0.72),
-              surface.withValues(alpha: 0.92),
-              surface,
-            ],
-          ),
+      child: CoverBackdrop(
+        drama: drama,
+        sigma: 48,
+        opacity: 0.22,
+        overlay: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0, 0.45, 1],
+          colors: [
+            surface.withValues(alpha: 0.72),
+            surface.withValues(alpha: 0.92),
+            surface,
+          ],
         ),
       ),
     );

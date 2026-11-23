@@ -420,6 +420,12 @@ func (manager *nativeDownloads) mediaLooksLikePlaylist(ctx context.Context, medi
 	if nativeDownloadMediaExtension(media.URL) != "" {
 		return false
 	}
+	// 路径里带 m3u8 的直接认作播放列表（av8d 是 /m3u8/{token}）。
+	// 探测要真发一次请求，超时、被限流或临时 5xx 都会让它返回 false，
+	// 那样又退化成「把播放列表当 mp4 下载」，所以能靠路径认出来的不再依赖网络。
+	if parsed, err := url.Parse(media.URL); err == nil && strings.Contains(strings.ToLower(parsed.Path), "m3u8") {
+		return true
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, media.URL, nil)
 	if err != nil {
 		return false
