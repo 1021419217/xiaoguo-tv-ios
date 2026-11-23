@@ -350,31 +350,136 @@ class _DuanjuAppState extends State<DuanjuApp> with WidgetsBindingObserver {
   }
 }
 
-class _BootScreen extends StatelessWidget {
+class _BootScreen extends StatefulWidget {
   const _BootScreen({this.error, this.onRetry});
   final String? error;
   final VoidCallback? onRetry;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 24,
-          children: [
-            if (error == null) const CircularProgressIndicator(),
-            Text(
-              error ?? '正在打开$appName',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (error != null && onRetry != null)
-              FilledButton(onPressed: onRetry, child: const Text('重新打开')),
-          ],
+  State<_BootScreen> createState() => _BootScreenState();
+}
+
+class _BootScreenState extends State<_BootScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..forward();
+
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.15, 0.75, curve: Curves.easeOut),
+  );
+
+  late final Animation<double> _scale =
+      Tween<double>(begin: 0.92, end: 1).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.15, 0.85, curve: Curves.easeOut),
         ),
-      ),
+      );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFF0C0C0E),
+    body: Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(painter: _BootLines(_controller)),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FadeTransition(
+                opacity: _fade,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Text(
+                    appName,
+                    style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4,
+                      color: Color(0xFFECE7DE),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FadeTransition(
+                opacity: _fade,
+                child: const Text(
+                  'XIAO GUO',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 6,
+                    color: Color(0xFF8C867C),
+                  ),
+                ),
+              ),
+              if (widget.error != null) ...[
+                const SizedBox(height: 28),
+                Text(
+                  widget.error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF8A857D),
+                  ),
+                ),
+                if (widget.onRetry != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: widget.onRetry,
+                    child: const Text('重新打开'),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ],
     ),
   );
+}
+
+/// 斜向光带：随启动进度从一侧扫过，营造速度感。
+class _BootLines extends CustomPainter {
+  _BootLines(this.animation) : super(repaint: animation);
+  final Animation<double> animation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final progress = animation.value;
+    final center = Offset(size.width / 2, size.height * 0.46);
+    final paint = Paint()
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 7; i++) {
+      final offset = (i - 3) * 22.0;
+      final weight = 70 - (i - 3).abs() * 14;
+      if (weight <= 0) continue;
+      paint.color = const Color(0xFF96969E).withValues(
+        alpha: (weight / 255) * progress,
+      );
+      final start = Offset(center.dx - 150, center.dy + offset + 90);
+      final end = Offset(center.dx + 150, center.dy + offset - 90);
+      final drawn = Offset(
+        start.dx + (end.dx - start.dx) * progress,
+        start.dy + (end.dy - start.dy) * progress,
+      );
+      canvas.drawLine(start, drawn, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BootLines oldDelegate) =>
+      oldDelegate.animation != animation;
 }
