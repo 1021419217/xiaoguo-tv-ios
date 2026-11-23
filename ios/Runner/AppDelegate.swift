@@ -20,29 +20,37 @@ import WebKit
   ///      App「正在播放音频」，照样挂起，保活等于没做。
   ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出；
   ///      数据本身就是全零 PCM，音量保持 1 即可，听不到声音。
+  /// 返回 {ok, error}：失败原因要回给 Dart 记进日记，不能再静默吞掉。
   @discardableResult
-  private func setDownloadKeepAlive(_ enabled: Bool) -> Bool {
+  private func setDownloadKeepAlive(_ enabled: Bool) -> [String: Any] {
     let session = AVAudioSession.sharedInstance()
     if !enabled {
       keepAlivePlayer?.stop()
       keepAlivePlayer = nil
       try? session.setActive(false, options: [.notifyOthersOnDeactivation])
-      return true
+      return ["ok": true, "error": ""]
     }
-    if keepAlivePlayer?.isPlaying == true { return true }
+    if keepAlivePlayer?.isPlaying == true { return ["ok": true, "error": ""] }
     do {
       try session.setCategory(.playback, mode: .default, options: [])
       try session.setActive(true)
+    } catch {
+      return ["ok": false, "error": "音频会话激活失败：\(error.localizedDescription)"]
+    }
+    do {
       let player = try AVAudioPlayer(data: Self.silentWav(seconds: 2))
       player.numberOfLoops = -1
       player.volume = 1
       player.prepareToPlay()
-      player.play()
       keepAlivePlayer = player
-      return true
+      if !player.play() {
+        keepAlivePlayer = nil
+        return ["ok": false, "error": "静音音频 play() 返回 false"]
+      }
     } catch {
-      return false
+      return ["ok": false, "error": "静音音频创建失败：\(error.localizedDescription)"]
     }
+    return ["ok": true, "error": ""]
   }
 
   /// 进后台时补一次激活：音频会话可能刚被系统释放或被来电打断，
@@ -50,10 +58,11 @@ import WebKit
   /// 本工程启用了 UIScene，UIApplicationDelegate 的 applicationDidEnterBackground
   /// 不会被系统调用，所以改听通知（两种都听，非 Scene 场景也覆盖）。
   @objc private func reactivateKeepAlive() {
-    if let player = keepAlivePlayer {
-      try? AVAudioSession.sharedInstance().setActive(true)
-      if !player.isPlaying { player.play() }
-    }
+    guard let player = keepAlivePlayer else { return }
+    let session = AVAudioSession.sharedInstance()
+    try? session.setCategory(.playback, mode: .default, options: [])
+    try? session.setActive(true)
+    if !player.isPlaying { player.play() }
   }
 
   /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
@@ -100,6 +109,7 @@ import WebKit
     for name in [
       UIApplication.didEnterBackgroundNotification,
       UIScene.didEnterBackgroundNotification,
+      AVAudioSession.interruptionNotification,
     ] {
       NotificationCenter.default.addObserver(
         self,
