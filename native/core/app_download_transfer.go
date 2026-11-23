@@ -203,12 +203,34 @@ func (manager *nativeDownloads) downloadFile(ctx context.Context, address, refer
 			offset = info.Size()
 		}
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		size, restart, err := manager.downloadFileAttempt(ctx, address, referer, target, key, offset, metadata, progress)
-		if !restart {
-			return size, err
+	// 网络抖动在下载时很常见：给 1s/2s/4s 三次退避重试，4xx（除 408/429）直接失败不空转。
+	const maxAttempts = 4
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			wait := time.Duration(1<<(attempt-1)) * time.Second
+			select {
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			case <-time.After(wait):
+			}
 		}
-		offset, metadata = 0, nativeDownloadFileState{}
+		size, restart, err := manager.downloadFileAttempt(ctx, address, referer, target, key, offset, metadata, progress)
+		if restart {
+			offset, metadata = 0, nativeDownloadFileState{}
+			lastErr = nil
+			continue
+		}
+		if err == nil {
+			return size, nil
+		}
+		if !nativeDownloadRetryable(err) {
+			return 0, err
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return 0, lastErr
 	}
 	return 0, errors.New("服务器无法恢复下载，请重试")
 }
@@ -219,7 +241,7 @@ func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address
 	}
 	requestCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	inactivity := time.AfterFunc(30*time.Second, cancel)
+	inactivity := time.AfterFunc(60*time.Second, cancel)
 	defer inactivity.Stop()
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, address, nil)
 	if err != nil {
@@ -240,7 +262,7 @@ func (manager *nativeDownloads) downloadFileAttempt(ctx context.Context, address
 			return 0, false, ctx.Err()
 		}
 		if requestCtx.Err() != nil {
-			return 0, false, errors.New("下载连接 30 秒没有响应，请检查网络后继续")
+			return 0, false, errors.New("下载连接 60 秒没有响应，请检查网络后继续")
 		}
 		var transport *url.Error
 		if errors.As(err, &transport) {
