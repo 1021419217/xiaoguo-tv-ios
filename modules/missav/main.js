@@ -6,7 +6,11 @@ const slugPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const cardPattern = /\/(?:dm[0-9]+\/)?cn\/([a-z0-9][a-z0-9._-]{0,127})\/?$/;
 const genrePattern = /\/(?:dm[0-9]+\/)?cn\/genres\/([^/?#]+)\/?$/;
 const pagePattern = /[?&]page=([0-9]{1,7})/;
-const mediaPattern = /https?:\/\/surrit\.com\/[0-9a-f-]{36}\/playlist\.m3u8/;
+// 播放地址挂在「任意 CDN 域 / UUID / playlist.m3u8（或 NNNp/）」下。站点会更换 CDN 域名，
+// 写死 surrit.com 后在换域当天就整站解析失败（「未解析到播放地址」），所以按结构匹配，
+// 命中多条时再优先挑 surrit.com 主域。
+const videoUrlPattern =
+  /(https?:\/\/[a-z0-9.-]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(?:playlist\.m3u8|\d{3,4}p\/)/i;
 const packedPattern = /eval\(function\(p,a,c,k,e,d\)\{.*?\}\('((?:[^'\\]|\\.)*)',([0-9]+),([0-9]+),'((?:[^'\\]|\\.)*)'\.split\('\|'\)/gs;
 
 function truncate(text, limit) {
@@ -362,14 +366,24 @@ function unpack(match) {
 }
 
 function mediaAddress(body) {
-  for (const match of body.matchAll(packedPattern)) {
-    const found = unpack(match).match(mediaPattern);
-    if (found) {
-      return found[0];
+  const found = [];
+  const collect = (text) => {
+    const scan = new RegExp(videoUrlPattern.source, "gi");
+    let match = scan.exec(String(text || ""));
+    while (match !== null) {
+      found.push(match[1] + "/" + match[2].toLowerCase() + "/playlist.m3u8");
+      match = scan.exec(String(text || ""));
     }
+  };
+  for (const match of body.matchAll(packedPattern)) {
+    collect(unpack(match));
   }
-  const direct = body.match(mediaPattern);
-  return direct ? direct[0] : "";
+  collect(body);
+  if (found.length === 0) {
+    return "";
+  }
+  const main = found.find((address) => /^https?:\/\/surrit\.com\//i.test(address));
+  return main || found[0];
 }
 
 function fetchDocument(address) {
