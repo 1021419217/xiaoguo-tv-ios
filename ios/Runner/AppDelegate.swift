@@ -102,7 +102,7 @@ import WebKit
           return
         }
         if call.method == "backgroundKeepAlive" {
-          result(setDownloadKeepAlive(call.arguments as? Bool ?? false))
+          result(self.setDownloadKeepAlive(call.arguments as? Bool ?? false))
           return
         }
         let arguments = call.arguments as? [String: Any]
