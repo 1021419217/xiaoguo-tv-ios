@@ -487,10 +487,7 @@ class _DownloadsPageState extends State<DownloadsPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _chipsSlot(
-                  context,
-                  _sourceChips(view, inset: 16, scroll: true),
-                ),
+                _sourceTabs(view, inset: 16),
                 Expanded(child: body),
               ],
             ),
@@ -606,52 +603,29 @@ class _DownloadsPageState extends State<DownloadsPage>
           ),
           _tabBar(24),
           const SizedBox(height: 4),
-          _chipsSlot(context, _sourceChips(view, inset: 24)),
+          _sourceTabs(view, inset: 24),
           Expanded(child: body),
         ],
       ),
     ),
   );
 
-  Widget _chipsSlot(BuildContext context, Widget? chips) => AnimatedSize(
-    duration: Motion.of(context, Motion.short),
-    curve: Motion.standard,
-    alignment: Alignment.topCenter,
-    child: chips ?? const SizedBox(width: double.infinity),
+  /// 站源筛选：和首页 / 追剧 / 历史同一套下划线 [CategoryTabs]，并且常驻。
+  /// 原来是「有数据才长出来」的 ChoiceChip 胶囊（外面还套了 AnimatedSize），
+  /// 进页面时先空一块再弹出来，样式也和全站其它页两套观感。
+  Widget _sourceTabs(_View view, {required double inset}) => Padding(
+    padding: EdgeInsets.symmetric(horizontal: inset),
+    child: CategoryTabs<String>(
+      // 两个标签页各有自己的站源筛选，key 分开避免下划线位置串台。
+      key: ValueKey('download-source-tabs-${_tabs.index}'),
+      options: [
+        const ChoiceOption('', '全部'),
+        for (final site in view.sources) ChoiceOption(site.id, site.name),
+      ],
+      selected: view.source,
+      onSelected: (id) => setState(() => _sources[_tabs.index] = id),
+    ),
   );
-
-  Widget? _sourceChips(
-    _View view, {
-    required double inset,
-    bool scroll = false,
-  }) {
-    if (view.sources.length < 2) return null;
-    Widget chip(String id, String label) => FocusRing(
-      radius: 8,
-      child: ChoiceChip(
-        key: ValueKey('download-source-$id'),
-        label: Text(label),
-        showCheckmark: false,
-        selected: view.source == id,
-        onSelected: (_) => setState(() => _sources[_tabs.index] = id),
-      ),
-    );
-    final chips = [
-      chip('', '全部'),
-      for (final site in view.sources) chip(site.id, site.name),
-    ];
-    if (scroll) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.fromLTRB(inset, 12, inset, 4),
-        child: Row(spacing: 8, children: chips),
-      );
-    }
-    return Padding(
-      padding: EdgeInsets.fromLTRB(inset, 12, inset, 4),
-      child: Wrap(spacing: 8, runSpacing: 8, children: chips),
-    );
-  }
 
   Widget _pendingList(BuildContext context, _View view) => FadeSwitcher(
     scale: true,
