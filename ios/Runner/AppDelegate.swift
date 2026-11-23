@@ -10,6 +10,63 @@ import WebKit
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var originalBrightness: CGFloat?
   private let volumeView = MPVolumeView(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
+  private var keepAlivePlayer: AVAudioPlayer?
+
+  /// 下载时的后台保活：循环播一段静音音频。
+  /// iOS 切后台几秒后会挂起整个进程，Go 的下载线程也一起停；只有持有一条
+  /// 正在播放的音频通道才能一直在后台跑。mixWithOthers 保证不打断用户正在
+  /// 听的东西，volume 0 保证真的一点声音都没有。
+  @discardableResult
+  private func setDownloadKeepAlive(_ enabled: Bool) -> Bool {
+    let session = AVAudioSession.sharedInstance()
+    if !enabled {
+      keepAlivePlayer?.stop()
+      keepAlivePlayer = nil
+      try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+      return true
+    }
+    if keepAlivePlayer?.isPlaying == true { return true }
+    do {
+      try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+      try session.setActive(true)
+      let player = try AVAudioPlayer(data: Self.silentWav(seconds: 1))
+      player.numberOfLoops = -1
+      player.volume = 0
+      player.prepareToPlay()
+      player.play()
+      keepAlivePlayer = player
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
+  private static func silentWav(seconds: Double) -> Data {
+    let sampleRate = 44100
+    let frames = Int(Double(sampleRate) * seconds)
+    let dataSize = frames * 2
+    var data = Data(capacity: 44 + dataSize)
+    func put<T: FixedWidthInteger>(_ value: T) {
+      var little = value.littleEndian
+      withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+    }
+    data.append(contentsOf: Array("RIFF".utf8))
+    put(UInt32(36 + dataSize))
+    data.append(contentsOf: Array("WAVE".utf8))
+    data.append(contentsOf: Array("fmt ".utf8))
+    put(UInt32(16))
+    put(UInt16(1))
+    put(UInt16(1))
+    put(UInt32(sampleRate))
+    put(UInt32(sampleRate * 2))
+    put(UInt16(2))
+    put(UInt16(16))
+    data.append(contentsOf: Array("data".utf8))
+    put(UInt32(dataSize))
+    data.append(Data(count: dataSize))
+    return data
+  }
 
   private var keyWindow: UIWindow? {
     UIApplication.shared.connectedScenes
@@ -42,6 +99,10 @@ import WebKit
           }
           result(["level": Int((device.batteryLevel * 100).rounded()),
                   "charging": device.batteryState == .charging || device.batteryState == .full])
+          return
+        }
+        if call.method == "backgroundKeepAlive" {
+          result(setDownloadKeepAlive(call.arguments as? Bool ?? false))
           return
         }
         let arguments = call.arguments as? [String: Any]

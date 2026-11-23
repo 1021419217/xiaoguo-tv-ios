@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'background_keep_alive.dart';
 import 'core_bridge.dart';
 import 'download_converter.dart';
 import 'local_store.dart';
@@ -72,6 +73,10 @@ class DownloadOverview extends ChangeNotifier {
       return;
     }
     _jobs = jobs;
+    // 有下载 / 转码任务在跑就申请后台保活，全部停下来就释放。
+    BackgroundKeepAlive.sync(
+      jobs.any((job) => job.active || job.converting),
+    );
     if (!_disposed) notifyListeners();
   }
 
