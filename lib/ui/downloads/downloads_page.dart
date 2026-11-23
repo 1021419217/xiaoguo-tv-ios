@@ -920,17 +920,21 @@ class _JobRow extends StatelessWidget {
       'converting' => downloadShare + (converted ?? 0) * (1 - downloadShare),
       _ => job.progress * downloadShare,
     };
+    // 每一步都摊开写：左边阶段 + 总进度，右边体积（已下 / 总体积）。
+    // 阶段名不能省——只显示一个百分数时，下载、封装、转码三段看起来像同一件事。
     final state = switch (job.state) {
-      'downloading' => '${(overall * 100).round()}%',
-      'converting' => '${job.stateLabel} ${(overall * 100).round()}%',
+      'downloading' => '下载中 ${(overall * 100).round()}%',
+      'converting' => '处理中 ${(overall * 100).round()}%',
       _ => job.stateLabel,
     };
     final detail = switch (job.state) {
       'failed' => job.error,
-      'queued' || 'converting' => '',
+      'queued' => '',
+      // 处理阶段文件已经下完，体积不再变化，直接把总体积写出来。
+      'converting' => job.total > 0 ? '总计 ${formatBytes(job.total)}' : '',
       _ when job.total > 0 =>
         '${formatBytes(job.bytes)} / ${formatBytes(job.total)}',
-      _ when job.bytes > 0 => formatBytes(job.bytes),
+      _ when job.bytes > 0 => '${formatBytes(job.bytes)} · 计算体积中',
       _ => '',
     };
     final secondary = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);

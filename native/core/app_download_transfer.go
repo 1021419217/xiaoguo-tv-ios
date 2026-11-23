@@ -86,6 +86,7 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 		return nativeDownloadResult{}, err
 	}
 	var completedBytes int64
+	var completedChunks int64
 	var stateMu sync.Mutex
 	var firstErr error
 	downloadCtx, cancelDownloads := context.WithCancel(ctx)
@@ -109,9 +110,12 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 			}
 			stateMu.Lock()
 			completedBytes += int64(len(asset.data))
+			completedChunks++
 			done := completedBytes
+			chunks := completedChunks
 			stateMu.Unlock()
-			manager.progress(job.ID, done, 0, float64(index+1)/float64(len(bundle.assets)))
+			total := estimateChunkedTotal(done, chunks, len(bundle.assets))
+			manager.progress(job.ID, done, total, float64(index+1)/float64(len(bundle.assets)))
 			continue
 		}
 		pending.Add(1)
@@ -131,13 +135,19 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 				if hls {
 					progress = (float64(index) + progress) / float64(len(bundle.assets))
 				}
-				overallTotal := int64(0)
-				if !hls {
-					overallTotal = total
-				}
 				stateMu.Lock()
 				base := completedBytes
+				chunks := completedChunks
 				stateMu.Unlock()
+				overallTotal := total
+				if hls {
+					// 分片大小没有统一清单，用「已完成分片的平均大小 × 总片数」估算总量，
+					// 下几片就能收敛，界面才能显示「已下 / 总体积」。
+					overallTotal = estimateChunkedTotal(base, chunks, len(bundle.assets))
+					if overallTotal > 0 && base+received > overallTotal {
+						overallTotal = base + received
+					}
+				}
 				manager.progress(job.ID, base+received, overallTotal, progress)
 			})
 			stateMu.Lock()
@@ -150,6 +160,7 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 				return
 			}
 			completedBytes += size
+			completedChunks++
 		}(index, asset, target)
 	}
 	pending.Wait()
@@ -166,6 +177,14 @@ func (manager *nativeDownloads) transferMedia(ctx context.Context, job nativeDow
 	}
 	manager.progress(job.ID, completedBytes, completedBytes, 1)
 	return nativeDownloadResult{file: entry, key: hex.EncodeToString(media.CENCKey), quality: bundle.quality}, nil
+}
+
+// estimateChunkedTotal 用已完成分片的平均大小乘总片数，估算整部视频的体积。
+func estimateChunkedTotal(completedBytes, completedChunks int64, totalChunks int) int64 {
+	if completedChunks <= 0 || totalChunks <= 0 || completedBytes <= 0 {
+		return 0
+	}
+	return completedBytes / completedChunks * int64(totalChunks)
 }
 
 func nativeDownloadValidator(header http.Header) string {
