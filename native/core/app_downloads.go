@@ -600,6 +600,25 @@ func (manager *nativeDownloads) localPlan(drama string, index int) (nativePlan, 
 		Qualities: []int{}, Headers: map[string]string{}, RouteCount: 1}, true, nil
 }
 
+// nativeDownloadHTTPError 让调用方能按状态码决定是否重试：4xx（除 408/429）重试也没用。
+type nativeDownloadHTTPError struct {
+	status int
+}
+
+func (failure nativeDownloadHTTPError) Error() string {
+	return fmt.Sprintf("媒体服务器返回 HTTP %d，请稍后重试", failure.status)
+}
+
 func nativeDownloadError(status int) error {
-	return fmt.Errorf("媒体服务器返回 HTTP %d，请稍后重试", status)
+	return nativeDownloadHTTPError{status: status}
+}
+
+func nativeDownloadRetryable(err error) bool {
+	var failure nativeDownloadHTTPError
+	if errors.As(err, &failure) {
+		if failure.status >= 400 && failure.status < 500 && failure.status != http.StatusRequestTimeout && failure.status != http.StatusTooManyRequests {
+			return false
+		}
+	}
+	return true
 }
