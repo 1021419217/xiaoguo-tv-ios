@@ -83,7 +83,15 @@ class _DownloadsPageState extends State<DownloadsPage>
   }
 
   void _tabChanged() {
-    if (_tabs.indexIsChanging) return;
+    if (!mounted) return;
+    if (_tabs.indexIsChanging) {
+      // 手势滑动期间会持续收到通知，但停下来的那一帧不保证还有通知；
+      // 补一次重建，否则页面已经切过去、顶栏还停在旧页。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_tabs.indexIsChanging) setState(() {});
+      });
+      return;
+    }
     setState(() => _selection = null);
   }
 
@@ -402,23 +410,31 @@ class _DownloadsPageState extends State<DownloadsPage>
   Widget _tabBar(double inset) {
     final pending = pendingDownloads(widget.downloads.jobs).length;
     final downloaded = downloadedDramas(widget.downloads.jobs).length;
+    // 标签文案在动画回调外算好，别跟着拖动的每一帧重算。
+    final options = [
+      ChoiceOption(0, pending == 0 ? '下载中' : '下载中 $pending'),
+      ChoiceOption(1, downloaded == 0 ? '已下载' : '已下载 $downloaded'),
+      ChoiceOption(
+        2,
+        widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
+      ),
+    ];
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: CategoryTabs<int>(
-        options: [
-          ChoiceOption(0, pending == 0 ? '下载中' : '下载中 $pending'),
-          ChoiceOption(1, downloaded == 0 ? '已下载' : '已下载 $downloaded'),
-          ChoiceOption(
-            2,
-            widget.merges.active == 0 ? '合并' : '合并 ${widget.merges.active}',
-          ),
-        ],
-        selected: _tabs.index,
-        onSelected: (index) {
-          if (index == _tabs.index) return;
-          setState(() => _selection = null);
-          _tabs.animateTo(index);
-        },
+      // 把 TabBarView 的滑动进度直接喂给下划线：手指拖到一半，线就跟到一半，
+      // 不再等页面停稳、等 index 变化、再补一段动画才追过去。
+      child: AnimatedBuilder(
+        animation: _tabs.animation,
+        builder: (context, _) => CategoryTabs<int>(
+          options: options,
+          selected: _tabs.index,
+          progress: _tabs.animation.value,
+          onSelected: (index) {
+            if (index == _tabs.index) return;
+            setState(() => _selection = null);
+            _tabs.animateTo(index);
+          },
+        ),
       ),
     );
   }

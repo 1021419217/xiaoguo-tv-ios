@@ -16,12 +16,19 @@ class CategoryTabs<T> extends StatefulWidget {
     required this.onSelected,
     this.onShowAll,
     this.autoReveal = true,
+    this.progress,
   });
   final List<ChoiceOption<T>> options;
   final T selected;
   final ValueChanged<T> onSelected;
   final void Function(BuildContext anchor)? onShowAll;
   final bool autoReveal;
+
+  /// 选中位置的连续进度（0 到 `options.length - 1`）。
+  ///
+  /// 传了就每帧按它插值下划线位置，让下划线跟着外层 TabBarView / PageView
+  /// 一起走；不传则仍是「选中值变了再滑过去」的老行为。
+  final double? progress;
 
   @override
   State<CategoryTabs<T>> createState() => CategoryTabsState<T>();
@@ -34,6 +41,9 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   bool _overflows = false;
   Rect? _indicator;
   bool _sliding = false;
+
+  /// progress 模式下首帧量不到位置时只补一次重建，避免空转。
+  bool _primed = false;
 
   @override
   void didUpdateWidget(covariant CategoryTabs<T> oldWidget) {
@@ -70,21 +80,53 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
     return false;
   }
 
-  /// 测量选中 tab 在行内的位置，供那条下划线定位/滑动。
-  /// inset 用左右 padding，使线宽贴合文字宽度（与上游一致）。
-  void _measure(double inset) {
-    if (!mounted) return;
-    final tab = _keys[widget.selected]?.currentContext?.findRenderObject();
+  /// 某个 tab 在行内的矩形（线宽贴合文字宽度，与上游一致）。
+  Rect? _tabRect(int index, double inset) {
+    if (index < 0 || index >= widget.options.length) return null;
+    final tab = _keys[widget.options[index].value]?.currentContext
+        ?.findRenderObject();
     final row = _row.currentContext?.findRenderObject();
-    if (tab is! RenderBox || row is! RenderBox) return;
-    if (!tab.hasSize) return;
+    if (tab is! RenderBox || row is! RenderBox || !tab.hasSize) return null;
     final origin = tab.localToGlobal(Offset.zero, ancestor: row);
-    final rect = Rect.fromLTWH(
+    return Rect.fromLTWH(
       origin.dx + inset,
       0,
       (tab.size.width - inset * 2).clamp(8.0, double.infinity),
       0,
     );
+  }
+
+  /// 按连续进度在相邻两个 tab 之间插值下划线位置。
+  Rect? _progressRect(double value, double inset) {
+    final count = widget.options.length;
+    if (count == 0) return null;
+    final last = count - 1;
+    final position = value.clamp(0.0, last.toDouble());
+    final from = position.floor();
+    final to = from + 1 <= last ? from + 1 : from;
+    final fraction = position - from;
+    final a = _tabRect(from, inset);
+    if (a == null) return null;
+    if (fraction == 0 || from == to) return a;
+    final b = _tabRect(to, inset);
+    if (b == null) return a;
+    return Rect.fromLTRB(
+      a.left + (b.left - a.left) * fraction,
+      0,
+      a.right + (b.right - a.right) * fraction,
+      0,
+    );
+  }
+
+  /// 测量选中 tab 在行内的位置，供那条下划线定位/滑动。
+  /// inset 用左右 padding，使线宽贴合文字宽度（与上游一致）。
+  void _measure(double inset) {
+    if (!mounted) return;
+    final at = widget.options.indexWhere(
+      (option) => option.value == widget.selected,
+    );
+    final rect = _tabRect(at, inset);
+    if (rect == null) return;
     if (rect == _indicator) return;
     setState(() {
       // 首次定位不做滑动动画，之后切换才让线从旧位置滑到新位置。
@@ -111,9 +153,27 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
       (value, _) => !widget.options.any((option) => option.value == value),
     );
     final television = form == FormFactor.television;
-    // 帧后测量选中 tab 的位置，驱动那条下划线定位 / 滑动。
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure(padding));
-    final indicator = _indicator;
+    // 有连续进度时每帧插值，不再走「测量后动画」那条路。
+    final progress = widget.progress;
+    if (progress == null) {
+      // 帧后测量选中 tab 的位置，驱动那条下划线定位 / 滑动。
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measure(padding));
+    }
+    final interpolated = progress == null
+        ? null
+        : _progressRect(progress, padding);
+    if (progress != null &&
+        interpolated == null &&
+        widget.options.isNotEmpty &&
+        !_primed) {
+      // 首帧 tab 还没布局，量不到位置；只补一帧再画一次，不会形成循环。
+      _primed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
+    final indicator = interpolated ?? _indicator;
+    final sliding = interpolated != null ? false : _sliding;
     // 手机 / 平板端「全部分类」常驻右端并与标签栏垂直居中对齐，
     // 不再依赖标签是否溢出——随时可点，位置固定，用起来才顺手。
     // 电视端仍按遥控器习惯，仅在标签溢出时于左端显示。
@@ -182,7 +242,7 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
                         // 文字宽度。颜色走中性高光而非主题色，融入玻璃界面。
                         if (indicator != null)
                           AnimatedPositioned(
-                            duration: _sliding
+                            duration: sliding
                                 ? Motion.of(context, Motion.medium)
                                 : Duration.zero,
                             curve: Motion.standard,
