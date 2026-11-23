@@ -386,6 +386,52 @@ function mediaAddress(body) {
   return main || found[0];
 }
 
+// 预拉 master 并解析各档位：模块侧一次性拿到 1080/720/480 的具体地址，
+// 播放器不用再为了「选档」多跑一次请求，卡了也能直接切档位。
+function playlistLevels(master, referer) {
+  let playlist = "";
+  let base = master;
+  try {
+    const result = host.fetchPlaylist({ url: master, referer: referer });
+    if (result) {
+      playlist = result.playlist ? String(result.playlist) : "";
+      if (result.url) {
+        base = String(result.url);
+      }
+    }
+  } catch (_) {
+    playlist = "";
+  }
+  if (playlist.indexOf("#EXTM3U") < 0) {
+    return [];
+  }
+  const levels = [];
+  let quality = 0;
+  for (const raw of playlist.replace(/\r/g, "").split("\n")) {
+    const line = raw.trim();
+    if (line.indexOf("#EXT-X-STREAM-INF:") === 0) {
+      const resolution = line.match(/RESOLUTION=\d+x(\d+)/);
+      quality = resolution ? Number(resolution[1]) : 0;
+      continue;
+    }
+    if (line === "" || line.charAt(0) === "#") {
+      continue;
+    }
+    let url = "";
+    try {
+      url = host.resolveUrl(base, line);
+    } catch (_) {
+      url = "";
+    }
+    if (url !== "") {
+      levels.push({ url: url, quality: quality });
+    }
+    quality = 0;
+  }
+  levels.sort((left, right) => right.quality - left.quality);
+  return levels;
+}
+
 function fetchDocument(address) {
   return htmlTree(host.fetchText({ url: address, referer: siteBaseUrl + "/", userAgent }).body);
 }
@@ -501,6 +547,21 @@ module.exports = {
     if (address === "") {
       throw new Error("MissAV 页面里未解析到播放地址");
     }
-    return host.prepareWebMedia({ url: address, referer: pageUrl }, channel);
+    const levels = playlistLevels(address, pageUrl);
+    if (levels.length === 0) {
+      // 拉不到档位时退回旧路径：交给 App 自己拉 master，至少不会播不了。
+      return host.prepareWebMedia({ url: address, referer: pageUrl }, channel);
+    }
+    const variants = levels.map((level) => ({
+      url: level.url,
+      referer: pageUrl,
+      quality: level.quality,
+    }));
+    return {
+      url: levels[0].url,
+      referer: pageUrl,
+      quality: levels[0].quality,
+      variants: variants,
+    };
   },
 };
