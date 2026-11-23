@@ -11,6 +11,9 @@ import '../app_scope.dart';
 import '../detail/detail_page.dart';
 import '../settings/settings_rows.dart';
 import '../widgets/action_pill.dart';
+import '../widgets/bar_button.dart';
+import '../widgets/category_tabs.dart';
+import '../widgets/choice_panel.dart';
 import '../widgets/swipe_category_layer.dart';
 import '../shell/app_shell.dart';
 import '../widgets/drama_grid.dart';
@@ -165,11 +168,9 @@ class _FollowPageState extends State<FollowPage> {
   );
 
   /// 顶栏操作统一成 [ActionPill]，和下载页、模块页同一套胶囊。
-  Widget _editButtonFor(_View view) => ActionPill(
+  Widget _editButtonFor(_View view) => BarButton(
     icon: Icons.check_box_outlined,
-    label: '编辑',
-    fontSize: 14,
-    focusNode: _editButton,
+    tooltip: '编辑',
     onPressed: view.shown.isEmpty ? null : _startEditing,
   );
 
@@ -254,6 +255,16 @@ class _FollowPageState extends State<FollowPage> {
     );
   }
 
+  /// 首页同款下划线分类条，替代原来的紫色 ChoiceChip。
+  Widget _sourceTabs(_View view) => CategoryTabs<String>(
+    options: [
+      const ChoiceOption('', '全部'),
+      for (final site in view.sources) ChoiceOption(site.id, site.name),
+    ],
+    selected: view.source,
+    onSelected: (id) => setState(() => _source = id),
+  );
+
   /// 左右滑动切换下方「站源」分类（全部 → 各站源）。
   /// 注意只包住**列表本身**：顶栏、搜索框、站源胶囊留在滑动层外面，
   /// 否则一滑整个追剧画面（标题、搜索框、卡片）一起位移，看着就是在抖。
@@ -333,10 +344,10 @@ class _FollowPageState extends State<FollowPage> {
                         ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                   child: _search(),
                 ),
-                ?_sources(view, inset: 16, scroll: true),
+                _sourceTabs(view),
               ],
             ),
           ),
