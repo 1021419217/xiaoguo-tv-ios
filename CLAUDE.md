@@ -29,10 +29,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - AV 站：`author` / `authorId` / `authorUrl` 优先填上传者或片商/频道；`actors` 填女优数组；`maker` 填片商；系列、厂牌、频道等信息能取到就一并抓取，模型暂无独立 `series` 字段时并入 `tags`，不要丢。
   - 不能只抓标题和封面；详情页能取到的作者、女优、片商、系列/标签必须全部映射。
   - 详情页能取到的「上传时间 / 添加时间 / 发行日期」必须填入 `onlineDate`（模块字段，会映射到 App 的 `releaseDate` 并显示在详情页时间一栏），格式统一为 `YYYY-MM-DD`；拿不到日期时才留空。
+  - 列表卡片（`catalogPage()` / `search()` / `rankingPage()` 返回的每一条）也要把卡片上已有的信息映射到对应字段，**字段名必须跟 Go 侧一致**，写错名字界面就不会显示：
+    - 卡片上有「2:15:53」这类时长角标 → 填 `durationText`（**不要塞进 `desc`、`remark` 或 `duration`**，那些字段界面不读）；
+    - 卡片上有清晰度标记（HD / 4K / 1080P）→ 填 `badge`；
+    - 卡片上有字幕标记（中文字幕 / 中字 / 有码无码等）→ 加进 `tags` 数组；
+    - 卡片上有集数（共 X 集 / 全 X 集）→ 填 `badge` 或复用 `remark`，但不要和 `durationText` 抢同一个元素。
+  - 反面例子（都踩过）：`missav` 列表卡片明明有 `2:15:53` 角标却完全没抓；`p91` 抓到了时长却塞进 `desc`（`'时长 ' + duration`），界面只认 `durationText`，用户以为功能没做。
 - 新模块交付前逐项自查，缺一项都算没做完（这是长期要求，不再逐次请示）：
   1. `detail()` 必须返回非空的 `author`、`authorId`、`authorUrl`；
   2. AV 站同时返回 `actors`（女优数组）与 `maker`（片商），系列/厂牌/频道并入 `tags`；
   3. 必须导出 `author(authorId, authorName, page)`，直接请求该站作者页并翻页，返回 `{ items, hasMore }`；
   4. `author()` 返回的条目带 `author` / `authorId`，二级页里还能继续点进去；
   5. `catalogPage()` / `search()` 的条目在列表页能取到作者时也一并带上，不要让用户必须先点进详情；
-  6. `detail()` 页面里有上传/添加/发行时间时，返回 `onlineDate`（格式 YYYY-MM-DD），不要漏。
+  6. `detail()` 页面里有上传/添加/发行时间时，返回 `onlineDate`（格式 YYYY-MM-DD），不要漏；
+  7. `catalogPage()` / `search()` / `rankingPage()` 的条目，卡片上能看到的时长/清晰度/字幕/集数要填进 `durationText` / `badge` / `tags`，**字段名必须跟 Go 侧一致**（写错就不显示）。
