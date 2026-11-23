@@ -13,6 +13,7 @@ import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
 import 'data_card.dart';
 import 'settings_rows.dart';
+import '../widgets/glass_dialog.dart';
 
 String storageSize(int bytes) {
   if (bytes < 0) return '暂不可用';
@@ -92,25 +93,12 @@ class _StorageViewState extends State<StorageView> {
   Future<void> _restore() => _migrate('', '应用默认目录');
 
   Future<void> _migrate(String parent, String destination) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('迁移已下载内容？'),
-        content: Text(
+      title: '迁移已下载内容？',
+      message:
           '将下载目录里的全部内容迁移到：\n$destination\n\n下载会先暂停，复制成功后清理旧目录。请保证目标有足够空间，并在完成后继续下载。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('迁移'),
-          ),
-        ],
-      ),
+      confirmLabel: '迁移',
     );
     if (confirmed != true || !mounted) return;
     final repository = AppScope.of(context).repository;

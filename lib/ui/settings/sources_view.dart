@@ -9,6 +9,7 @@ import '../widgets/focus_ring.dart';
 import '../widgets/group_card.dart';
 import 'settings_rows.dart';
 import 'sorani_account_view.dart';
+import '../widgets/glass_dialog.dart';
 
 /// 站源管理：开关、拖动排序、删除、测速。
 ///
@@ -39,29 +40,14 @@ class _SourcesViewState extends State<SourcesView> {
   }
 
   Future<void> _remove(SourceSite site) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('彻底删除「${site.name}」？'),
-        content: const Text(
+      title: '彻底删除「${site.name}」？',
+      message:
           '将永久删除这个站源在本机的追剧、观看记录和已下载的视频，无法恢复。'
           '站源模块本身不会被卸载，之后可从「设置 › 模块」重新安装。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('彻底删除'),
-          ),
-        ],
-      ),
+      confirmLabel: '彻底删除',
+      danger: true,
     );
     if (confirmed != true || !mounted) return;
     await saveSetting(context, () async {

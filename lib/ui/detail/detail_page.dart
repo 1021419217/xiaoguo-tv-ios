@@ -25,6 +25,7 @@ import '../widgets/choice_panel.dart';
 import '../widgets/motion/motion_widgets.dart';
 import '../widgets/status_view.dart';
 import 'author_page.dart';
+import '../widgets/glass_dialog.dart';
 
 class _Metrics {
   const _Metrics({
@@ -445,22 +446,11 @@ class _DetailPageState extends State<DetailPage> {
     final episode = details.episodes[index];
     if (episode.vip &&
         SourceSite.byId(details.drama.source).vipPrompt &&
-        await showDialog<bool>(
+        await showGlassDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('这是一集 VIP 内容'),
-                content: const Text('站源可能只提供试看或限制播放。'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('尝试播放'),
-                  ),
-                ],
-              ),
+              title: '这是一集 VIP 内容',
+              message: '站源可能只提供试看或限制播放。',
+              confirmLabel: '尝试播放',
             ) !=
             true) {
       return;

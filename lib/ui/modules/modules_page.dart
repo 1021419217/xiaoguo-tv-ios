@@ -20,6 +20,7 @@ import '../widgets/capsule_tabs.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
 import '../widgets/group_card.dart';
+import '../widgets/glass_dialog.dart';
 
 class ModulesPage extends StatefulWidget {
   const ModulesPage({super.key, required this.store});
@@ -243,29 +244,12 @@ class _ModulesPageState extends State<ModulesPage>
   }
 
   Future<void> _uninstall(SourceModule module) async {
-    final accepted = await showDialog<bool>(
+    final accepted = await showGlassDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('卸载 ${module.name}？'),
-        content: const Text('该站源的追剧、观看记录和已下载视频会保留，但在重新安装前不再显示，正在下载的集会暂停。'),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('卸载'),
-            ),
-          ),
-        ],
-      ),
+      title: '卸载 ${module.name}？',
+      message: '该站源的追剧、观看记录和已下载视频会保留，但在重新安装前不再显示，正在下载的集会暂停。',
+      confirmLabel: '卸载',
+      danger: true,
     );
     if (accepted != true) return;
     await _run(() async {

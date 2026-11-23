@@ -397,13 +397,13 @@ class _HistoryPageState extends State<HistoryPage> {
               context,
               view,
               inset: 16,
-              // 磨砂顶栏浮在内容之上（extendBodyBehindAppBar），正文必须自己
-              // 让出 kToolbarHeight，否则搜索框会被压在顶栏底下。
-              top: kToolbarHeight,
+              // 不要再加 top: kToolbarHeight——extendBodyBehindAppBar 下
+              // Scaffold 已把它算进 MediaQuery.padding.top，SafeArea 让出的
+              // 那一截里就含顶栏高度，再补一次会空出一大块。
               swipe: true,
               header: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
                   child: _search(),
                 ),
                 _sourceTabs(view),

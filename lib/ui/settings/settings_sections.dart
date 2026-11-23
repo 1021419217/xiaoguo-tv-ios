@@ -25,6 +25,7 @@ import 'backup_actions.dart';
 import 'diary_view.dart';
 import 'settings_rows.dart';
 import 'storage_view.dart';
+import '../widgets/glass_dialog.dart';
 
 enum SettingsGroup {
   appearance('外观', Icons.palette_outlined),
@@ -680,29 +681,11 @@ class _RenderingTileState extends State<_RenderingTile> {
   }
 
   Future<void> _switch(bool enabled) async {
-    final accepted = await showDialog<bool>(
+    final accepted = await showGlassDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(enabled ? '开启兼容渲染模式？' : '关闭兼容渲染模式？'),
-        content: const Text('需要重启应用才能生效，正在进行的下载会中断。'),
-        actions: [
-          FocusRing(
-            radius: 20,
-            child: TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-          ),
-          FocusRing(
-            radius: 20,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('立即重启'),
-            ),
-          ),
-        ],
-      ),
+      title: enabled ? '开启兼容渲染模式？' : '关闭兼容渲染模式？',
+      message: '需要重启应用才能生效，正在进行的下载会中断。',
+      confirmLabel: '立即重启',
     );
     if (accepted != true || !mounted) return;
     if (!await AppDevice.setCompatibleRendering(enabled) && mounted) {
