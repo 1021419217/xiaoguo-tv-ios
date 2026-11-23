@@ -69,6 +69,7 @@ type LibraryDrama struct {
 	Serial         string   `json:"serial,omitempty"`
 	ReleaseDate    string   `json:"releaseDate,omitempty"`
 	DurationText   string   `json:"durationText,omitempty"`
+	Duration       any      `json:"duration,omitempty"`
 	Maker          string   `json:"maker,omitempty"`
 	Director       string   `json:"director,omitempty"`
 
@@ -234,7 +235,7 @@ func NativeNormalize(drama Drama) LibraryDrama {
 		Author: strings.TrimSpace(drama.Author), AuthorID: strings.TrimSpace(drama.AuthorID), AuthorURL: strings.TrimSpace(drama.AuthorURL),
 		Actors: append([]string(nil), drama.Actors...), Serial: strings.TrimSpace(drama.Serial),
 		ReleaseDate: FirstNonEmpty(strings.TrimSpace(drama.ReleaseDate), ProviderReleaseDate(drama.OnlineDate)),
-		DurationText: strings.TrimSpace(drama.DurationText), Maker: strings.TrimSpace(drama.Maker),
+		DurationText: FirstNonEmpty(strings.TrimSpace(drama.DurationText), nativeDurationText(drama.Duration)), Maker: strings.TrimSpace(drama.Maker),
 		Director: strings.TrimSpace(drama.Director), Meta: drama.Meta}
 }
 
