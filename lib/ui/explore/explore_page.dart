@@ -128,8 +128,23 @@ class ExplorePageState extends State<ExplorePage> {
       final box = _headerKey.currentContext?.findRenderObject();
       if (box is! RenderBox || !box.hasSize) return;
       final height = box.size.height;
-      if ((height - _headerH).abs() < 0.5) return;
+      final delta = height - _headerH;
+      if (delta.abs() < 0.5) return;
       setState(() => _headerH = height);
+      // 顶栏收起/展开会改变顶部留白的高度，滚动内容整体上移/下移；
+      // 若不补偿滚动位置，就会卡在某个位置滑不上去（表现为一卡一咔）。
+      if (delta.abs() > 0.5 && _scroll.hasClients) {
+        final position = _scroll.position;
+        if (position.pixels > position.minScrollExtent + 0.5) {
+          final target = (position.pixels + delta).clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          );
+          if ((target - position.pixels).abs() > 0.5) {
+            _scroll.jumpTo(target);
+          }
+        }
+      }
     });
   }
 
