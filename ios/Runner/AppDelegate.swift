@@ -20,39 +20,49 @@ import WebKit
   ///      App「正在播放音频」，照样挂起，保活等于没做。
   ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出；
   ///      数据本身就是全零 PCM，音量保持 1 即可，听不到声音。
+  /// 返回 {ok, error}：失败原因要回给 Dart 记进日记，不能再静默吞掉。
   @discardableResult
-  private func setDownloadKeepAlive(_ enabled: Bool) -> Bool {
+  private func setDownloadKeepAlive(_ enabled: Bool) -> [String: Any] {
     let session = AVAudioSession.sharedInstance()
     if !enabled {
       keepAlivePlayer?.stop()
       keepAlivePlayer = nil
       try? session.setActive(false, options: [.notifyOthersOnDeactivation])
-      return true
+      return ["ok": true, "error": ""]
     }
-    if keepAlivePlayer?.isPlaying == true { return true }
+    if keepAlivePlayer?.isPlaying == true { return ["ok": true, "error": ""] }
     do {
       try session.setCategory(.playback, mode: .default, options: [])
       try session.setActive(true)
+    } catch {
+      return ["ok": false, "error": "音频会话激活失败：\(error.localizedDescription)"]
+    }
+    do {
       let player = try AVAudioPlayer(data: Self.silentWav(seconds: 2))
       player.numberOfLoops = -1
       player.volume = 1
       player.prepareToPlay()
-      player.play()
       keepAlivePlayer = player
-      return true
+      if !player.play() {
+        keepAlivePlayer = nil
+        return ["ok": false, "error": "静音音频 play() 返回 false"]
+      }
     } catch {
-      return false
+      return ["ok": false, "error": "静音音频创建失败：\(error.localizedDescription)"]
     }
+    return ["ok": true, "error": ""]
   }
 
   /// 进后台时补一次激活：音频会话可能刚被系统释放或被来电打断，
   /// 不重新激活的话保活会在后台断掉。
-  override func applicationDidEnterBackground(_ application: UIApplication) {
-    if let player = keepAlivePlayer {
-      try? AVAudioSession.sharedInstance().setActive(true)
-      if !player.isPlaying { player.play() }
-    }
-    super.applicationDidEnterBackground(application)
+  /// 本工程启用了 UIScene，UIApplicationDelegate 的 applicationDidEnterBackground
+  /// 不会被系统调用，所以改听通知（两种都听，非 Scene 场景也覆盖）。
+  @objc private func reactivateKeepAlive() {
+    guard let player = keepAlivePlayer else { return }
+    let session = AVAudioSession.sharedInstance()
+    try? session.setCategory(.playback, mode: .default, options: [])
+    try? session.setActive(true)
+    if !player.isPlaying { player.play() }
   }
 
   /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
@@ -96,6 +106,18 @@ import WebKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     ZgjEnsureCoreLinked()
+    for name in [
+      UIApplication.didEnterBackgroundNotification,
+      UIScene.didEnterBackgroundNotification,
+      AVAudioSession.interruptionNotification,
+    ] {
+      NotificationCenter.default.addObserver(
+        self,
+        selector: #selector(reactivateKeepAlive),
+        name: name,
+        object: nil
+      )
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -148,6 +170,22 @@ import WebKit
           let host = (arguments?["host"] as? String) ?? address.host ?? ""
           ChallengeWebView.shared.webFetch(url: address, host: host) { html in
             result(html)
+          }
+          return
+        case "silentChallenge":
+          // 后台静默过验证：不弹窗，离屏 WebView 自己把挑战跑完，拿到凭据就回传。
+          guard let urlText = arguments?["url"] as? String,
+                let address = URL(string: urlText) else {
+            result(nil)
+            return
+          }
+          let host = (arguments?["host"] as? String) ?? address.host ?? ""
+          ChallengeWebView.shared.silentSolve(url: address, host: host) { cookie, agent in
+            guard let cookie, !cookie.isEmpty else {
+              result(nil)
+              return
+            }
+            result(["cookie": cookie, "ua": agent ?? ""])
           }
           return
         case "getBrightness":
@@ -257,6 +295,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       } else {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        self.harden(config)
         web = WKWebView(frame: .zero, configuration: config)
         // 新建的 WebView 也要进窗口层级（放在屏幕外）：不在窗口里的
         // WKWebView 同样会被系统挂起 JS，fetch 永远拿不到结果。
@@ -295,6 +334,21 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     return key
   }
 
+  /// 关掉自动播放与脚本开窗权限。成人站的广告会用 WebView 拉起系统全屏播放器，
+  /// 那层播放器浮在所有界面之上，跟当前在哪个页、哪个站源都无关，关掉还会再来。
+  private func harden(_ config: WKWebViewConfiguration) {
+    config.mediaTypesRequiringUserActionForPlayback = .all
+    config.allowsInlineMediaPlayback = true
+    config.preferences.javaScriptCanOpenWindowsAutomatically = false
+  }
+
+  /// 把 WebView 停到空白页：页面脚本与广告随之停止，WebView 本体（cookie 会话、
+  /// TLS/JS 指纹）仍保留，下次 webFetch 重新导航到目标页即可。
+  private func park(_ web: WKWebView) {
+    web.stopLoading()
+    web.load(URLRequest(url: URL(string: "about:blank")!))
+  }
+
   private static func keyWindow() -> UIWindow? {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
@@ -322,6 +376,8 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
         )
         let html = (value as? String) ?? (value as? NSNumber)?.stringValue ?? ""
         completion(html.isEmpty ? nil : html)
+        // 取完立刻回到空白页：别让站点的广告在后台页面里继续跑。
+        self.park(web)
       }
     }
     func waitAndFetch(_ tries: Int) {
@@ -341,6 +397,99 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
     } else {
       web.load(URLRequest(url: url))
       waitAndFetch(0)
+    }
+  }
+
+  /// 后台静默过验证：不弹窗，离屏 WebView 打开站点，等 Cloudflare 放行。
+  ///
+  /// 和手动「去验证」走同一台 WebView 与同一份 cookie 库，区别只是不显示界面：
+  /// 站点一旦不再停在挑战页且拿到了 cf_clearance，就把凭据交回去，模块接着用。
+  /// 超时（默认 25 秒）就回 nil，由界面退回手动验证。
+  func silentSolve(
+    url: URL,
+    host: String,
+    timeout: TimeInterval = 25,
+    completion: @escaping (String?, String?) -> Void
+  ) {
+    DispatchQueue.main.async {
+      let key = Self.hostKey(host)
+      let web: WKWebView
+      let cachedKey = self.solved[key] != nil
+        ? key
+        : self.solved.keys.first { candidate in
+            key == candidate || key.hasSuffix("." + candidate)
+              || candidate.hasSuffix("." + key)
+          }
+      if let cachedKey, let cached = self.solved[cachedKey] {
+        web = cached
+      } else {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        self.harden(config)
+        web = WKWebView(frame: .zero, configuration: config)
+        if let window = Self.keyWindow() {
+          web.frame = CGRect(
+            x: -window.bounds.width - 40, y: 0,
+            width: window.bounds.width, height: window.bounds.height
+          )
+          window.insertSubview(web, at: 0)
+        }
+        self.retain(web, for: key)
+      }
+
+      let hosts = Set(
+        [host, url.host ?? ""]
+          .map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+          .filter { !$0.isEmpty }
+      )
+      let deadline = Date().addingTimeInterval(timeout)
+      var finished = false
+
+      // 拿到凭据（或超时）后立刻停到空白页：隐藏的 WebView 不能留着跑页面脚本，
+      // 上一版「突然弹出系统播放器的直播广告」就是那么来的。
+      func finish(_ cookie: String?, _ agent: String?) {
+        guard !finished else { return }
+        finished = true
+        self.park(web)
+        completion(cookie, agent)
+      }
+
+      web.load(URLRequest(url: url))
+
+      func poll() {
+        guard !finished else { return }
+        let waiting = ["just a moment", "请稍候", "請稍候", "attention required", "checking", "verifying"]
+        web.evaluateJavaScript("document.title") { value, _ in
+          let title = ((value as? String) ?? "").lowercased()
+          let blocked = title.isEmpty || waiting.contains { title.contains($0) }
+          WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+            guard !finished else { return }
+            let mine = cookies.filter { cookie in
+              let domain = cookie.domain.lowercased()
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+              guard !domain.isEmpty else { return false }
+              return hosts.contains { candidate in
+                candidate == domain || candidate.hasSuffix("." + domain)
+                  || domain.hasSuffix("." + candidate)
+              }
+            }
+            let hasClearance = mine.contains { $0.name == "cf_clearance" }
+            if !blocked && hasClearance {
+              let header = mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+              web.evaluateJavaScript("navigator.userAgent") { agent, _ in
+                finish(header, agent as? String)
+              }
+              return
+            }
+            if Date() >= deadline {
+              finish(nil, nil)
+              return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { poll() }
+          }
+        }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { poll() }
     }
   }
 
@@ -422,6 +571,7 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       let config = WKWebViewConfiguration()
       // 用默认（持久化）存储：验证拿到的 cookie 与后续 WebKit 请求共用同一份。
       config.websiteDataStore = .default()
+      self.harden(config)
       let web = WKWebView(frame: .zero, configuration: config)
       web.translatesAutoresizingMaskIntoConstraints = false
       web.navigationDelegate = self
@@ -600,6 +750,10 @@ final class ChallengeWebView: NSObject, WKNavigationDelegate {
       }
       web.navigationDelegate = nil
       retain(web, for: key)
+      // 抓完 cookie 就把页面清掉：站点的广告会在这台常驻 WebView 里一直播下去，
+      // 还会借它拉起系统全屏播放器（浮在所有界面之上，关掉过几秒又弹回来）。
+      // WebView 本身留着，指纹会话不丢，下次 webFetch 重新导航即可。
+      park(web)
     } else {
       web?.stopLoading()
       web?.navigationDelegate = nil

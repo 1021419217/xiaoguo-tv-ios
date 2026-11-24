@@ -244,8 +244,9 @@ func (transport *huangguoBrowserTransport) RoundTrip(request *http.Request) (*ht
 		if result.StatusCode >= 400 || strings.EqualFold(result.Header.Get("Cf-Mitigated"), "challenge") {
 			level = "warning"
 		}
+		_, profileName := transport.profileFor(request)
 		transport.record(diagnosticEvent{Event: "network.browser_request", Level: level, Source: transport.source(request.URL),
-			Host: request.URL.Hostname(), HTTPStatus: result.StatusCode, Client: huangguoBrowserProfile,
+			Host: request.URL.Hostname(), HTTPStatus: result.StatusCode, Client: profileName,
 			Protocol: result.Proto, CFRay: Truncate(result.Header.Get("Cf-Ray"), 128),
 			ResponseType: Truncate(result.Header.Get("Content-Type"), 128), Message: "浏览器指纹请求完成"})
 	}

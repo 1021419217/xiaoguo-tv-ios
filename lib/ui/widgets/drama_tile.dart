@@ -87,9 +87,9 @@ class _PosterButtonState extends State<_PosterButton> {
                         child: Container(
                           width: 40,
                           height: 40,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color(0x52000000),
+                            color: const Color(0x52000000),
                           ),
                           child: const Icon(
                             Icons.play_arrow_rounded,

@@ -38,6 +38,29 @@ class AppDevice {
     }
   }
 
+  /// 后台静默过验证：原生用离屏 WebView 自己把挑战跑完，不弹窗。
+  /// 拿到凭据返回；超时或没拿到返回 null，调用方再退回手动「去验证」。
+  static Future<({String cookie, String userAgent})?> silentSolve(
+    String url,
+    String host,
+  ) async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    try {
+      final data = await channel
+          .invokeMapMethod<String, dynamic>('silentChallenge', {
+            'url': url,
+            'host': host,
+          })
+          .timeout(const Duration(seconds: 35));
+      final cookie = data?['cookie'];
+      if (cookie is! String || cookie.isEmpty) return null;
+      final agent = data?['ua'];
+      return (cookie: cookie, userAgent: agent is String ? agent : '');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 用那台验证过的 WKWebView 抓页面 HTML（指纹与过验证那次一致）。
   /// 返回原始 HTML；失败返回 null。仅在 iOS 有效。
   static Future<String?> webFetch(String url, String host) async {

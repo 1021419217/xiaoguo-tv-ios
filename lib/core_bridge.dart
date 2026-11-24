@@ -1026,16 +1026,30 @@ class NativeRepository extends AppRepository {
     String query = '',
     String category = '',
     bool force = false,
-  }) async => CatalogPage.fromJson(
-    await _read(query.isEmpty ? 'catalog-$source' : 'catalog-$source-search', {
-      'action': 'catalog',
-      'source': source,
-      'page': page,
-      'query': query,
-      'category': category,
-      'force': force,
-    }),
-  );
+  }) async {
+    // 真 PageView 会同时预加载相邻分类页。原来所有分类共用 catalog-<source>
+    // 一条通道，native 对同一 session 只留最新请求、cancel 掉先发的那条，
+    // 被取消的请求就把 "context canceled" 冒泡成错误页。给每个分类独立通道。
+    // 分类 id 可能含中文/特殊字符，压成 36 进制后缀保证 session 合法。
+    String scope;
+    if (query.isNotEmpty) {
+      scope = 'catalog-$source-search';
+    } else if (category.isEmpty) {
+      scope = 'catalog-$source';
+    } else {
+      scope = 'catalog-$source-c${(category.hashCode & 0x7fffffff).toRadixString(36)}';
+    }
+    return CatalogPage.fromJson(
+      await _read(scope, {
+        'action': 'catalog',
+        'source': source,
+        'page': page,
+        'query': query,
+        'category': category,
+        'force': force,
+      }),
+    );
+  }
   @override
   Future<CatalogPage> cached(String source, {String category = ''}) async =>
       CatalogPage.fromJson(

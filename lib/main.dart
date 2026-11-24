@@ -99,15 +99,6 @@ class _AppBootstrapState extends State<AppBootstrap>
     if (state == AppLifecycleState.resumed && Platform.isAndroid) {
       unawaited(_refreshDevice());
     }
-    if (!Platform.isIOS) return;
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      unawaited(
-        NativeRepository(
-          background: true,
-        ).controlDownloads('pauseAll').catchError((Object _) {}),
-      );
-    }
   }
 
   Future<void> _refreshDevice() async {

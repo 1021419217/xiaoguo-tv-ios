@@ -1,0 +1,29 @@
+{
+  "id": "spankbang",
+  "name": "SpankBang",
+  "version": "1.0.1",
+  "description": "SpankBang - 免费成人视频（New / Trending / 分类 / 搜索，含 HLS 多码率）。站点在 Cloudflare 后面，首次使用需在 App 内过一次人机验证。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "spankbang.com",
+    "*.spankbang.com",
+    "spankbang.party",
+    "*.spankbang.party",
+    "*.sb-cd.com",
+    "*.spankbangcdn.com",
+    "*.spky.xxx"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://spankbang.com",
+  "browserFingerprint": true,
+  "aliases": [
+    "spankbang.com",
+    "www.spankbang.com",
+    "spankbang.party"
+  ]
+}

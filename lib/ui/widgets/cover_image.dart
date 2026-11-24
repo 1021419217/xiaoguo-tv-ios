@@ -263,35 +263,27 @@ class DramaCover extends StatelessWidget {
                 ),
               ),
             ),
-          // 排行榜有左上角名次时不再叠 HD，避免两个角标压在一起
-          if (details && rank == null)
-            if (_qualityLabel(drama) case final quality?)
-              Positioned(
-                left: 7,
-                top: 7,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(
-                      color: const Color(0x99FFFFFF),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Text(
-                    quality,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
+          if (details && _qualityLabel(drama) != null)
+            Positioned(
+              left: 7,
+              top: 7,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: const Color(0x99FFFFFF), width: 0.8),
+                ),
+                child: Text(
+                  _qualityLabel(drama)!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
+            ),
         ],
       ),
     );

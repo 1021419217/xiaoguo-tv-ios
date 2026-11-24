@@ -449,6 +449,14 @@ func nativeDispatch(input nativeInput) (any, error) {
 		if key == "" {
 			return map[string]any{"saved": false}, nil
 		}
+		// 名单之外的站点：凭据存进去也会被 challengeLookup 丢掉，表现为
+		// 「提示已经拿到 cookie，却仍然一直 403」。写一条日志，别再静默失败。
+		if !isVerifiedChallengeHost(key) {
+			engine.downloader.recordDiagnostic(diagnosticEvent{
+				Event: "module", Level: "warning", Source: key, Host: key,
+				Message: "站点验证凭据已保存，但该站点未登记为需要人机验证的站源，凭据不会用于后续请求",
+			})
+		}
 		// 验证凭据变了，旧的缓存页清掉，避免继续喂上一轮抓的旧 HTML。
 		ClearWebPages()
 		if limiter := engine.downloader.limiter; limiter != nil {
@@ -676,6 +684,17 @@ func (engine *nativeEngine) nativeCatalog(ctx context.Context, input nativeInput
 		}
 		seen[drama.ID] = true
 		result.Items = append(result.Items, NativeNormalize(drama))
+	}
+	// 联网抓取第 1 页（非搜索）：无论是进入页面自动加载还是主动下拉刷新，都清掉
+	// 该站源该分类的旧目录缓存，让本次抓回的新数据整页替换，确保用户每次进入
+	// 都能看到最新内容。否则 saveCatalogCache 会把旧片追加到列表尾部、并把页码
+	// 回退到上次浏览位置，用户看到的仍是旧内容（目录流站源尤其明显）。
+	// 只清本次加载的 cacheKey，不影响其他分类/站源，也不影响翻页（page>1）与搜索。
+	if page == 1 && query == "" {
+		engine.mu.Lock()
+		delete(engine.catalogs, cacheKey)
+		delete(engine.catalogStates, cacheKey)
+		engine.mu.Unlock()
 	}
 	engine.saveCatalogCache(cacheKey, &result)
 	return result, nil
