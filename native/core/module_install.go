@@ -78,9 +78,20 @@ func (engine *nativeEngine) modules() ([]nativeModuleInfo, error) {
 }
 
 func (engine *nativeEngine) prepareModule(ctx context.Context, file, address, indexed string, bundled bool) (nativeModuleInfo, error) {
+	return engine.prepareModuleFrom(ctx, file, address, indexed, bundled, false)
+}
+
+// preparePersonalModule 从个人在线仓库取模块，其它流程与官方索引一致。
+func (engine *nativeEngine) preparePersonalModule(ctx context.Context, indexed string) (nativeModuleInfo, error) {
+	return engine.prepareModuleFrom(ctx, "", "", indexed, false, true)
+}
+
+func (engine *nativeEngine) prepareModuleFrom(ctx context.Context, file, address, indexed string, bundled, personal bool) (nativeModuleInfo, error) {
 	var raw []byte
 	var err error
 	switch {
+	case personal:
+		raw, err = engine.personalIndexedModulePackage(ctx, indexed)
 	case indexed != "":
 		raw, err = engine.indexedModulePackage(ctx, indexed, bundled)
 	case address != "":

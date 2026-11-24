@@ -32,7 +32,42 @@ var (
 	moduleIndexRepo = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
 	moduleIndexTag  = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 	moduleIndexHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+	// 个人在线仓库：单仓库放全部模块，地址独立于官方索引。
+	// 改这里的地址即可换自己的仓库，不影响官方模块商店。
+	personalIndexAddresses = []string{
+		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
+		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@main/index.json",
+	}
+	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
+	personalFileAddresses = []string{
+		"https://raw.githubusercontent.com/%s/%s/%s/%s",
+		"https://cdn.jsdelivr.net/gh/%s@%s/%s/%s",
+	}
+	personalIndexPath = regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`)
 )
+
+// 个人索引的条目：和官方条目同构，多一个 path 字段指向单仓库里的子目录。
+type personalIndexEntry struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Version     string            `json:"version"`
+	Description string            `json:"description"`
+	API         int               `json:"api"`
+	Adult       bool              `json:"adult"`
+	Repo        string            `json:"repo"`
+	Tag         string            `json:"tag"`
+	Path        string            `json:"path"`
+	SHA256      map[string]string `json:"sha256"`
+}
+
+func (entry personalIndexEntry) usable() bool {
+	return entry.API == moduleAPIVersion && moduleIDPattern.MatchString(entry.ID) &&
+		strings.TrimSpace(entry.Name) != "" && moduleIndexRepo.MatchString(entry.Repo) &&
+		moduleIndexTag.MatchString(entry.Tag) && personalIndexPath.MatchString(entry.Path) &&
+		moduleIndexHash.MatchString(entry.SHA256[moduleManifest]) &&
+		moduleIndexHash.MatchString(entry.SHA256[moduleEntry])
+}
 
 type moduleIndexEntry struct {
 	ID          string            `json:"id"`
@@ -173,4 +208,98 @@ func zipModuleFiles(manifest, code []byte) ([]byte, error) {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
+}
+
+// personalModuleIndex 读取个人在线仓库的索引（与官方索引完全独立）。
+func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
+	var failures []string
+	for mirror, address := range personalIndexAddresses {
+		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
+		if err == nil {
+			var index struct {
+				Format  int                 `json:"format"`
+				Modules []personalIndexEntry `json:"modules"`
+			}
+			if err = json.Unmarshal(raw, &index); err == nil {
+				if index.Format == moduleIndexFormat {
+					entries := []personalIndexEntry{}
+					for _, entry := range index.Modules {
+						if entry.usable() {
+							entries = append(entries, entry)
+						}
+					}
+					return entries, mirror, nil
+				}
+				err = fmt.Errorf("索引格式为第 %d 版，请更新应用", index.Format)
+			} else {
+				err = errors.New("索引格式无效")
+			}
+		}
+		failures = append(failures, err.Error())
+	}
+	return nil, 0, fmt.Errorf("读取个人仓库失败：%s", strings.Join(failures, "；"))
+}
+
+func (engine *nativeEngine) personalModuleStore(ctx context.Context) (map[string]any, error) {
+	entries, _, err := engine.personalModuleIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 转成与官方索引一致的字段，界面直接复用 _IndexCard。
+	items := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		items = append(items, map[string]any{
+			"id":          entry.ID,
+			"name":        entry.Name,
+			"version":     entry.Version,
+			"description": entry.Description,
+			"api":         entry.API,
+			"adult":       entry.Adult,
+			"repo":        entry.Repo,
+			"tag":         entry.Tag,
+			"sha256":      entry.SHA256,
+			"bundled":     false,
+		})
+	}
+	return map[string]any{"items": items}, nil
+}
+
+func (engine *nativeEngine) personalIndexedModulePackage(ctx context.Context, id string) ([]byte, error) {
+	entries, mirror, err := engine.personalModuleIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.ID != id {
+			continue
+		}
+		manifest, err := engine.fetchPersonalFile(ctx, entry, mirror, moduleManifest, moduleManifestBytes)
+		if err != nil {
+			return nil, err
+		}
+		code, err := engine.fetchPersonalFile(ctx, entry, mirror, moduleEntry, moduleEntryBytes)
+		if err != nil {
+			return nil, err
+		}
+		return zipModuleFiles(manifest, code)
+	}
+	return nil, fmt.Errorf("个人仓库里没有 %s", id)
+}
+
+func (engine *nativeEngine) fetchPersonalFile(ctx context.Context, entry personalIndexEntry, mirror int, name string, limit int) ([]byte, error) {
+	var failures []string
+	for offset := range personalFileAddresses {
+		pattern := personalFileAddresses[(mirror+offset)%len(personalFileAddresses)]
+		address := fmt.Sprintf(pattern, entry.Repo, entry.Tag, entry.Path, name)
+		data, err := engine.fetchModuleResource(ctx, address, limit)
+		if err == nil {
+			sum := sha256.Sum256(data)
+			if hex.EncodeToString(sum[:]) == entry.SHA256[name] {
+				return data, nil
+			}
+			err = errors.New("文件校验不符")
+		}
+		failures = append(failures, err.Error())
+	}
+	return nil, fmt.Errorf("下载 %s 的 %s 失败：%s", entry.Name, name, strings.Join(failures, "；"))
 }

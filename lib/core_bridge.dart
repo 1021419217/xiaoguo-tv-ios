@@ -139,12 +139,15 @@ abstract class AppRepository {
   bool get supportsSourceManagement => false;
   Future<List<SourceModule>> modules() async => const [];
   Future<ModuleStore> moduleIndex() async => throw AppFailure('当前环境不支持模块商店');
+  Future<ModuleStore> personalModuleIndex() async => throw AppFailure('当前环境不支持个人仓库');
   Future<SourceModule> prepareModule({
     String file = '',
     String url = '',
     String indexed = '',
     bool bundled = false,
   }) async => throw AppFailure('当前环境不支持安装模块');
+  Future<SourceModule> preparePersonalModule({String indexed = ''}) async =>
+      throw AppFailure('当前环境不支持安装个人仓库模块');
   Future<String> installModule(String token) async =>
       throw AppFailure('当前环境不支持安装模块');
   Future<void> uninstallModule(String id) async =>
@@ -924,6 +927,16 @@ class NativeRepository extends AppRepository {
   }
 
   @override
+  Future<ModuleStore> personalModuleIndex() async {
+    _adminPermission();
+    final result = await _call({'action': 'personalModuleIndex'});
+    return ModuleStore([
+      for (final row in result['items'] as List? ?? const [])
+        ModuleIndexEntry.fromJson(Map<String, dynamic>.from(row as Map)),
+    ], warning: result['warning'] as String? ?? '');
+  }
+
+  @override
   Future<SourceModule> prepareModule({
     String file = '',
     String url = '',
@@ -938,6 +951,17 @@ class NativeRepository extends AppRepository {
         'url': url,
         'source': indexed,
         'bundled': bundled,
+      }),
+    );
+  }
+
+  @override
+  Future<SourceModule> preparePersonalModule({String indexed = ''}) async {
+    _adminPermission();
+    return SourceModule.fromJson(
+      await _call({
+        'action': 'preparePersonalModule',
+        'source': indexed,
       }),
     );
   }
@@ -1026,30 +1050,16 @@ class NativeRepository extends AppRepository {
     String query = '',
     String category = '',
     bool force = false,
-  }) async {
-    // 真 PageView 会同时预加载相邻分类页。原来所有分类共用 catalog-<source>
-    // 一条通道，native 对同一 session 只留最新请求、cancel 掉先发的那条，
-    // 被取消的请求就把 "context canceled" 冒泡成错误页。给每个分类独立通道。
-    // 分类 id 可能含中文/特殊字符，压成 36 进制后缀保证 session 合法。
-    String scope;
-    if (query.isNotEmpty) {
-      scope = 'catalog-$source-search';
-    } else if (category.isEmpty) {
-      scope = 'catalog-$source';
-    } else {
-      scope = 'catalog-$source-c${(category.hashCode & 0x7fffffff).toRadixString(36)}';
-    }
-    return CatalogPage.fromJson(
-      await _read(scope, {
-        'action': 'catalog',
-        'source': source,
-        'page': page,
-        'query': query,
-        'category': category,
-        'force': force,
-      }),
-    );
-  }
+  }) async => CatalogPage.fromJson(
+    await _read(query.isEmpty ? 'catalog-$source' : 'catalog-$source-search', {
+      'action': 'catalog',
+      'source': source,
+      'page': page,
+      'query': query,
+      'category': category,
+      'force': force,
+    }),
+  );
   @override
   Future<CatalogPage> cached(String source, {String category = ''}) async =>
       CatalogPage.fromJson(

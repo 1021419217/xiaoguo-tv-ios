@@ -71,7 +71,7 @@ Map<String, String> _missingSources(
 
 class _ModulesPageState extends State<ModulesPage>
     with SingleTickerProviderStateMixin {
-  late final _tabs = TabController(length: 4, vsync: this)
+  late final _tabs = TabController(length: 5, vsync: this)
     ..addListener(_tabChanged);
   List<SourceModule>? _modules;
   List<String>? _moving;
@@ -80,6 +80,8 @@ class _ModulesPageState extends State<ModulesPage>
   Map<String, int?> _latency = const {};
   ModuleStore? _index;
   String? _indexError;
+  ModuleStore? _personalIndex;
+  String? _personalIndexError;
   bool _busy = false;
 
   LocalStore get _store => widget.store;
@@ -94,6 +96,7 @@ class _ModulesPageState extends State<ModulesPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refresh();
       _loadIndex();
+      _loadPersonalIndex();
     });
   }
 
@@ -147,6 +150,29 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
+  Future<void> _loadPersonalIndex() async {
+    setState(() {
+      _personalIndex = null;
+      _personalIndexError = null;
+    });
+    try {
+      final index = await _repository.personalModuleIndex();
+      if (mounted) {
+        setState(
+          () => _personalIndex = ModuleStore(
+            [
+              for (final entry in index.entries)
+                if (entry.id != 'supjav') entry,
+            ],
+            warning: index.warning,
+          ),
+        );
+      }
+    } catch (failure) {
+      if (mounted) setState(() => _personalIndexError = '$failure');
+    }
+  }
+
   void _show(String message) {
     if (mounted) {
       ScaffoldMessenger.of(
@@ -173,12 +199,17 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
-  Future<void> _installIndexed(ModuleIndexEntry entry) => _run(
+  Future<void> _installIndexed(
+    ModuleIndexEntry entry, {
+    bool personal = false,
+  }) => _run(
     () async => _install(
-      await _repository.prepareModule(
-        indexed: entry.id,
-        bundled: entry.bundled,
-      ),
+      personal
+          ? await _repository.preparePersonalModule(indexed: entry.id)
+          : await _repository.prepareModule(
+              indexed: entry.id,
+              bundled: entry.bundled,
+            ),
     ),
   );
 
@@ -433,8 +464,10 @@ class _ModulesPageState extends State<ModulesPage>
     if (mounted) setState(() => _moving = null);
   }
 
-  Widget _catalogTab({required bool bundled}) {
+  Widget _catalogTab({required bool bundled, bool personal = false}) {
     final enabled = _canInstall;
+    final source = personal ? _personalIndex : _index;
+    final sourceError = personal ? _personalIndexError : _indexError;
     final installed = {for (final module in _modules ?? const []) module.id};
     // 被用户手动锁定版本的模块，在「内置」分类里仍然列出，方便装回内置版本。
     final pinned = {
@@ -442,9 +475,9 @@ class _ModulesPageState extends State<ModulesPage>
         if (module.pinned) module.id,
     };
     final missing = _missingSources(_store, _repository);
-    final warning = bundled ? '' : _index?.warning ?? '';
+    final warning = bundled ? '' : source?.warning ?? '';
     final listed = [
-      for (final entry in _index?.entries ?? const <ModuleIndexEntry>[])
+      for (final entry in source?.entries ?? const <ModuleIndexEntry>[])
         if (entry.bundled == bundled) entry,
     ];
     final entries =
@@ -495,7 +528,7 @@ class _ModulesPageState extends State<ModulesPage>
           ],
         ),
       if (warning.isNotEmpty) _Note(warning),
-      if (!bundled && entries.isNotEmpty)
+      if (!bundled && entries.isNotEmpty && !personal)
         SettingsCard(
           children: [
             SettingsTile(
@@ -507,21 +540,35 @@ class _ModulesPageState extends State<ModulesPage>
             ),
           ],
         ),
-      if (_indexError ?? _error case final error?)
+      if (sourceError ?? _error case final error?)
         _Note(error)
-      else if (_index == null || _modules == null)
+      else if (source == null || _modules == null)
         const _Loading()
       else if (listed.isEmpty && warning.isEmpty)
-        _Note(bundled ? '这个安装包没有内置模块。' : '仓库里还没有模块。')
+        _Note(
+          bundled
+              ? '这个安装包没有内置模块。'
+              : personal
+              ? '个人仓库里还没有模块。'
+              : '仓库里还没有模块。',
+        )
       else if (entries.isEmpty && listed.isNotEmpty)
-        _Note(bundled ? '内置模块都已安装。' : '仓库里的模块都已安装。')
+        _Note(
+          bundled
+              ? '内置模块都已安装。'
+              : personal
+              ? '个人仓库的模块都已安装。'
+              : '仓库里的模块都已安装。',
+        )
       else
         for (final entry in entries)
           _IndexCard(
             entry: entry,
             records: missing[entry.id],
             restoreBuiltin: bundled && pinned.contains(entry.id),
-            onInstall: enabled ? () => _installIndexed(entry) : null,
+            onInstall: enabled
+                ? () => _installIndexed(entry, personal: personal)
+                : null,
           ),
     ]);
   }
@@ -557,13 +604,15 @@ class _ModulesPageState extends State<ModulesPage>
       appBar: AppBar(
         title: const Text('模块'),
         actions: [
-          if (_tabs.index == 1)
+          if (_tabs.index == 1 || _tabs.index == 2)
             BarButton(
               icon: Icons.refresh_rounded,
               tooltip: '刷新',
-              onPressed: _index == null && _indexError == null
-                  ? null
-                  : _loadIndex,
+              onPressed: _tabs.index == 2
+                  ? (_personalIndex == null && _personalIndexError == null
+                      ? null
+                      : _loadPersonalIndex)
+                  : (_index == null && _indexError == null ? null : _loadIndex),
             ),
           const SizedBox(width: 12),
         ],
@@ -574,7 +623,13 @@ class _ModulesPageState extends State<ModulesPage>
             child: Align(
               alignment: Alignment.centerLeft,
               child: CapsuleTabs(
-                labels: const ['已安装', '在线仓库', '内置', '手动'],
+                labels: [
+                  '已安装 ${_modules?.length ?? 0}',
+                  '在线仓库 ${_index?.entries.length ?? 0}',
+                  '个人在线 ${_personalIndex?.entries.length ?? 0}',
+                  '内置',
+                  '手动',
+                ],
                 index: _tabs.index,
                 animation: _tabs.animation,
                 onChanged: (index) {
@@ -596,6 +651,7 @@ class _ModulesPageState extends State<ModulesPage>
               children: [
                 _installedTab(),
                 _catalogTab(bundled: false),
+                _catalogTab(bundled: false, personal: true),
                 _catalogTab(bundled: true),
                 _manualTab(),
               ],
