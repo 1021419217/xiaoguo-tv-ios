@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -213,8 +214,11 @@ func zipModuleFiles(manifest, code []byte) ([]byte, error) {
 // personalModuleIndex 读取个人在线仓库的索引（与官方索引完全独立）。
 func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
 	var failures []string
+	// raw.githubusercontent.com 的 index.json 带 max-age=300，jsDelivr 对 @main
+	// 缓存更久。不加时间戳的话，刚同步的模块要等好几分钟才出现，用户点刷新也没用。
+	stamp := strconv.FormatInt(time.Now().Unix(), 10)
 	for mirror, address := range personalIndexAddresses {
-		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
+		raw, err := engine.fetchModuleResource(ctx, address+"?t="+stamp, moduleIndexBytes)
 		if err == nil {
 			var index struct {
 				Format  int                 `json:"format"`

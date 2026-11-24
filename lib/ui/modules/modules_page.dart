@@ -601,11 +601,11 @@ class _ModulesPageState extends State<ModulesPage>
       appBar: AppBar(
         title: const Text('模块'),
         actions: [
-          if (_tabs.index == 1 || _tabs.index == 2)
+          if (_tabs.index == 2 || _tabs.index == 3)
             BarButton(
               icon: Icons.refresh_rounded,
               tooltip: '刷新',
-              onPressed: _tabs.index == 2
+              onPressed: _tabs.index == 3
                   ? (_personalIndex == null && _personalIndexError == null
                       ? null
                       : _loadPersonalIndex)
@@ -627,10 +627,10 @@ class _ModulesPageState extends State<ModulesPage>
                 padding: const EdgeInsets.symmetric(horizontal: 9),
                 labels: [
                   '已安装 ${_modules?.length ?? 0}',
+                  '导入',
                   '在线 ${_onlineCount()}',
                   '个人 ${_personalIndex?.entries.length ?? 0}',
                   '内置',
-                  '导入',
                 ],
                 index: _tabs.index,
                 animation: _tabs.animation,
@@ -652,10 +652,10 @@ class _ModulesPageState extends State<ModulesPage>
               controller: _tabs,
               children: [
                 _installedTab(),
+                _manualTab(),
                 _catalogTab(bundled: false),
                 _catalogTab(bundled: false, personal: true),
                 _catalogTab(bundled: true),
-                _manualTab(),
               ],
             ),
           ),
