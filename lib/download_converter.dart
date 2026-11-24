@@ -16,7 +16,12 @@ class DownloadConverter extends ChangeNotifier {
     : executor = executor ?? FFmpegExecutor() {
     downloads.addListener(_sync);
     if (Platform.isIOS) {
-      _lifecycle = AppLifecycleListener(onPause: _suspend, onResume: _resume);
+      // iOS 上不再因切后台(onPause)取消转换。下载阶段靠静音音频保活维持
+      // 进程存活，converting 状态也在保活判定内，ffmpeg 可以在后台把已下好
+      // 的分集合并完；旧逻辑一切后台就 _suspend+_cancel，导致下载完停在
+      // converting、必须等用户点回 App 才一集一集合并。仅在回到前台(onResume)
+      // 时补一次同步作为兜底（进程若真被系统冻结，恢复后能继续驱动）。
+      _lifecycle = AppLifecycleListener(onResume: _resume);
     }
     _sync();
   }
@@ -28,7 +33,7 @@ class DownloadConverter extends ChangeNotifier {
   final _skipped = <String>{};
   String? _current;
   double? _progress;
-  bool _cancelled = false, _suspended = false, _disposed = false;
+  bool _cancelled = false, _disposed = false;
 
   double? progressOf(String id) => id == _current ? _progress : null;
 
@@ -81,7 +86,7 @@ class DownloadConverter extends ChangeNotifier {
       }
       return;
     }
-    if (_suspended || _disposed) return;
+    if (_disposed) return;
     DownloadJob? next;
     for (final job in downloads.jobs) {
       if (!job.converting || _skipped.contains(job.id)) continue;
@@ -195,13 +200,9 @@ class DownloadConverter extends ChangeNotifier {
     unawaited(executor.cancel());
   }
 
-  void _suspend() {
-    _suspended = true;
-    _cancel();
-  }
-
   void _resume() {
-    _suspended = false;
+    // 回到前台兜底：进程若曾被系统冻结、后台转换停在半路，回到前台时
+    // 重新驱动一次 _sync，把仍处于 converting 的分集合并完。
     _sync();
   }
 
