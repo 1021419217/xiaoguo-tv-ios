@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	personalIndexTTL   = 15 * time.Second
+	personalIndexTTL   = 8 * time.Second
 	moduleIndexFormat  = 1
 	moduleIndexBytes   = 1 << 20
 	moduleFetchTimeout = 20 * time.Second
@@ -50,16 +50,16 @@ var (
 	// 加时间戳也绕不过（实测 ?t= 仍返回旧内容）。GitHub API 配合
 	// Accept: application/vnd.github.raw 直接返回原文、缓存只有 60 秒，
 	// 是唯一能及时看到刚同步内容的通道，放第一位。
-	// 顺序按「新鲜度」排，不是按速度排：
-	//   API        缓存 60 秒，最实时；但未认证限流 60 次/小时，刷新太勤会 403
-	//   raw main   缓存 5 分钟
-	//   jsDelivr   对 @main 缓存 12 小时，最差
-	// 之前 jsDelivr 排在 raw 前面，导致 API 被限流后直接掉到「12 小时前的索引」，
-	// 用户越刷新越看不到更新。jsDelivr 只能放最后兜底。
+	// 顺序按「实时性 + 无限流」排：
+	//   jsDelivr @latest  解析到最新 tag，tag 内容不可变，实测同步后立刻可见，
+	//                     且没有配额限制 —— 放第一
+	//   raw main          缓存 5 分钟，无配额
+	//   API               最实时（60 秒），但未认证只有 60 次/小时，
+	//                     用户连点刷新会 403，只做最后兜底
 	personalIndexAddresses = []string{
-		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
+		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@latest/index.json",
 		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
-		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@main/index.json",
+		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
 	}
 	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
 	personalFileAddresses = []string{
