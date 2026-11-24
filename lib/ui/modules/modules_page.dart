@@ -173,9 +173,14 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
-  /// 在线仓库只统计真正来自网络的条目，内置的由「内置」页单独列。
-  int _onlineCount() =>
-      (_index?.entries ?? const <ModuleIndexEntry>[]).where((e) => !e.bundled).length;
+  /// 「在线」标签只显示还能装的：排除内置条目和已安装的模块。
+  /// 装完一个就少一个，和页面里实际列出的卡片数一致，不会像总数那样误导。
+  int _onlineCount() {
+    final installed = {for (final module in _modules ?? const []) module.id};
+    return (_index?.entries ?? const <ModuleIndexEntry>[])
+        .where((entry) => !entry.bundled && !installed.contains(entry.id))
+        .length;
+  }
 
   void _show(String message) {
     if (mounted) {
