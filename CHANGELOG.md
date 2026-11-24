@@ -2,6 +2,11 @@
 
 每个版本一节，标题为 `pubspec.yaml` 中的完整版本号。发布工作流会把对应一节写入 GitHub Release 说明。
 
+## 2.9.5+94
+
+- 修复详情页资料表冒出「durationText 158m」这种字段名：`durationText` / `durationMs` 没在「标准字段」白名单里，被当成未知资料塞进了 meta，界面就把它当一行资料显示出来。
+- SpankBang 视频不存在时（HTTP 404）改为明确提示「这个视频在 SpankBang 上已经看不到了（可能被删除、设为私密，或当前地区不可访问）」，不再显示含糊的「返回 HTTP 404」。
+
 ## 2.9.4+93
 
 - 修复个人在线仓库同步后长时间看不到更新：原来优先读 raw.githubusercontent.com 的 main 分支，那个地址带 CDN 缓存且加时间戳也绕不过（实测仍返回旧索引）。改为优先走 GitHub API（声明 raw 返回原文，缓存仅 60 秒），失败再依次退到 jsDelivr 和 raw。

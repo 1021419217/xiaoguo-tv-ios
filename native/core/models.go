@@ -488,6 +488,9 @@ var nativeMetaSkip = map[string]bool{
 	"released_at": true, "publishedat": true, "published_at": true, "publishdate": true,
 	"publish_date": true, "maker": true, "studio": true, "label": true, "brand": true,
 	"publisher": true, "director": true, "directors": true, "duration": true, "length": true,
+	// durationText / durationMs 是标准字段，若不在白名单里会被当成「未知资料」
+	// 塞进 meta，详情页就会多出一行「durationText 158m」这种字段名泄漏。
+	"durationtext": true, "duration_text": true, "durationms": true, "duration_ms": true,
 	"runtime": true, "onlinedate": true, "online_date": true, "score": true, "rating": true,
 	"views": true, "heat": true, "remark": true, "releasestatus": true, "release_status": true,
 	"metadataschema": true, "metadata_schema": true, "channelname": true, "channel_name": true,
