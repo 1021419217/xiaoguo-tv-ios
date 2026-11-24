@@ -136,6 +136,44 @@ node audit_modules.mjs    # 10 项字段矩阵
 
 `strict_check.mjs` 的规则全部来自上面的事故，新增事故就往里加一条。
 
+
+---
+
+## 附：模块 id → 真实域名对照表（id 与域名对不上的，占全部 39 个模块的 44%）
+
+**动手测试前先查这张表。** 下表里的模块，凭 id 拼域名必错。
+
+| 模块 id | 真实域名 | 说明 |
+|---|---|---|
+| `beabox` | `bh4066.top` | 完全不同 |
+| `cg91` | `www.91cg1.com` | 数字顺序是 91cg1，不是 cg91 |
+| `dsd` | `www.dsd.com.se` | 域名后缀是 `.com.se` |
+| `hanxiaoquan` | `www.jennyhow.com` | 完全不同 |
+| `hscangku` | `huangsecangku.net`（备用 `111.ajsck.cc`） | 拼音「黄色仓库」；注意 **ajsck 不是 ajmck** |
+| `huangtao` | `aihuangdou.com` | 「黄涛」→ 爱黄豆 |
+| `ikanbot` | `movie.douban.com` | 数据源是豆瓣电影 |
+| `kanliao` | `www.kanliao20.net` | 带数字 20 |
+| `p91` / `p91a` / `p91y` | `www.91porn.com` / `91porna.com` / `91porny.com` | 91porn 系列，后缀 a/y 区分 |
+| `whostv` | `whos.tv` | **没有 whostv.com 这个站**（少一个 t 就是另一个域名） |
+| `xgroovy` | `cn.xgroovy.com` | 带 cn 子域 |
+| `yeguo` | `attract.vgbyziuz.cc` | 随机字符域名 |
+
+其余模块（av8d / jable / missav / javrate / madou / spankbang / xchina 等）id 与域名基本对应，但仍要以 `manifest.json` 为准。
+
+### 自查命令
+
+```bash
+node -e "
+const fs=require('fs');
+fs.readdirSync('xiaoguo-tv-ios/modules').forEach(id=>{
+  try{
+    const m=JSON.parse(fs.readFileSync(\`xiaoguo-tv-ios/modules/\${id}/manifest.json\`,'utf8'));
+    console.log(id.padEnd(16), (m.baseUrl||'').replace(/^https?:\/\//,''));
+  }catch(e){}
+});
+"
+```
+
 ---
 
 ## 网络与构建
