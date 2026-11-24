@@ -192,6 +192,26 @@ fs.readdirSync('xiaoguo-tv-ios/modules').forEach(id=>{
 
 ---
 
+## 批量抓取的规矩（别拿有头浏览器刷屏）
+
+**事故**：用 `chromium.launch({channel:'chrome', headless:false})` 跑批量脚本，对每个站试 6 个候选路径、每个路径开一个新页面、每次失败等 20 秒超时。15 个站 × 6 路径 = 90 次页面打开，用户看到的是「窗口不停弹、页面打不开还停在那儿」，白等 10 分钟。
+
+### 正确的分工
+
+| 场景 | 工具 | 原因 |
+|---|---|---|
+| 批量探活 / 抓 HTML | **curl + 完整指纹** | 不弹窗、几百毫秒、能读系统代理 |
+| 需要过 Cloudflare | 真实 Chrome（`channel:'chrome'`） | curl 会被识别 |
+| 需要执行 JS 后取 DOM | 真实 Chrome | 但注意广告脚本会改 DOM |
+
+### 硬性要求
+
+1. **批量任务禁止用有头浏览器**——除非单个站、且明确告诉用户会弹窗
+2. 必须用真实 Chrome 时：**复用单个 page**，不要每站新建
+3. 超时压到 **8 秒**，失败立刻下一个，不要死等 20 秒
+4. **Node 的 `fetch` 不读 `HTTP_PROXY`**——本机代理是 `127.0.0.1:50696`。批量抓取用 curl，或给 undici 设 ProxyAgent，**绝不能用 `env -u http_proxy` 清代理再跑 fetch**（会全部超时，看起来像站点全挂）
+5. Playwright 的 `page.content()` 是 JS 执行后的 DOM（missav 的视频链接会被广告脚本换成 `#`）；要原始 HTML 必须用 curl
+
 ## 网络与构建
 
 - 所有 GitHub 操作（push / sync / build）都要带重试，`ECONNRESET` 是常态
