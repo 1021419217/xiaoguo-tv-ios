@@ -192,6 +192,27 @@ fs.readdirSync('xiaoguo-tv-ios/modules').forEach(id=>{
 
 ---
 
+## 扫站时跳过的站点（用户明确要求，2026-11-25）
+
+以下短剧/影视站**保留在 App 里可用，但不做抓取验证和字段补全**——用户不需要我们在这上面花时间：
+
+| 模块 id | 站点 |
+|---|---|
+| `hongguo` | 红果 |
+| `huangguoai` | 黄果 AI |
+| `huangguo-video` | 黄果视频 |
+| `huangtao` | 黄桃 |
+| `heitao` | 黑桃 |
+| `yesheai` | 夜社 |
+| `yeguo` | 野果 |
+| `huangju` | 剧果 |
+| `crdj` | 91短剧 |
+| `hanxiaoquan` | 韩小圈 |
+| `ikanbot` | 爱看机器人 |
+| `dsd` | 帝果（旧版黄果） |
+
+清单在 `skip_stations.mjs`，`check_domains.mjs` / `full_scan.mjs` / `group4_curl.mjs` 都已默认跳过。
+
 ## 批量抓取的规矩（别拿有头浏览器刷屏）
 
 **事故**：用 `chromium.launch({channel:'chrome', headless:false})` 跑批量脚本，对每个站试 6 个候选路径、每个路径开一个新页面、每次失败等 20 秒超时。15 个站 × 6 路径 = 90 次页面打开，用户看到的是「窗口不停弹、页面打不开还停在那儿」，白等 10 分钟。
