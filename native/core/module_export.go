@@ -2,6 +2,7 @@ package core
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -16,7 +17,8 @@ const moduleExportFolder = "module-exports"
 // exportModules 把已安装的模块重新打包成 zip 供用户导出。
 //
 // 单个模块直接平铺 manifest.json 与 main.js，导出后还能用「手动安装」装回来；
-// 多个模块每个一个子目录，方便一次带走整套站源。
+// 多个模块时外层包里每个模块是一个独立的 zip（<标识>-<版本>.zip），
+// 解压后得到的就是一个个能直接安装的模块包，不用再自己找文件。
 func (engine *nativeEngine) exportModules(ids []string) (map[string]any, error) {
 	root := engine.downloader.moduleRoot()
 	selected := make([]string, 0, len(ids))
@@ -61,23 +63,60 @@ func (engine *nativeEngine) exportModules(ids []string) (map[string]any, error) 
 	defer file.Close()
 
 	writer := zip.NewWriter(file)
-	for _, id := range selected {
-		prefix := ""
-		if !single {
-			prefix = id + "/"
-		}
+	if single {
+		// 单模块仍然平铺，导出后可以直接用「手动安装」装回来。
 		for _, item := range []string{moduleManifest, moduleEntry} {
-			raw, err := os.ReadFile(filepath.Join(root, id, item))
+			raw, err := os.ReadFile(filepath.Join(root, selected[0], item))
 			if err != nil {
 				_ = writer.Close()
-				return nil, fmt.Errorf("%s 缺少 %s，无法导出", id, item)
+				return nil, fmt.Errorf("%s 缺少 %s，无法导出", selected[0], item)
 			}
-			entry, err := writer.Create(prefix + item)
+			entry, err := writer.Create(item)
 			if err != nil {
 				_ = writer.Close()
 				return nil, err
 			}
 			if _, err := entry.Write(raw); err != nil {
+				_ = writer.Close()
+				return nil, err
+			}
+		}
+	} else {
+		// 多模块：每个模块单独打成一个 zip 放在外层包里，
+		// 用户解压后看到的就是一个个现成的模块包，能直接拖回 App 安装。
+		for _, id := range selected {
+			var inner bytes.Buffer
+			innerWriter := zip.NewWriter(&inner)
+			for _, item := range []string{moduleManifest, moduleEntry} {
+				raw, err := os.ReadFile(filepath.Join(root, id, item))
+				if err != nil {
+					_ = innerWriter.Close()
+					_ = writer.Close()
+					return nil, fmt.Errorf("%s 缺少 %s，无法导出", id, item)
+				}
+				entry, err := innerWriter.Create(item)
+				if err != nil {
+					_ = innerWriter.Close()
+					_ = writer.Close()
+					return nil, err
+				}
+				if _, err := entry.Write(raw); err != nil {
+					_ = innerWriter.Close()
+					_ = writer.Close()
+					return nil, err
+				}
+			}
+			if err := innerWriter.Close(); err != nil {
+				_ = writer.Close()
+				return nil, err
+			}
+			name := moduleArchiveName(root, id)
+			entry, err := writer.Create(name)
+			if err != nil {
+				_ = writer.Close()
+				return nil, err
+			}
+			if _, err := entry.Write(inner.Bytes()); err != nil {
 				_ = writer.Close()
 				return nil, err
 			}
@@ -96,4 +135,15 @@ func (engine *nativeEngine) exportModules(ids []string) (map[string]any, error) 
 		"count": len(selected),
 		"bytes": info.Size(),
 	}, nil
+}
+
+// moduleArchiveName 给导出的单个模块包起名：<标识>-<版本>.zip，版本缺失时只留标识。
+func moduleArchiveName(root, id string) string {
+	name := id
+	if module, err := readModule(filepath.Join(root, id)); err == nil {
+		if version := strings.TrimSpace(module.manifest.Version); version != "" {
+			name = id + "-" + version
+		}
+	}
+	return name + ".zip"
 }

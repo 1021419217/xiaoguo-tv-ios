@@ -173,6 +173,10 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
+  /// 在线仓库只统计真正来自网络的条目，内置的由「内置」页单独列。
+  int _onlineCount() =>
+      (_index?.entries ?? const <ModuleIndexEntry>[]).where((e) => !e.bundled).length;
+
   void _show(String message) {
     if (mounted) {
       ScaffoldMessenger.of(
@@ -237,20 +241,6 @@ class _ModulesPageState extends State<ModulesPage>
 
   Future<String?> _applyInstall(SourceModule module) =>
       applyModuleInstall(_repository, _store, module);
-
-  Future<void> _installAll(List<ModuleIndexEntry> entries) async {
-    final accepted = await showBatchInstallDialog(
-      context,
-      entries: entries,
-      title: '安装 ${entries.length} 个站源？',
-      message: '这些站源会逐个安装并启用。',
-    );
-    if (accepted != true) return;
-    await _run(
-      () async =>
-          _show(await installIndexedModules(_repository, _store, entries)),
-    );
-  }
 
   Future<void> _installFile() => _run(() async {
     final file = await FilePicker.pickFile(
@@ -391,6 +381,51 @@ class _ModulesPageState extends State<ModulesPage>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(spacing: 10, children: header),
           ),
+        if (!_store.locked)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(
+              spacing: 10,
+              children: [
+                SettingsCard(
+                  children: [
+                    SettingsTile(
+                      icon: Icons.speed_rounded,
+                      iconColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.20),
+                      iconForeground: Theme.of(context).colorScheme.onSurface,
+                      title: _testing ? '正在测源…' : '站源测速',
+                      subtitle: _testing
+                          ? '正在逐个请求分类接口，最多 8 秒'
+                          : _latency.isEmpty
+                          ? '测一遍各站源的连接速度'
+                          : '已测 ${_latency.length} 个站源，点一下重测',
+                      enabled: !_testing,
+                      trailing: _testing
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : null,
+                      onTap: _testing ? null : _runSpeedTest,
+                    ),
+                  ],
+                ),
+                SettingsCard(
+                  children: [
+                    SettingsTile(
+                      icon: Icons.archive_outlined,
+                      iconColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.20),
+                      iconForeground: Theme.of(context).colorScheme.onSurface,
+                      title: '导出全部模块',
+                      subtitle: '导出 ${modules.length} 个模块，每个模块一个 zip',
+                      enabled: !_busy,
+                      onTap: _busy ? null : () => _export(modules),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: ReorderableListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -483,7 +518,10 @@ class _ModulesPageState extends State<ModulesPage>
     final entries =
         [
           for (final entry in listed)
-            if (!installed.contains(entry.id) ||
+            // 个人在线是「自己的备份仓库」，已装过的也要列出来：
+            // 既能看到手上有哪些，也能随时重装/更新，不能像在线仓库那样滤掉。
+            if (personal ||
+                !installed.contains(entry.id) ||
                 bundled && pinned.contains(entry.id))
             entry,
         ]..sort(
@@ -491,55 +529,8 @@ class _ModulesPageState extends State<ModulesPage>
             missing.containsKey(b.id) ? 0 : 1,
           ),
         );
-    final modules = _modules;
     return _list([
-      if (!bundled && modules != null && modules.isNotEmpty)
-        SettingsCard(
-          children: [
-            SettingsTile(
-              icon: Icons.speed_rounded,
-              title: _testing ? '正在测源…' : '站源测速',
-              subtitle: _testing
-                  ? '正在逐个请求分类接口，最多 8 秒'
-                  : _latency.isEmpty
-                  ? '测一遍各站源的连接速度'
-                  : '已测 ${_latency.length} 个站源，点一下重测',
-              enabled: !_testing && !_store.locked,
-              trailing: _testing
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : null,
-              onTap: _testing || _store.locked ? null : _runSpeedTest,
-            ),
-          ],
-        ),
-      if (!bundled && modules != null && modules.isNotEmpty && !_store.locked)
-        SettingsCard(
-          children: [
-            SettingsTile(
-              icon: Icons.save_alt_rounded,
-              title: '导出全部模块',
-              subtitle: '把已安装的 ${modules.length} 个模块打包成一个 zip',
-              enabled: !_busy,
-              onTap: _busy ? null : () => _export(modules),
-            ),
-          ],
-        ),
       if (warning.isNotEmpty) _Note(warning),
-      if (!bundled && entries.isNotEmpty && !personal)
-        SettingsCard(
-          children: [
-            SettingsTile(
-              icon: Icons.download_rounded,
-              title: '安装全部站源',
-              subtitle: '在线仓库里还有 ${entries.length} 个未安装',
-              enabled: enabled,
-              onTap: enabled ? () => _installAll(entries) : null,
-            ),
-          ],
-        ),
       if (sourceError ?? _error case final error?)
         _Note(error)
       else if (source == null || _modules == null)
@@ -566,6 +557,12 @@ class _ModulesPageState extends State<ModulesPage>
             entry: entry,
             records: missing[entry.id],
             restoreBuiltin: bundled && pinned.contains(entry.id),
+            installedVersion: personal
+                ? {
+                    for (final module in _modules ?? const [])
+                      module.id: module.version,
+                  }[entry.id]
+                : null,
             onInstall: enabled
                 ? () => _installIndexed(entry, personal: personal)
                 : null,
@@ -623,12 +620,17 @@ class _ModulesPageState extends State<ModulesPage>
             child: Align(
               alignment: Alignment.centerLeft,
               child: CapsuleTabs(
+                // 五个标签带数量会超出屏幕宽：开滚动 + 收窄字号/内边距，
+                // 既不会像等分布局那样把末尾的「内置 / 手动」压扁，也能多塞下两个。
+                scrollable: true,
+                fontSize: 12,
+                padding: const EdgeInsets.symmetric(horizontal: 9),
                 labels: [
                   '已安装 ${_modules?.length ?? 0}',
-                  '在线仓库 ${_index?.entries.length ?? 0}',
-                  '个人在线 ${_personalIndex?.entries.length ?? 0}',
+                  '在线 ${_onlineCount()}',
+                  '个人 ${_personalIndex?.entries.length ?? 0}',
                   '内置',
-                  '手动',
+                  '导入',
                 ],
                 index: _tabs.index,
                 animation: _tabs.animation,
@@ -1003,11 +1005,16 @@ class _IndexCard extends StatelessWidget {
     required this.records,
     required this.onInstall,
     this.restoreBuiltin = false,
+    this.installedVersion,
   });
   final ModuleIndexEntry entry;
   final String? records;
   final VoidCallback? onInstall;
   final bool restoreBuiltin;
+
+  /// 本地已装的版本；不为空时按钮显示「重装 / 更新」，个人在线页用它
+  /// 区分哪些模块手里已经有了。
+  final String? installedVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -1018,6 +1025,13 @@ class _IndexCard extends StatelessWidget {
       version: entry.version,
       id: entry.id,
       body: [
+        if (installedVersion case final version?)
+          Text(
+            version == entry.version
+                ? '已安装 v$version'
+                : '已安装 v$version，仓库是 v${entry.version}',
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
         if (restoreBuiltin)
           Text(
             '当前使用手动安装的版本，装回内置版会解除版本锁定',
@@ -1034,8 +1048,18 @@ class _IndexCard extends StatelessWidget {
       trailing: Padding(
         padding: const EdgeInsets.only(top: 2, left: 8),
         child: ActionPill(
-          icon: restoreBuiltin ? Icons.restore_rounded : Icons.download_rounded,
-          label: restoreBuiltin ? '恢复内置版' : '安装',
+          icon: restoreBuiltin
+              ? Icons.restore_rounded
+              : installedVersion == null
+              ? Icons.download_rounded
+              : Icons.refresh_rounded,
+          label: restoreBuiltin
+              ? '恢复内置版'
+              : installedVersion == null
+              ? '安装'
+              : installedVersion == entry.version
+              ? '重装'
+              : '更新',
           tone: ActionTone.accent,
           onPressed: onInstall,
         ),

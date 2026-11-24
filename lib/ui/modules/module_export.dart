@@ -7,7 +7,8 @@ import '../../core_bridge.dart';
 /// 把已安装模块重新打包成 zip，再交给系统「存储到文件」面板。
 ///
 /// 单个模块的包结构与安装包一致，导出后能直接用「手动安装」装回来；
-/// 多个模块打包时每个模块一个子目录。用户取消时返回 null。
+/// 多个模块时外层包里每个模块是独立的一个 zip（<标识>-<版本>.zip），
+/// 解压后拿到的就是一个个现成的模块包。用户取消时返回 null。
 Future<String?> saveModuleArchive(
   AppRepository repository,
   List<String> ids,

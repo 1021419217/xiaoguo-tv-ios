@@ -48,6 +48,7 @@ class SettingsTile extends StatelessWidget {
     this.onTap,
     this.enabled = true,
     this.iconColor,
+    this.iconForeground,
   });
   final String title;
   final String? subtitle;
@@ -59,6 +60,9 @@ class SettingsTile extends StatelessWidget {
 
   /// 圆形图标底色；不传时用主题色的低饱和版本。
   final Color? iconColor;
+
+  /// 图标本身颜色；不传时用白色。图标底色偏浅时要传深色，否则白底白图标糊成一片。
+  final Color? iconForeground;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +82,11 @@ class SettingsTile extends StatelessWidget {
                   color: iconColor ?? colors.primary.withValues(alpha: 0.85),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 19, color: Colors.white),
+                child: Icon(
+                  icon,
+                  size: 19,
+                  color: iconForeground ?? Colors.white,
+                ),
               ),
         title: Text(
           title,
