@@ -11,10 +11,21 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
+// 个人索引的短缓存：用户连点刷新时不必每次都打 GitHub API
+// （未认证限流 60 次/小时，点几十下就会被 403，反而掉到旧缓存）。
+var (
+	personalIndexMu     sync.Mutex
+	personalIndexAt     time.Time
+	personalIndexCached []personalIndexEntry
+	personalIndexMirror int
+)
+
 const (
+	personalIndexTTL   = 15 * time.Second
 	moduleIndexFormat  = 1
 	moduleIndexBytes   = 1 << 20
 	moduleFetchTimeout = 20 * time.Second
@@ -39,10 +50,16 @@ var (
 	// 加时间戳也绕不过（实测 ?t= 仍返回旧内容）。GitHub API 配合
 	// Accept: application/vnd.github.raw 直接返回原文、缓存只有 60 秒，
 	// 是唯一能及时看到刚同步内容的通道，放第一位。
+	// 顺序按「新鲜度」排，不是按速度排：
+	//   API        缓存 60 秒，最实时；但未认证限流 60 次/小时，刷新太勤会 403
+	//   raw main   缓存 5 分钟
+	//   jsDelivr   对 @main 缓存 12 小时，最差
+	// 之前 jsDelivr 排在 raw 前面，导致 API 被限流后直接掉到「12 小时前的索引」，
+	// 用户越刷新越看不到更新。jsDelivr 只能放最后兜底。
 	personalIndexAddresses = []string{
 		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
-		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@main/index.json",
 		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
+		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@main/index.json",
 	}
 	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
 	personalFileAddresses = []string{
@@ -217,6 +234,14 @@ func zipModuleFiles(manifest, code []byte) ([]byte, error) {
 
 // personalModuleIndex 读取个人在线仓库的索引（与官方索引完全独立）。
 func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
+	personalIndexMu.Lock()
+	if personalIndexCached != nil && time.Since(personalIndexAt) < personalIndexTTL {
+		entries, mirror := personalIndexCached, personalIndexMirror
+		personalIndexMu.Unlock()
+		return entries, mirror, nil
+	}
+	personalIndexMu.Unlock()
+
 	var failures []string
 	for mirror, address := range personalIndexAddresses {
 		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
@@ -233,6 +258,9 @@ func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personal
 							entries = append(entries, entry)
 						}
 					}
+					personalIndexMu.Lock()
+					personalIndexCached, personalIndexAt, personalIndexMirror = entries, time.Now(), mirror
+					personalIndexMu.Unlock()
 					return entries, mirror, nil
 				}
 				err = fmt.Errorf("索引格式为第 %d 版，请更新应用", index.Format)

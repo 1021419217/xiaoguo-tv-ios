@@ -2,6 +2,10 @@
 
 每个版本一节，标题为 `pubspec.yaml` 中的完整版本号。发布工作流会把对应一节写入 GitHub Release 说明。
 
+## 2.9.6+95
+
+- 修复「刷新很多次反而看不到模块更新」：个人索引的降级顺序原来是 API → jsDelivr → raw，而 jsDelivr 对 `@main` 缓存 12 小时。GitHub API 未认证限流 60 次/小时，连续刷新触发限流后会直接掉到「12 小时前」的索引。现在改为 API → raw（5 分钟）→ jsDelivr，并给索引加 15 秒短缓存，连点刷新不会把配额用光。
+
 ## 2.9.5+94
 
 - 修复详情页资料表冒出「durationText 158m」这种字段名：`durationText` / `durationMs` 没在「标准字段」白名单里，被当成未知资料塞进了 meta，界面就把它当一行资料显示出来。
