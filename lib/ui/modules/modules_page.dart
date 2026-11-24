@@ -82,6 +82,9 @@ class _ModulesPageState extends State<ModulesPage>
   String? _indexError;
   ModuleStore? _personalIndex;
   String? _personalIndexError;
+  /// 个人仓库索引的拉取时间：用来在页面上显示「索引更新于 X 分钟前」，
+  /// 让用户能判断是「索引本身旧了」还是「真的没有新版本」。
+  DateTime? _personalIndexAt;
   bool _busy = false;
 
   LocalStore get _store => widget.store;
@@ -188,6 +191,7 @@ class _ModulesPageState extends State<ModulesPage>
             warning: index.warning,
           ),
         );
+        _personalIndexAt = DateTime.now();
         if (notify) {
           final entries = _personalIndex?.entries ?? const [];
           final updatable = entries.where((entry) {
@@ -201,6 +205,15 @@ class _ModulesPageState extends State<ModulesPage>
       if (mounted) setState(() => _personalIndexError = '$failure');
       if (mounted && notify) _toastRefresh(0, '$failure');
     }
+  }
+
+  /// 「刚刚 / X 分钟前 / X 小时前」
+  static String _agoText(DateTime at) {
+    final diff = DateTime.now().difference(at);
+    if (diff.inMinutes < 1) return '刚刚';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+    if (diff.inHours < 24) return '${diff.inHours} 小时前';
+    return '${diff.inDays} 天前';
   }
 
   /// 比较两个 `x.y.z` 版本号：a 比 b 新返回 1，旧返回 -1，相同返回 0。
@@ -380,7 +393,13 @@ class _ModulesPageState extends State<ModulesPage>
         : _arranged(loaded, _moving ?? _store.sourceOrder);
     final enabled = _canInstall;
     final latest = <String, ModuleIndexEntry>{};
-    for (final entry in _index?.entries ?? const <ModuleIndexEntry>[]) {
+    // 「已安装」页的可更新判断必须同时看官方索引和个人仓库：
+    // 以前只遍历 _index，个人仓库里的新版本完全不参与比较，
+    // 表现就是「同步了模块但已安装页永远显示已是最新」。
+    for (final entry in [
+      ...?_index?.entries,
+      ...?_personalIndex?.entries,
+    ]) {
       final current = latest[entry.id];
       if (current == null ||
           isNewerModuleVersion(entry.version, current.version)) {
@@ -601,6 +620,12 @@ class _ModulesPageState extends State<ModulesPage>
           return a.name.compareTo(b.name);
         });
     return _list([
+      if (personal && _personalIndexAt != null)
+        _Note(
+          '索引更新于 ${_agoText(_personalIndexAt!)}'
+          '${sourceError == null ? ' · 共 ${source?.entries.length ?? 0} 个模块' : ''}'
+          '（raw GitHub 有 5 分钟缓存，刚同步完的模块请等几分钟再刷新）',
+        ),
       if (warning.isNotEmpty) _Note(warning),
       if (sourceError ?? _error case final error?)
         _Note(error)
