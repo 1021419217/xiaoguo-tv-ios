@@ -128,13 +128,29 @@ av8d / javrate / jable 的时长和演员全在 JSON-LD 里，只 grep 中文关
 
 ## 交付前必跑
 
+统一入口（工作区根目录）：
+
 ```bash
-node strict_check.mjs     # 6 条事故规则
-node load_test.mjs        # 39 个模块能否加载
-node audit_modules.mjs    # 10 项字段矩阵
+node precheck.mjs          # 全量：字段自检 + 模块加载 + 38 个域名探活（约 3-5 分钟）
+node precheck.mjs --fast   # 跳过域名探活（约 15 秒，日常改代码用这个）
 ```
 
+它串起三个脚本，任一**致命项**失败就退出码非 0：
+
+| 脚本 | 检查什么 | 致命 |
+|---|---|---|
+| `strict_check.mjs` | 6 条事故规则（字段名、actors 层级、UA、域名池） | ✅ |
+| `load_test.mjs` | 39 个模块能否 evaluate | ✅ |
+| `check_domains.mjs` | 38 个域名探活，识别失效/年龄门/停放页 | ⚠ 仅报告 |
+
 `strict_check.mjs` 的规则全部来自上面的事故，新增事故就往里加一条。
+
+### check_domains 的坑（已修）
+
+只探 `baseUrl` 根路径会误判：p91 的 `/` 是年龄验证页（2965B），真实功能在 `/v.php?next=watch`（94KB）。
+脚本现在会在根路径异常时自动再试 `/videos`、`/latest-updates/`、`/cn/new`、`/index.php` 等常见功能路径，任一正常就算健康。
+
+**注意**：9 个站点对 curl 返回 403（Cloudflare），这是正常的——真实 Chrome（`channel:'chrome'`）能过，不算法失效。脚本会标出来，人工判断即可。
 
 
 ---
