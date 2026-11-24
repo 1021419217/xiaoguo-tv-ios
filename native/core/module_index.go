@@ -26,7 +26,6 @@ var (
 )
 
 const (
-	personalIndexTTL   = 8 * time.Second
 	moduleIndexFormat  = 1
 	moduleIndexBytes   = 1 << 20
 	moduleFetchTimeout = 20 * time.Second
@@ -51,16 +50,15 @@ var (
 	// 加时间戳也绕不过（实测 ?t= 仍返回旧内容）。GitHub API 配合
 	// Accept: application/vnd.github.raw 直接返回原文、缓存只有 60 秒，
 	// 是唯一能及时看到刚同步内容的通道，放第一位。
-	// 顺序按「可靠性」排，不是按理论实时性：
-	//   raw main   缓存 5 分钟，内容等于最新 commit，无配额 —— 最可靠，放第一
-	//   API        最实时（60 秒），但未认证只有 60 次/小时，连点刷新会 403
-	//   jsDelivr   ⚠️ 实测会缓存旧内容（2026-11-25：@latest 返回 v1.0.18，
-	//              而当时最新是 v1.0.24），只能放最后兜底
-	// 另外 personalModuleIndex 现在是并发请求全部源、取 tag 最新的那份，
-	// 所以即使某个源脏了，也不会把整份索引带旧。
+	// 完全对齐上游官方模块商店的做法：只用 raw + jsDelivr，**不碰 GitHub API**。
+	// API 未认证只有 60 次/小时，连点刷新就 403，这是本功能之前所有麻烦的来源；
+	// 上游压根不用它，也就没有这个限制。
+	//   raw main        缓存 5 分钟，内容 = 最新 commit，无任何配额
+	//   jsDelivr @latest 国内可达，但实测会缓存旧内容
+	//                  （2026-11-25：@latest 返回 v1.0.18 而最新是 v1.0.24）
+	// 两个源**并发**请求、取 tag 最新的那份，脏的那个不会把索引带旧。
 	personalIndexAddresses = []string{
 		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
-		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
 		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@latest/index.json",
 	}
 	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
@@ -266,14 +264,6 @@ func tagNewer(a, b string) bool {
 // raw 的 main 分支）会缓存旧内容，顺序取第一个成功的话，可能一直拿到几天前
 // 的索引，表现就是「同步了新模块但 App 里看不到更新」。
 func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
-	personalIndexMu.Lock()
-	if personalIndexCached != nil && time.Since(personalIndexAt) < personalIndexTTL {
-		entries, mirror := personalIndexCached, personalIndexMirror
-		personalIndexMu.Unlock()
-		return entries, mirror, nil
-	}
-	personalIndexMu.Unlock()
-
 	type fetched struct {
 		entries []personalIndexEntry
 		mirror  int
