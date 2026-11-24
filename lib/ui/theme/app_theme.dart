@@ -128,6 +128,19 @@ abstract final class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: background,
       canvasColor: background,
+      // 角标（底栏下载数）之前走 M3 默认的 error 色，深色主题下是紫色，
+      // 和纯黑玻璃拟态割裂。统一用中性高光：深色=白底深字，浅色=深底白字。
+      badgeTheme: BadgeThemeData(
+        backgroundColor: scheme.primary,
+        textColor: scheme.onPrimary,
+        smallSize: 16,
+        largeSize: 18,
+        textStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
       // 小果 2.0 的页面转场（电视端禁用动画）保持不变。
       pageTransitionsTheme: pageTransitions(television: television),
       cardTheme: glass,

@@ -173,6 +173,18 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
+  /// 比较两个 `x.y.z` 版本号：a 比 b 新返回 1，旧返回 -1，相同返回 0。
+  static int _compareVersion(String a, String b) {
+    final left = a.split('.');
+    final right = b.split('.');
+    for (var i = 0; i < 3; i++) {
+      final x = int.tryParse(i < left.length ? left[i] : '0') ?? 0;
+      final y = int.tryParse(i < right.length ? right[i] : '0') ?? 0;
+      if (x != y) return x > y ? 1 : -1;
+    }
+    return 0;
+  }
+
   /// 「在线」标签只显示还能装的：排除内置条目和已安装的模块。
   /// 装完一个就少一个，和页面里实际列出的卡片数一致，不会像总数那样误导。
   int _onlineCount() {
@@ -504,6 +516,14 @@ class _ModulesPageState extends State<ModulesPage>
     if (mounted) setState(() => _moving = null);
   }
 
+  /// 本地已安装的版本；没装过返回 null。
+  String? installedVersionOf(String id) {
+    for (final module in _modules ?? const <SourceModule>[]) {
+      if (module.id == id) return module.version;
+    }
+    return null;
+  }
+
   Widget _catalogTab({required bool bundled, bool personal = false}) {
     final enabled = _canInstall;
     final source = personal ? _personalIndex : _index;
@@ -529,11 +549,21 @@ class _ModulesPageState extends State<ModulesPage>
                 !installed.contains(entry.id) ||
                 bundled && pinned.contains(entry.id))
             entry,
-        ]..sort(
-          (a, b) => (missing.containsKey(a.id) ? 0 : 1).compareTo(
-            missing.containsKey(b.id) ? 0 : 1,
-          ),
-        );
+        ]..sort((a, b) {
+          int rank(ModuleIndexEntry entry) {
+            // 0 = 仓库版本比已装的新（最该处理，排最前）
+            final have = personal ? installedVersionOf(entry.id) : null;
+            if (have != null && _compareVersion(entry.version, have) > 0) {
+              return 0;
+            }
+            if (missing.containsKey(entry.id)) return 1;
+            return 2;
+          }
+
+          final byRank = rank(a).compareTo(rank(b));
+          if (byRank != 0) return byRank;
+          return a.name.compareTo(b.name);
+        });
     return _list([
       if (warning.isNotEmpty) _Note(warning),
       if (sourceError ?? _error case final error?)
@@ -562,12 +592,7 @@ class _ModulesPageState extends State<ModulesPage>
             entry: entry,
             records: missing[entry.id],
             restoreBuiltin: bundled && pinned.contains(entry.id),
-            installedVersion: personal
-                ? {
-                    for (final module in _modules ?? const [])
-                      module.id: module.version,
-                  }[entry.id]
-                : null,
+            installedVersion: personal ? installedVersionOf(entry.id) : null,
             onInstall: enabled
                 ? () => _installIndexed(entry, personal: personal)
                 : null,
