@@ -51,16 +51,17 @@ var (
 	// 加时间戳也绕不过（实测 ?t= 仍返回旧内容）。GitHub API 配合
 	// Accept: application/vnd.github.raw 直接返回原文、缓存只有 60 秒，
 	// 是唯一能及时看到刚同步内容的通道，放第一位。
-	// 顺序按「实时性 + 无限流」排：
-	//   jsDelivr @latest  解析到最新 tag，tag 内容不可变，实测同步后立刻可见，
-	//                     且没有配额限制 —— 放第一
-	//   raw main          缓存 5 分钟，无配额
-	//   API               最实时（60 秒），但未认证只有 60 次/小时，
-	//                     用户连点刷新会 403，只做最后兜底
+	// 顺序按「可靠性」排，不是按理论实时性：
+	//   raw main   缓存 5 分钟，内容等于最新 commit，无配额 —— 最可靠，放第一
+	//   API        最实时（60 秒），但未认证只有 60 次/小时，连点刷新会 403
+	//   jsDelivr   ⚠️ 实测会缓存旧内容（2026-11-25：@latest 返回 v1.0.18，
+	//              而当时最新是 v1.0.24），只能放最后兜底
+	// 另外 personalModuleIndex 现在是并发请求全部源、取 tag 最新的那份，
+	// 所以即使某个源脏了，也不会把整份索引带旧。
 	personalIndexAddresses = []string{
-		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@latest/index.json",
 		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
 		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
+		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@latest/index.json",
 	}
 	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
 	personalFileAddresses = []string{
