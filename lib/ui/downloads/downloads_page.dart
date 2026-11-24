@@ -56,66 +56,63 @@ class DownloadsPage extends StatefulWidget {
 }
 
 class _DownloadsPageState extends State<DownloadsPage>
-    with SingleTickerProviderStateMixin {
-  /// 主分页控制器：0 = 下载中，1..N = 下载完成按站源分页。
-  /// 用一条 PageController 承载两段，滑动到边界自然衔接，不会卡在子分类。
-  late final _tabs = PageController(initialPage: 0);
-  int _page = 0;
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final _tabs = TabController(length: 2, vsync: this)
+    ..addListener(_tabChanged);
   final _sources = ['', ''];
   Set<String>? _selection;
   bool _busy = false;
   final _enteredJobs = <Object>{};
 
-  bool get _pendingTab => _page == 0;
-  bool get _downloadedTab => _page >= 1;
+  bool get _pendingTab => _tabs.index == 0;
+  bool get _downloadedTab => _tabs.index == 1;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.downloads.refresh();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabs.dispose();
     super.dispose();
   }
 
-  /// 主分页停稳后同步当前页：0 = 下载中，>=1 = 下载完成（减去偏移即站源序号）。
-  void _tabChanged(int index) {
-    if (!mounted || index == _page) return;
-    setState(() {
-      _page = index;
-      _selection = null;
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // iOS 在后台把进程挂起后，进度不会继续推进；切回前台必须主动同步一次，
+      // 否则界面停在切走那一刻的数字，看起来像「卡住不动」。
+      widget.downloads.refresh();
+    }
   }
 
-  /// 下载完成区的站源选项 id 列表（含开头 ''=全部），与扁平分页一一对应：
-  /// 页 k (k>=1) 对应 _doneOptionIds[k-1]。
-  List<String> _doneOptionIds(List<DownloadJob> jobs) => [
-    '',
-    for (final site in downloadSources([
-      for (final job in jobs) if (job.completed) job,
-    ]))
-      site.id,
-  ];
+  void _tabChanged() {
+    if (!mounted) return;
+    if (_tabs.indexIsChanging) {
+      // 手势滑动期间会持续收到通知，但停下来的那一帧不保证还有通知；
+      // 补一次重建，否则页面已经切过去、顶栏还停在旧页。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_tabs.indexIsChanging) setState(() {});
+      });
+      return;
+    }
+    setState(() => _selection = null);
+  }
 
-  /// 按扁平页独立构造数据，供 PageView 每页各自渲染、互不串数据。
-  /// 页 0 = 下载中（沿用 _sources[0] 的点击筛选）；页 k>=1 = 下载完成按站源分页。
+  /// 按标签页独立构造数据，供 TabBarView 每页各自渲染、互不串数据。
   _View _viewFor(int page, List<DownloadJob> jobs) {
-    final done = page >= 1;
     final sources = downloadSources(
-      done
-          ? [for (final job in jobs) if (job.completed) job]
-          : pendingDownloads(jobs),
+      page == 0
+          ? pendingDownloads(jobs)
+          : [for (final job in jobs) if (job.completed) job],
     );
-    final options = ['', for (final site in sources) site.id];
-    final wanted = done
-        ? (page - 1 >= 0 && page - 1 < options.length
-              ? options[page - 1]
-              : '')
-        : _sources[0];
-    final source = sources.any((site) => site.id == wanted) ? wanted : '';
+    final source = sources.any((site) => site.id == _sources[page])
+        ? _sources[page]
+        : '';
     bool shown(Drama drama) => source.isEmpty || drama.source == source;
     final pending = [
       for (final job in pendingDownloads(jobs))
@@ -131,20 +128,18 @@ class _DownloadsPageState extends State<DownloadsPage>
       sources: sources,
       source: source,
       selection: _selection?.intersection(
-        done
-            ? {for (final item in downloaded) item.drama.id}
-            : {for (final job in pending) job.id},
+        page == 0
+            ? {for (final job in pending) job.id}
+            : {for (final item in downloaded) item.drama.id},
       ),
     );
   }
 
-  /// 由页号直接构造内容：页 0 渲染下载中，其余渲染下载完成网格。
-  Widget _pageOf(BuildContext context, int page, List<DownloadJob> jobs) {
-    final view = _viewFor(page, jobs);
-    return page == 0
-        ? _pendingList(context, view)
-        : _downloadedGrid(context, view);
-  }
+  /// 按标签页分发内容，供 TabBarView 相邻两页同时构建。
+  Widget _page(BuildContext context, int page, _View view) => switch (page) {
+    0 => _pendingList(context, view),
+    _ => _downloadedGrid(context, view),
+  };
 
   void _toggle(String id) => setState(() {
     final selection = {...?_selection};
@@ -245,41 +240,30 @@ class _DownloadsPageState extends State<DownloadsPage>
     ]),
     builder: (context, _) {
       final jobs = widget.downloads.jobs;
-      // 下载中与下载完成的各站源处在同一条 PageView 上：页 0 = 下载中，
-      // 页 1..N = 下载完成按站源分页（含"全部"）。这样滑到第一个站源再
-      // 继续滑就是下载中，滑回来也是连续的一整段，不会卡在子分类边界。
-      final doneOptions = _doneOptionIds(jobs);
-      final count = 1 + doneOptions.length;
-      // 站源数量可能变化（下载完成/删除），夹紧当前页并纠正控制器位置。
-      if (_page > count - 1) {
-        final corrected = count - 1;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _page = corrected);
-        });
-      }
-      final index = _page.clamp(0, count - 1);
+      final index = _tabs.index;
       final view = _viewFor(index, jobs);
       final body = !widget.downloads.available
           ? const StatusView(
               title: '当前用户没有下载权限',
               icon: Icons.lock_outline_rounded,
             )
-          : _pageOf(context, index, jobs);
+          : _page(context, index, view);
+      // 与首页、详情选集同款跟手翻页：TabBarView 原生相邻页同屏、1:1 跟手，
+      // 胶囊高亮通过 _tabs.animation 交叉淡入，整页滑动不再淡入淡出。
       // 多选编辑态禁用滑动，避免误触切页。
       final touch = switch (AppScope.formFactorOf(context)) {
         FormFactor.phone || FormFactor.pad => true,
         _ => false,
       };
       final swiped = touch && widget.downloads.available
-          ? PageView(
+          ? TabBarView(
               controller: _tabs,
-              onPageChanged: _tabChanged,
               physics: _selection == null
                   ? null
                   : const NeverScrollableScrollPhysics(),
               children: [
-                for (var page = 0; page < count; page++)
-                  _pageOf(context, page, jobs),
+                for (var page = 0; page < _tabs.length; page++)
+                  _page(context, page, _viewFor(page, jobs)),
               ],
             )
           : body;
@@ -420,8 +404,7 @@ class _DownloadsPageState extends State<DownloadsPage>
   }
 
   /// 主标签换成与首页 / 追剧 / 历史同一套下划线 [CategoryTabs]。
-  /// 主标签只有「下载中 / 已下载」两项，映射到底层扁平 PageView：
-  /// 下载中 = 页 0，已下载 = 页 1 起。滑到已下载的任一站源仍算「已下载」。
+  /// 原来这里是自定义胶囊 + `_tabs.animation` 交叉淡入，和全站其它页两套观感。
   Widget _tabBar(double inset) {
     final pending = pendingDownloads(widget.downloads.jobs).length;
     final downloaded = downloadedDramas(widget.downloads.jobs).length;
@@ -430,41 +413,29 @@ class _DownloadsPageState extends State<DownloadsPage>
       ChoiceOption(0, pending == 0 ? '下载中' : '下载中 $pending'),
       ChoiceOption(1, downloaded == 0 ? '已下载' : '已下载 $downloaded'),
     ];
-    final current = _pendingTab ? 0 : 1;
     void select(int index) {
-      if (index == current) return;
+      if (index == _tabs.index) return;
       setState(() => _selection = null);
-      // 下载中→页 0，已下载→页 1（站源"全部"），保持与站源分页一致。
-      _tabs.animateToPage(
-        index == 0 ? 0 : 1,
-        duration: Motion.of(context, Motion.medium),
-        curve: Motion.standard,
-      );
+      _tabs.animateTo(index);
     }
 
     Widget tabs(double? progress) => CategoryTabs<int>(
       options: options,
-      selected: current,
+      selected: _tabs.index,
       progress: progress,
       onSelected: select,
     );
 
-    // 用 PageController 的连续位置驱动下划线：手指拖到一半线就跟到一半。
-    // 页 0 是下载中、页 >=1 是已下载，投影到 0..1 两条主标签之间。
-    final position = _tabs.hasClients ? _tabs.page : null;
-    final mainProgress = position == null
-        ? null
-        : (position >= 1 ? 1.0 : (position < 0 ? 0.0 : position));
+    final animation = _tabs.animation;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: mainProgress == null
+      // 把 TabBarView 的滑动进度直接喂给下划线：手指拖到一半，线就跟到一半，
+      // 不再等页面停稳、等 index 变化、再补一段动画才追过去。
+      child: animation == null
           ? tabs(null)
           : AnimatedBuilder(
-              animation: _tabs,
-              builder: (context, _) {
-                final p = _tabs.hasClients ? (_tabs.page ?? 0.0) : 0.0;
-                return tabs(p >= 1 ? 1.0 : (p < 0 ? 0.0 : p));
-              },
+              animation: animation,
+              builder: (context, _) => tabs(animation.value),
             ),
     );
   }
@@ -653,48 +624,19 @@ class _DownloadsPageState extends State<DownloadsPage>
   /// 站源筛选：和首页 / 追剧 / 历史同一套下划线 [CategoryTabs]，并且常驻。
   /// 原来是「有数据才长出来」的 ChoiceChip 胶囊（外面还套了 AnimatedSize），
   /// 进页面时先空一块再弹出来，样式也和全站其它页两套观感。
-  Widget _sourceTabs(_View view, {required double inset}) {
-    final options = [
-      const ChoiceOption('', '全部'),
-      for (final site in view.sources) ChoiceOption(site.id, site.name),
-    ];
-    if (_pendingTab) {
-      // 下载中：仍是点击筛选（这一页不按站源分页），key 与下载完成分开。
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: inset),
-        child: CategoryTabs<String>(
-          key: const ValueKey('download-source-tabs-pending'),
-          options: options,
-          selected: view.source,
-          onSelected: (id) => setState(() => _sources[0] = id),
-        ),
-      );
-    }
-    // 下载完成：每个站源是一页（页 1..N），点击直接翻到对应页；下划线跟手。
-    final selectedIndex = options.indexWhere((o) => o.value == view.source);
-    final jump = (int i) {
-      if (i == _page - 1) return;
-      setState(() => _selection = null);
-      _tabs.animateToPage(
-        i + 1,
-        duration: Motion.of(context, Motion.medium),
-        curve: Motion.standard,
-      );
-    };
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: inset),
-      child: CategoryTabs<String>(
-        key: const ValueKey('download-source-tabs-done'),
-        options: options,
-        selected: view.source,
-        progress: selectedIndex < 0 ? null : selectedIndex.toDouble(),
-        onSelected: (id) {
-          final i = options.indexWhere((o) => o.value == id);
-          if (i >= 0) jump(i);
-        },
-      ),
-    );
-  }
+  Widget _sourceTabs(_View view, {required double inset}) => Padding(
+    padding: EdgeInsets.symmetric(horizontal: inset),
+    child: CategoryTabs<String>(
+      // 两个标签页各有自己的站源筛选，key 分开避免下划线位置串台。
+      key: ValueKey('download-source-tabs-${_tabs.index}'),
+      options: [
+        const ChoiceOption('', '全部'),
+        for (final site in view.sources) ChoiceOption(site.id, site.name),
+      ],
+      selected: view.source,
+      onSelected: (id) => setState(() => _sources[_tabs.index] = id),
+    ),
+  );
 
   Widget _pendingList(BuildContext context, _View view) => FadeSwitcher(
     scale: true,

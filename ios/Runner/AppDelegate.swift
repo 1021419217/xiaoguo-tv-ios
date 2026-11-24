@@ -18,8 +18,10 @@ import WebKit
   /// 注意两点（踩过的坑）：
   ///   1. 音频会话必须独占，不能带 .mixWithOthers —— 混音时系统不认为
   ///      App「正在播放音频」，照样挂起，保活等于没做。
-  ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出；
-  ///      数据本身就是全零 PCM，音量保持 1 即可，听不到声音。
+  ///   2. 不要靠 volume=0 静音，音量归零也可能被判定为没有实际输出。
+  ///   3. 全零 PCM 在 iOS 16+ 上也可能被判为「没有实际音频输出」而挂起
+  ///      （用户实测：切后台进度不动、切回前台才飞速跑完）。现在改成振幅
+  ///      ±1 的极小幅值方波（约 -90dB），音量保持 1，人耳听不到但系统认。
   /// 返回 {ok, error}：失败原因要回给 Dart 记进日记，不能再静默吞掉。
   @discardableResult
   private func setDownloadKeepAlive(_ enabled: Bool) -> [String: Any] {
@@ -65,7 +67,12 @@ import WebKit
     if !player.isPlaying { player.play() }
   }
 
-  /// 生成一段 1 秒静音 WAV（16bit 单声道 44.1kHz），省得往工程里放资源文件。
+  /// 生成一段 2 秒「近静音」WAV（16bit 单声道 44.1kHz）。
+  ///
+  /// ⚠️ 不能用全 0 的纯数字静音：iOS 16+ 会把「没有任何音频输出」的播放判定为
+  /// 无效后台音频，几分钟后仍把进程挂起（下载线程跟着停，表现为切后台进度不动、
+  /// 切回前台立刻恢复并飞速下完）。这里填充振幅 ±1 的极小幅值方波
+  /// （约 -90dB，人耳完全听不到，但系统认为确实在输出音频）。
   private static func silentWav(seconds: Double) -> Data {
     let sampleRate = 44100
     let frames = Int(Double(sampleRate) * seconds)
@@ -88,7 +95,14 @@ import WebKit
     put(UInt16(16))
     data.append(contentsOf: Array("data".utf8))
     put(UInt32(dataSize))
-    data.append(Data(count: dataSize))
+    // ±1 交替采样：既不是数字静音，又低到听不见
+    var samples = [Int16](repeating: 0, count: frames)
+    for index in 0..<frames {
+      samples[index] = (index % 2 == 0) ? 1 : -1
+    }
+    samples.withUnsafeBufferPointer { buffer in
+      data.append(Data(buffer: buffer))
+    }
     return data
   }
 

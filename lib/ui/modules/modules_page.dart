@@ -127,7 +127,7 @@ class _ModulesPageState extends State<ModulesPage>
     }
   }
 
-  Future<void> _loadIndex() async {
+  Future<void> _loadIndex({bool notify = false}) async {
     setState(() {
       _index = null;
       _indexError = null;
@@ -144,13 +144,34 @@ class _ModulesPageState extends State<ModulesPage>
             warning: index.warning,
           ),
         );
+        if (notify) _toastRefresh(_index?.entries.length ?? 0, null);
       }
     } catch (failure) {
       if (mounted) setState(() => _indexError = '$failure');
+      if (mounted && notify) _toastRefresh(0, '$failure');
     }
   }
 
-  Future<void> _loadPersonalIndex() async {
+  /// 刷新完给个明确反馈：以前点完界面毫无变化，用户以为按钮坏了。
+  void _toastRefresh(int total, String? failure, {int? updatable}) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text(
+          failure == null
+              ? (updatable == null
+                  ? '已刷新：仓库 $total 个模块'
+                  : '已刷新：$total 个模块，$updatable 个可更新')
+              : '刷新失败：$failure',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadPersonalIndex({bool notify = false}) async {
     setState(() {
       _personalIndex = null;
       _personalIndexError = null;
@@ -167,9 +188,18 @@ class _ModulesPageState extends State<ModulesPage>
             warning: index.warning,
           ),
         );
+        if (notify) {
+          final entries = _personalIndex?.entries ?? const [];
+          final updatable = entries.where((entry) {
+            final installed = installedVersionOf(entry.id);
+            return installed != null && installed != entry.version;
+          }).length;
+          _toastRefresh(entries.length, null, updatable: updatable);
+        }
       }
     } catch (failure) {
       if (mounted) setState(() => _personalIndexError = '$failure');
+      if (mounted && notify) _toastRefresh(0, '$failure');
     }
   }
 
@@ -390,24 +420,24 @@ class _ModulesPageState extends State<ModulesPage>
     if (!_store.profile.admin || _store.locked) {
       return _list([...header, for (final module in modules) card(module)]);
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (header.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Column(spacing: 10, children: header),
-          ),
-        if (!_store.locked)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Column(
-              spacing: 10,
-              children: [
-                SettingsCard(
-                  children: [
-                    SettingsTile(
-                      icon: Icons.speed_rounded,
+    // 顶部这些卡片要跟着列表一起滚（以前放在 Column 里固定住，
+    // 往下滑时它们占着上半屏不动，可滚区域被挤得很小）。
+    final topCards = <Widget>[
+      if (header.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(spacing: 10, children: header),
+        ),
+      if (!_store.locked)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            spacing: 10,
+            children: [
+              SettingsCard(
+                children: [
+                  SettingsTile(
+                    icon: Icons.speed_rounded,
                       iconColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.20),
                       iconForeground: Theme.of(context).colorScheme.onSurface,
                       title: _testing ? '正在测源…' : '站源测速',
@@ -440,12 +470,21 @@ class _ModulesPageState extends State<ModulesPage>
                     ),
                   ],
                 ),
-              ],
-            ),
+            ],
           ),
-        Expanded(
-          child: ReorderableListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        ),
+    ];
+    // 顶部卡片作为列表 header，跟着一起滚
+    return ReorderableListView.builder(
+            header: Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
+                children: topCards,
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
             buildDefaultDragHandles: false,
             itemCount: modules.length,
             onReorder: _reorder,
@@ -464,9 +503,6 @@ class _ModulesPageState extends State<ModulesPage>
                 ),
               );
             },
-          ),
-        ),
-      ],
     );
   }
 
@@ -638,8 +674,10 @@ class _ModulesPageState extends State<ModulesPage>
               onPressed: _tabs.index == 3
                   ? (_personalIndex == null && _personalIndexError == null
                       ? null
-                      : _loadPersonalIndex)
-                  : (_index == null && _indexError == null ? null : _loadIndex),
+                      : () => _loadPersonalIndex(notify: true))
+                  : (_index == null && _indexError == null
+                      ? null
+                      : () => _loadIndex(notify: true)),
             ),
           const SizedBox(width: 12),
         ],

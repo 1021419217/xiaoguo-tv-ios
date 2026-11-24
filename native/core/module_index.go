@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -232,7 +233,37 @@ func zipModuleFiles(manifest, code []byte) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// tagRank 把 v1.0.24 拆成 [1,0,24]，用于比较哪份索引更新。
+func tagRank(tag string) [3]int {
+	var out [3]int
+	tag = strings.TrimPrefix(strings.TrimSpace(tag), "v")
+	parts := strings.Split(tag, ".")
+	for i := 0; i < 3 && i < len(parts); i++ {
+		value, err := strconv.Atoi(parts[i])
+		if err != nil {
+			value = 0
+		}
+		out[i] = value
+	}
+	return out
+}
+
+// tagNewer 判断 a 是否比 b 新。
+func tagNewer(a, b string) bool {
+	ra, rb := tagRank(a), tagRank(b)
+	for i := 0; i < 3; i++ {
+		if ra[i] != rb[i] {
+			return ra[i] > rb[i]
+		}
+	}
+	return false
+}
+
 // personalModuleIndex 读取个人在线仓库的索引（与官方索引完全独立）。
+//
+// 并发请求所有镜像，取 tag 最新的那一份：某些 CDN（jsDelivr 的 @latest、
+// raw 的 main 分支）会缓存旧内容，顺序取第一个成功的话，可能一直拿到几天前
+// 的索引，表现就是「同步了新模块但 App 里看不到更新」。
 func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
 	personalIndexMu.Lock()
 	if personalIndexCached != nil && time.Since(personalIndexAt) < personalIndexTTL {
@@ -242,35 +273,66 @@ func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personal
 	}
 	personalIndexMu.Unlock()
 
-	var failures []string
+	type fetched struct {
+		entries []personalIndexEntry
+		mirror  int
+		tag     string
+		err     error
+	}
+	results := make(chan fetched, len(personalIndexAddresses))
 	for mirror, address := range personalIndexAddresses {
-		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
-		if err == nil {
+		go func(mirror int, address string) {
+			raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
+			if err != nil {
+				results <- fetched{mirror: mirror, err: err}
+				return
+			}
 			var index struct {
-				Format  int                 `json:"format"`
+				Format  int                  `json:"format"`
 				Modules []personalIndexEntry `json:"modules"`
 			}
-			if err = json.Unmarshal(raw, &index); err == nil {
-				if index.Format == moduleIndexFormat {
-					entries := []personalIndexEntry{}
-					for _, entry := range index.Modules {
-						if entry.usable() {
-							entries = append(entries, entry)
-						}
-					}
-					personalIndexMu.Lock()
-					personalIndexCached, personalIndexAt, personalIndexMirror = entries, time.Now(), mirror
-					personalIndexMu.Unlock()
-					return entries, mirror, nil
-				}
-				err = fmt.Errorf("索引格式为第 %d 版，请更新应用", index.Format)
-			} else {
-				err = errors.New("索引格式无效")
+			if err = json.Unmarshal(raw, &index); err != nil {
+				results <- fetched{mirror: mirror, err: errors.New("索引格式无效")}
+				return
 			}
-		}
-		failures = append(failures, err.Error())
+			if index.Format != moduleIndexFormat {
+				results <- fetched{mirror: mirror, err: fmt.Errorf("索引格式为第 %d 版，请更新应用", index.Format)}
+				return
+			}
+			entries := []personalIndexEntry{}
+			for _, entry := range index.Modules {
+				if entry.usable() {
+					entries = append(entries, entry)
+				}
+			}
+			tag := ""
+			if len(index.Modules) > 0 {
+				tag = index.Modules[0].Tag
+			}
+			results <- fetched{entries: entries, mirror: mirror, tag: tag}
+		}(mirror, address)
 	}
-	return nil, 0, fmt.Errorf("读取个人仓库失败：%s", strings.Join(failures, "；"))
+
+	var failures []string
+	var best *fetched
+	for i := 0; i < len(personalIndexAddresses); i++ {
+		item := <-results
+		if item.err != nil {
+			failures = append(failures, item.err.Error())
+			continue
+		}
+		if best == nil || tagNewer(item.tag, best.tag) {
+			copied := item
+			best = &copied
+		}
+	}
+	if best == nil {
+		return nil, 0, fmt.Errorf("读取个人仓库失败：%s", strings.Join(failures, "；"))
+	}
+	personalIndexMu.Lock()
+	personalIndexCached, personalIndexAt, personalIndexMirror = best.entries, time.Now(), best.mirror
+	personalIndexMu.Unlock()
+	return best.entries, best.mirror, nil
 }
 
 func (engine *nativeEngine) personalModuleStore(ctx context.Context) (map[string]any, error) {
