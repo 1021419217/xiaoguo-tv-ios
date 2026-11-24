@@ -80,7 +80,13 @@ class DramaFeed extends ChangeNotifier {
       _accept(result, more: more, requested: page);
     } catch (error) {
       if (generation != _generation) return;
-      _error = error.toString();
+      final text = error.toString();
+      // 换源/预加载时，后发的同类请求会主动 cancel 掉先发的那条。
+      // 这是内部协调、不是站点失败，不该弹「暂时无法加载 context canceled」。
+      // 仅吞掉错误文案，loading/notify 照常收尾，避免卡在加载中。
+      if (!text.contains('canceled') && !text.contains('Canceled')) {
+        _error = text;
+      }
     }
     _loading = _loadingMore = false;
     _notify();
