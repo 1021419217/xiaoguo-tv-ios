@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -36,9 +35,14 @@ var (
 
 	// 个人在线仓库：单仓库放全部模块，地址独立于官方索引。
 	// 改这里的地址即可换自己的仓库，不影响官方模块商店。
+	// 顺序有讲究：raw.githubusercontent.com 的 main 分支带 max-age=300，
+	// 加时间戳也绕不过（实测 ?t= 仍返回旧内容）。GitHub API 配合
+	// Accept: application/vnd.github.raw 直接返回原文、缓存只有 60 秒，
+	// 是唯一能及时看到刚同步内容的通道，放第一位。
 	personalIndexAddresses = []string{
-		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
+		"https://api.github.com/repos/1021419217/xg-modules/contents/index.json?ref=main",
 		"https://cdn.jsdelivr.net/gh/1021419217/xg-modules@main/index.json",
+		"https://raw.githubusercontent.com/1021419217/xg-modules/main/index.json",
 	}
 	// %s 依次是：仓库名、tag、模块在仓库里的子目录、文件名
 	personalFileAddresses = []string{
@@ -214,11 +218,8 @@ func zipModuleFiles(manifest, code []byte) ([]byte, error) {
 // personalModuleIndex 读取个人在线仓库的索引（与官方索引完全独立）。
 func (engine *nativeEngine) personalModuleIndex(ctx context.Context) ([]personalIndexEntry, int, error) {
 	var failures []string
-	// raw.githubusercontent.com 的 index.json 带 max-age=300，jsDelivr 对 @main
-	// 缓存更久。不加时间戳的话，刚同步的模块要等好几分钟才出现，用户点刷新也没用。
-	stamp := strconv.FormatInt(time.Now().Unix(), 10)
 	for mirror, address := range personalIndexAddresses {
-		raw, err := engine.fetchModuleResource(ctx, address+"?t="+stamp, moduleIndexBytes)
+		raw, err := engine.fetchModuleResource(ctx, address, moduleIndexBytes)
 		if err == nil {
 			var index struct {
 				Format  int                 `json:"format"`

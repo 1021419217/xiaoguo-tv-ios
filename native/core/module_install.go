@@ -265,6 +265,12 @@ func (engine *nativeEngine) fetchLimited(ctx context.Context, address string, li
 	if err != nil {
 		return nil, err
 	}
+	// GitHub 的 contents 接口默认返回 JSON 包装（base64），
+	// 声明 raw 才直接拿到文件原文，省掉解码也不会被 CDN 缓存太久。
+	if strings.HasPrefix(address, "https://api.github.com/") {
+		request.Header.Set("Accept", "application/vnd.github.raw")
+		request.Header.Set("User-Agent", "xiaoguo-tv")
+	}
 	response, err := engine.downloader.client.Do(request)
 	if err != nil {
 		return nil, err
