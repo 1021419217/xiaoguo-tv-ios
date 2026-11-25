@@ -89,13 +89,27 @@ class SourceCatalog {
     int page = 1,
     bool force = false,
   }) async {
-    final result = await repository.catalog(
-      source.id,
-      category: _request(category),
-      page: page,
-      force: force,
-    );
-    return _within(category, result);
+    // 首屏失败/返回空时自动再试一次：站源接口经常抖一下（token 过期、
+    // 首次握手超时），以前会让用户看到一个空页面加「刷新」按钮，
+    // 必须手动点一下才有内容。这里替用户点这一次。
+    Future<CatalogPage> once({required bool force}) async {
+      final result = await repository.catalog(
+        source.id,
+        category: _request(category),
+        page: page,
+        force: force,
+      );
+      return _within(category, result);
+    }
+
+    try {
+      final result = await once(force: force);
+      if (result.items.isNotEmpty || page > 1) return result;
+      return await once(force: true);
+    } catch (error) {
+      if (page > 1) rethrow;
+      return await once(force: true);
+    }
   }
 
   Future<CatalogPage> recommendations({

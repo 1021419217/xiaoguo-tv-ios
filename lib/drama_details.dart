@@ -75,7 +75,14 @@ class DramaDetails extends ChangeNotifier {
       unawaited(_loadSeasons(generation));
     }
     try {
-      final detail = await repository.detail(_drama);
+      // 首次失败自动再试一次：站源接口抖动（token 过期、首次握手超时）
+      // 非常常见，以前直接显示「剧集信息暂时不可用 / 重试」，要用户手点。
+      DramaDetail detail;
+      try {
+        detail = await repository.detail(_drama);
+      } catch (_) {
+        detail = await repository.detail(_drama);
+      }
       if (!_current(generation)) return;
       _drama = repository.catalogUpdates.current(_drama).merge(detail.drama);
       _episodes = detail.episodes;
