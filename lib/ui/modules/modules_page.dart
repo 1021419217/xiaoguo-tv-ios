@@ -447,48 +447,45 @@ class _ModulesPageState extends State<ModulesPage>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Column(spacing: 10, children: header),
         ),
+      // 原先这里是两张整块 SettingsCard（各占一行图标+标题+副标题+箭头），
+      // 加起来一百多像素高。改成一行两个按钮，节省了大部分纵向空间。
       if (!_store.locked)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Column(
-            spacing: 10,
+          child: Row(
             children: [
-              SettingsCard(
-                children: [
-                  SettingsTile(
-                    icon: Icons.speed_rounded,
-                      iconColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.20),
-                      iconForeground: Theme.of(context).colorScheme.onSurface,
-                      title: _testing ? '正在测源…' : '站源测速',
-                      subtitle: _testing
-                          ? '正在逐个请求分类接口，最多 8 秒'
-                          : _latency.isEmpty
-                          ? '测一遍各站源的连接速度'
-                          : '已测 ${_latency.length} 个站源，点一下重测',
-                      enabled: !_testing,
-                      trailing: _testing
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : null,
-                      onTap: _testing ? null : _runSpeedTest,
-                    ),
-                  ],
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _testing ? null : _runSpeedTest,
+                  icon: _testing
+                      ? const SizedBox.square(
+                          dimension: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.speed_rounded, size: 18),
+                  label: Text(
+                    _testing
+                        ? '测源中…'
+                        : (_latency.isEmpty
+                              ? '站源测速'
+                              : '重测 ${_latency.length} 个'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                SettingsCard(
-                  children: [
-                    SettingsTile(
-                      icon: Icons.archive_outlined,
-                      iconColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.20),
-                      iconForeground: Theme.of(context).colorScheme.onSurface,
-                      title: '导出全部模块',
-                      subtitle: '导出 ${modules.length} 个模块，每个模块一个 zip',
-                      enabled: !_busy,
-                      onTap: _busy ? null : () => _export(modules),
-                    ),
-                  ],
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _export(modules),
+                  icon: const Icon(Icons.archive_outlined, size: 18),
+                  label: const Text(
+                    '导出模块',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+              ),
             ],
           ),
         ),
