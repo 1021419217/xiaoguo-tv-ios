@@ -80,7 +80,16 @@ class DramaDetails extends ChangeNotifier {
       DramaDetail detail;
       try {
         detail = await repository.detail(_drama);
-      } catch (_) {
+      } catch (first) {
+        // 需要人机验证时不重试：再试只会再放一次挑战，
+        // 交给详情页「去验证」入口（2.8.4+82 加的流程）。
+        final text = first.toString();
+        if (text.contains('验证') ||
+            text.contains('challenge') ||
+            text.contains('Challenge') ||
+            text.contains('Cloudflare')) {
+          rethrow;
+        }
         detail = await repository.detail(_drama);
       }
       if (!_current(generation)) return;

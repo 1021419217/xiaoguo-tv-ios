@@ -15,6 +15,16 @@ String categoryName(String name) {
   };
 }
 
+/// 判断错误是否属于「需要人机验证 / 被 Cloudflare 拦」，这类不该盲目重试。
+bool _needsVerification(Object error) {
+  final text = error.toString();
+  return text.contains('验证') ||
+      text.contains('challenge') ||
+      text.contains('Challenge') ||
+      text.contains('Cloudflare') ||
+      text.contains('cloudflare');
+}
+
 class SourceCatalog {
   SourceCatalog(this.repository, this.source);
   final AppRepository repository;
@@ -108,6 +118,9 @@ class SourceCatalog {
       return await once(force: true);
     } catch (error) {
       if (page > 1) rethrow;
+      // 需要人机验证的错误不要重试：再试一次只会把同样的挑战再跑一遍，
+      // 应该原样抛给界面，走「去验证」入口（见 lib/verify_repair.dart）。
+      if (_needsVerification(error)) rethrow;
       return await once(force: true);
     }
   }
