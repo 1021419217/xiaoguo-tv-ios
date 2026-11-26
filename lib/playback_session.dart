@@ -785,6 +785,13 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
+        // mpv 的 start 是播放器级持久属性：一旦某次续播设过秒数，同一个
+        // Player 实例下次 open 会沿用，导致切集后从旧进度起播。续播现在靠
+        // 下方 _resumeSeek 二次定位，这里必须先归零，保证从开头打开。
+        final native = player.platform;
+        if (native is NativePlayer) {
+          await native.setProperty('start', '0');
+        }
         // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
         // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
         await player.open(
@@ -885,6 +892,7 @@ class PlaybackSession extends ChangeNotifier {
     _playIntent = playWhenReady;
     _resumePosition = 0;
     _openedAt = 0;
+    _positionAdvanced = false;
     _index = index;
     _error = null;
     _localFailure = false;
@@ -946,6 +954,13 @@ class PlaybackSession extends ChangeNotifier {
       await _configure(standby, plan);
       await _limitCache(standby, true);
       await _selectAudio(standby, false);
+      // 竖屏切集走 _swap() 直接把这个 standby 提升为主播放器、不再 open，
+      // 所以必须在这里就把 start 归零，否则会沿用 mpv 残留的续播秒数，
+      // 切集后跳到 20/30/40 秒不等。这是竖屏独有、横屏正常的原因。
+      final platform = standby.platform;
+      if (platform is NativePlayer) {
+        await platform.setProperty('start', '0');
+      }
       await standby.open(
         Media(plan.url, httpHeaders: plan.headers),
         play: false,
