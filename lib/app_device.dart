@@ -216,6 +216,32 @@ class AppDevice {
     } catch (_) {}
   }
 
+  /// 滑动快进/快退的绵密触觉（仅 iOS Core Haptics；其他平台原生未实现，no-op）。
+  static Future<void> hapticStart() async {
+    try {
+      await channel.invokeMethod<void>('hapticStart');
+    } catch (_) {}
+  }
+
+  /// intensity/sharpness 均为 0~1，按滑动速度实时更新；速度为零时传 0 静默。
+  static Future<void> hapticUpdate({
+    required double intensity,
+    double sharpness = 0.5,
+  }) async {
+    try {
+      await channel.invokeMethod<void>('hapticUpdate', {
+        'intensity': intensity,
+        'sharpness': sharpness,
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> hapticStop() async {
+    try {
+      await channel.invokeMethod<void>('hapticStop');
+    } catch (_) {}
+  }
+
   static Future<String?> createDocument(String name, String mimeType) async {
     try {
       return await channel.invokeMethod<String>('createDocument', {
