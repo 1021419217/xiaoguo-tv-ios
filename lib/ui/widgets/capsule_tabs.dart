@@ -22,6 +22,7 @@ class CapsuleTabs extends StatefulWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 14),
     this.margin = EdgeInsets.zero,
     this.height = 42,
+    this.stretch = false,
   });
 
   final List<String> labels;
@@ -44,6 +45,9 @@ class CapsuleTabs extends StatefulWidget {
   final EdgeInsets padding;
   final EdgeInsets margin;
   final double height;
+
+  /// 让轨道横向铺满父级宽度（内容仍靠左），用于需要跟下方卡片等宽对齐的页面。
+  final bool stretch;
 
   @override
   State<CapsuleTabs> createState() => _CapsuleTabsState();
@@ -163,13 +167,18 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
     if (!widget.track) return Padding(padding: widget.margin, child: content);
     return Padding(
       padding: widget.margin,
-      child: Container(
-        decoration: BoxDecoration(
-          color: ink.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: ink.withValues(alpha: 0.08)),
+      child: ConstrainedBox(
+        constraints: widget.stretch
+            ? const BoxConstraints(minWidth: double.infinity)
+            : const BoxConstraints(),
+        child: Container(
+          decoration: BoxDecoration(
+            color: ink.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: ink.withValues(alpha: 0.08)),
+          ),
+          child: content,
         ),
-        child: content,
       ),
     );
   }

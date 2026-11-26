@@ -708,15 +708,16 @@ class _ModulesPageState extends State<ModulesPage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
-            // 胶囊内部有 3px 轨道边距 + 3px 内容边距，左右收到 13 让
-            // 高亮段的文字边缘正好落在 16，与下方按钮/卡片左边缘对齐。
-            padding: const EdgeInsets.fromLTRB(13, 0, 13, 10),
-            child: Align(
-              alignment: Alignment.centerLeft,
+            // 左右 16 与下方按钮/卡片保持一致；胶囊轨道本身 stretch 铺满整行，
+            // 让顶部菜单和下面模块同宽，不再右边空一截。
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: SizedBox(
+              width: double.infinity,
               child: CapsuleTabs(
                 // 五个标签带数量会超出屏幕宽：开滚动 + 收窄字号/内边距，
                 // 既不会像等分布局那样把末尾的「内置 / 手动」压扁，也能多塞下两个。
                 scrollable: true,
+                stretch: true,
                 fontSize: 12,
                 padding: const EdgeInsets.symmetric(horizontal: 9),
                 labels: [
