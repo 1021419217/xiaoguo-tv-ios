@@ -153,7 +153,29 @@ class ExploreFeed extends ChangeNotifier {
     if (catalog.categories.length == 1) {
       unawaited(_loadCategories(catalog, force: true));
     }
-    await _feed?.reload(force: true);
+    final current = _feed;
+    // 一次刷新覆盖所有已加载分类：过去只刷当前 tab，切到子分类仍是
+    // 15 分钟前的旧内容，逼着用户每个分类各自再刷一遍。
+    unawaited(_refreshOtherFeeds(catalog, current));
+    await current?.reload(force: true);
+  }
+
+  /// 后台分批强制刷新当前之外的分类，避免分类过多时瞬间打爆上游；
+  /// 切源或页面销毁后立即停手，不再为旧站发请求。
+  Future<void> _refreshOtherFeeds(
+    SourceCatalog catalog,
+    DramaFeed? current,
+  ) async {
+    const batch = 5;
+    final others = _feeds.values
+        .where((feed) => !identical(feed, current))
+        .toList();
+    for (var i = 0; i < others.length; i += batch) {
+      if (_disposed || catalog != _catalog) return;
+      await Future.wait([
+        for (final feed in others.skip(i).take(batch)) feed.reload(force: true),
+      ]);
+    }
   }
 
   void _open() {
@@ -167,7 +189,9 @@ class ExploreFeed extends ChangeNotifier {
       return;
     }
     final catalog = _catalog = SourceCatalog(repository, SourceSite.byId(id));
-    _select(catalog.recommends ? recommendTab : CatalogCategory.all);
+    // 切源后首屏必须拿新站数据：默认 force:false 会命中 Go 层 15 分钟缓存，
+    // 导致切进来还是上一站/旧内容，必须手动刷新才变。
+    _select(catalog.recommends ? recommendTab : CatalogCategory.all, force: true);
     unawaited(_loadCategories(catalog));
   }
 
@@ -182,20 +206,22 @@ class ExploreFeed extends ChangeNotifier {
     _notify();
   }
 
-  void _select(CatalogCategory tab) {
+  void _select(CatalogCategory tab, {bool force = false}) {
     final catalog = _catalog!;
     if (recommending) unawaited(repository.cancelRecommendations());
     _tab = tab;
     if (_feeds[tab.id] case final kept?) {
       _feed = kept;
       _ranks = _rankings[tab.id] ?? const {};
-      if (kept.items.isEmpty && !kept.loading) unawaited(kept.reload());
+      if ((force || kept.items.isEmpty) && !kept.loading) {
+        unawaited(kept.reload(force: force));
+      }
       _notify();
       return;
     }
     final ranks = _ranks = _rankings[tab.id] = <String, int>{};
     final feed = _feed = _feeds[tab.id] = _createFeed(catalog, tab, ranks);
-    unawaited(feed.reload());
+    unawaited(feed.reload(force: force));
     _notify();
   }
 

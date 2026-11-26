@@ -708,16 +708,17 @@ class _ModulesPageState extends State<ModulesPage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
-            // 左右 16 与下方按钮/卡片对齐；五个分类等分铺满整行，不靠轨道留白。
+            // 左右 16 与下方按钮/卡片对齐；五个分类在轨道内均匀铺满整行。
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: SizedBox(
               width: double.infinity,
               child: CapsuleTabs(
-                // 五个分类固定、数量有限：等分铺满整行，字号也可以放大，
-                // 比上一版「拉伸轨道但内容靠左、右边空一截」更整齐。
-                expand: true,
+                // 段宽由文字 + padding 自己撑开，剩余空间 spaceEvenly 均分：
+                // 既不像等分那样让「导入/内置」空出半截，也不会把
+                // 「个人仓库 4」末尾的数字挤到段外被遮住。
+                stretch: true,
                 fontSize: 13.5,
-                padding: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 labels: [
                   '已安装 ${_modules?.length ?? 0}',
                   '导入',

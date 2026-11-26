@@ -46,7 +46,8 @@ class CapsuleTabs extends StatefulWidget {
   final EdgeInsets margin;
   final double height;
 
-  /// 让轨道横向铺满父级宽度（内容仍靠左），用于需要跟下方卡片等宽对齐的页面。
+  /// 让轨道横向铺满父级宽度，且各段在轨道内均匀排布（不再靠左堆在一起）。
+  /// 配合「段宽由文字撑开」使用：短文字段不留大片空白，长文字段也不会被挤掉数字。
   final bool stretch;
 
   @override
@@ -150,7 +151,15 @@ class _CapsuleTabsState extends State<CapsuleTabs> {
               for (final segment in segments) Expanded(child: segment),
             ],
           )
-        : Row(mainAxisSize: MainAxisSize.min, spacing: 2, children: segments);
+        : Row(
+            // 铺满时：段宽由文字 + padding 自己撑开，剩余空间用 spaceEvenly
+            // 均分到段间，短文字段不再空出半截、长文字段也不会挤掉末尾数字。
+            mainAxisSize: widget.stretch ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisAlignment:
+                widget.stretch ? MainAxisAlignment.spaceEvenly : MainAxisAlignment.start,
+            spacing: widget.stretch ? 0 : 2,
+            children: segments,
+          );
     final content = widget.scrollable
         ? SingleChildScrollView(
             controller: _scroll,
