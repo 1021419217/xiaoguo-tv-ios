@@ -383,7 +383,7 @@ class _ModulesPageState extends State<ModulesPage>
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
     itemCount: children.length,
     itemBuilder: (_, index) => children[index],
-    separatorBuilder: (_, _) => const SizedBox(height: 10),
+    separatorBuilder: (_, _) => const SizedBox(height: 8),
   );
 
   Widget _installedTab() {
@@ -451,7 +451,9 @@ class _ModulesPageState extends State<ModulesPage>
       // 加起来一百多像素高。改成一行两个按钮，节省了大部分纵向空间。
       if (!_store.locked)
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          // 上下留白对称：Tab 栏自带 10px 底距，这里补 2px 凑成 12；
+          // 下方给 12px，与 header 归零后的间距一致，不再「上空下紧」。
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
           child: Row(
             children: [
               Expanded(
@@ -493,7 +495,7 @@ class _ModulesPageState extends State<ModulesPage>
     // 顶部卡片作为列表 header，跟着一起滚
     return ReorderableListView.builder(
             header: Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: 10,
@@ -514,7 +516,7 @@ class _ModulesPageState extends State<ModulesPage>
                 key: ValueKey(module.id),
                 index: index,
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: card(module),
                 ),
               );
@@ -706,7 +708,9 @@ class _ModulesPageState extends State<ModulesPage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            // 胶囊内部有 3px 轨道边距 + 3px 内容边距，左右收到 13 让
+            // 高亮段的文字边缘正好落在 16，与下方按钮/卡片左边缘对齐。
+            padding: const EdgeInsets.fromLTRB(13, 0, 13, 10),
             child: Align(
               alignment: Alignment.centerLeft,
               child: CapsuleTabs(
@@ -805,7 +809,7 @@ class _ModuleCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 12, footer ? 12 : 16),
+                padding: EdgeInsets.fromLTRB(16, 12, 12, footer ? 8 : 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -820,13 +824,13 @@ class _ModuleCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _ModuleTitle(name, adult: adult),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             'v${version.isEmpty ? '—' : version}  ·  $id',
                             style: meta,
                           ),
                           if (body.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             DefaultTextStyle.merge(
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontSize: 13,
@@ -836,7 +840,7 @@ class _ModuleCard extends StatelessWidget {
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: 4,
+                                spacing: 2,
                                 children: body,
                               ),
                             ),
@@ -856,7 +860,7 @@ class _ModuleCard extends StatelessWidget {
                   color: colors.outlineVariant,
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
                   child: Row(
                     spacing: 8,
                     children: [...leading, const Spacer(), ...actions],
