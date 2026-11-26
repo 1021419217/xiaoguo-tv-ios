@@ -236,7 +236,7 @@ class SettingsSection extends StatelessWidget {
             ),
             SwitchTile(
               title: '滑动快进震动',
-              subtitle: '慢滑时静默，手一加速就绵密震动，模拟进度条刻度手感',
+              subtitle: '横向快进/快退跨过刻度时轻微震动，模拟进度条手感',
               value: preferences.swipeSeekHaptic,
               onChanged: (value) =>
                   savePreferences(preferences.copyWith(swipeSeekHaptic: value)),

@@ -380,10 +380,10 @@ class _ModulesPageState extends State<ModulesPage>
   );
 
   Widget _list(List<Widget> children) => ListView.separated(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
     itemCount: children.length,
     itemBuilder: (_, index) => children[index],
-    separatorBuilder: (_, _) => const SizedBox(height: 8),
+    separatorBuilder: (_, _) => const SizedBox(height: 6),
   );
 
   Widget _installedTab() {
@@ -708,23 +708,21 @@ class _ModulesPageState extends State<ModulesPage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
-            // 左右 16 与下方按钮/卡片保持一致；胶囊轨道本身 stretch 铺满整行，
-            // 让顶部菜单和下面模块同宽，不再右边空一截。
+            // 左右 16 与下方按钮/卡片对齐；五个分类等分铺满整行，不靠轨道留白。
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: SizedBox(
               width: double.infinity,
               child: CapsuleTabs(
-                // 五个标签带数量会超出屏幕宽：开滚动 + 收窄字号/内边距，
-                // 既不会像等分布局那样把末尾的「内置 / 手动」压扁，也能多塞下两个。
-                scrollable: true,
-                stretch: true,
-                fontSize: 12,
-                padding: const EdgeInsets.symmetric(horizontal: 9),
+                // 五个分类固定、数量有限：等分铺满整行，字号也可以放大，
+                // 比上一版「拉伸轨道但内容靠左、右边空一截」更整齐。
+                expand: true,
+                fontSize: 13.5,
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 labels: [
                   '已安装 ${_modules?.length ?? 0}',
                   '导入',
                   '在线 ${_onlineCount()}',
-                  '个人 ${_personalIndex?.entries.length ?? 0}',
+                  '个人仓库 ${_personalIndex?.entries.length ?? 0}',
                   '内置',
                 ],
                 index: _tabs.index,
@@ -810,7 +808,7 @@ class _ModuleCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 12, footer ? 8 : 12),
+                padding: EdgeInsets.fromLTRB(14, 9, 10, footer ? 6 : 9),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -819,29 +817,29 @@ class _ModuleCard extends StatelessWidget {
                           ? '?'
                           : trimmed.substring(0, 1).toUpperCase(),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _ModuleTitle(name, adult: adult),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 1),
                           Text(
                             'v${version.isEmpty ? '—' : version}  ·  $id',
                             style: meta,
                           ),
                           if (body.isNotEmpty) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             DefaultTextStyle.merge(
                               style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 13,
-                                height: 1.4,
+                                fontSize: 12,
+                                height: 1.3,
                                 fontWeight: FontWeight.w500,
                                 color: colors.onSurfaceVariant,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                spacing: 2,
+                                spacing: 1,
                                 children: body,
                               ),
                             ),
@@ -861,7 +859,7 @@ class _ModuleCard extends StatelessWidget {
                   color: colors.outlineVariant,
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
+                  padding: const EdgeInsets.fromLTRB(14, 5, 14, 6),
                   child: Row(
                     spacing: 8,
                     children: [...leading, const Spacer(), ...actions],
@@ -876,7 +874,7 @@ class _ModuleCard extends StatelessWidget {
   }
 }
 
-/// 模块首字母方块：44 见方、14 圆角、极淡玻璃底 + 一圈细描边。
+/// 模块首字母方块：36 见方、12 圆角、极淡玻璃底 + 一圈细描边。
 /// 比彩色图标块安静，也不会和「限制级」这类状态标记抢注意力。
 class _Monogram extends StatelessWidget {
   const _Monogram({required this.text});
@@ -888,18 +886,18 @@ class _Monogram extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final ink = dark ? Colors.white : theme.colorScheme.onSurface;
     return Container(
-      width: 44,
-      height: 44,
+      width: 36,
+      height: 36,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: ink.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ink.withValues(alpha: 0.10)),
       ),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 17,
+          fontSize: 15,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.4,
           color: ink.withValues(alpha: 0.86),

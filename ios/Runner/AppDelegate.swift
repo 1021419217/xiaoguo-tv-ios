@@ -5,7 +5,6 @@ import CFNetwork
 import AVFoundation
 import MediaPlayer
 import WebKit
-import CoreHaptics
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -231,22 +230,6 @@ import CoreHaptics
           }
           result(nil)
           return
-        case "hapticStart":
-          // 开始一段绵密触觉：Core Haptics 持续事件，强度/锐度由 Dart 按滑动速度实时更新。
-          SeekHaptics.shared.start()
-          result(true)
-          return
-        case "hapticUpdate":
-          // intensity 0~1：越大越绵密酥麻；速度为 0（慢滑）时传 0，引擎静默。
-          let intensity = Float(min(max(arguments?["intensity"] as? Double ?? 0, 0), 1))
-          let sharpness = Float(min(max(arguments?["sharpness"] as? Double ?? 0.5, 0), 1))
-          SeekHaptics.shared.update(intensity: intensity, sharpness: sharpness)
-          result(true)
-          return
-        case "hapticStop":
-          SeekHaptics.shared.stop()
-          result(true)
-          return
         default:
           break
         }
@@ -270,109 +253,6 @@ import CoreHaptics
                 "pac": (settings["ProxyAutoConfigEnable"] as? NSNumber)?.boolValue == true])
       }
     }
-  }
-}
-
-/// 滑动快进/快退的绵密触觉引擎。
-///
-/// 为什么不用 UIKit 的 UISelectionFeedbackGenerator：
-/// 那一类 API 只能发「一下一下」的离散 click（相当于每隔一段距离点一下），
-/// 手感是一顿一顿的。Lumenic 那种「酥酥麻麻」是 Core Haptics 的连续事件：
-/// 用一个持续震动 event，实时改它的 intensity / sharpness —— 慢滑时强度为 0
-/// 完全静默，速度起来后强度与锐度平滑抬升，听起来摸起来就是连贯的颗粒感，
-/// 而不是若干次孤立的点击。锐度偏高会产生密集细碎的颗粒，这正是要复刻的手感。
-///
-/// 引擎与播放器复用同一个实例，避免每次滑动都重建（重建有几十毫秒延迟，
-/// 会让起步那一下明显卡顿）。设备不支持触觉时所有方法都安全 no-op。
-private final class SeekHaptics {
-  static let shared = SeekHaptics()
-
-  private var engine: CHHapticEngine?
-  private var player: CHHapticPatternPlayer?
-  private var running = false
-
-  private init() {
-    guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
-    let engine = try? CHHapticEngine()
-    guard let engine = engine else { return }
-    // 引擎被系统打断（来电、切后台）后自动重启并恢复播放器，避免滑动时突然没震动。
-    engine.stoppedHandler = { [weak self] _ in self?.restart() }
-    engine.resetHandler = { [weak self] in self?.restart() }
-    self.engine = engine
-  }
-
-  private func restart() {
-    guard let engine = engine else { return }
-    try? engine.start()
-    if running {
-      running = false
-      start()
-    }
-  }
-
-  func start() {
-    guard let engine = engine else { return }
-    if running { return }
-    do {
-      try engine.start()
-      // 持续事件：duration 给足（1 小时）。静态参数给满值作基准，
-      // 真正强度由动态参数 intensityControl 实时覆盖；静态值给 0 的话
-      // 动态参数若按乘法叠加会导致永远静默，所以这里必须给满。
-      let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 1)
-      let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 1)
-      let event = CHHapticEvent(
-        eventType: .hapticContinuous,
-        parameters: [intensity, sharpness],
-        relativeTime: 0,
-        duration: 3600
-      )
-      let pattern = try CHHapticPattern(events: [event], parameters: [])
-      let player = try engine.makePlayer(with: pattern)
-      self.player = player
-      // 起步先压到 0：静态满值若直接播放会"嗡"地炸一下，
-      // 立刻发一个静默动态参数把强度按住，之后完全由速度驱动抬升。
-      let silence = CHHapticDynamicParameter(
-        parameterID: .hapticIntensityControl,
-        value: 0,
-        relativeTime: 0
-      )
-      try player.sendParameters([silence], atTime: CHHapticTimeImmediate)
-      try player.start(atTime: CHHapticTimeImmediate)
-      running = true
-    } catch {
-      // 触觉初始化失败不应影响播放，静默降级。
-      running = false
-    }
-  }
-
-  /// intensity：0~1 的滑动速度映射；sharpness：0~1，越高颗粒越细密。
-  func update(intensity: Float, sharpness: Float) {
-    guard running, let player = player else { return }
-    let iParam = CHHapticDynamicParameter(
-      parameterID: .hapticIntensityControl,
-      value: intensity,
-      relativeTime: 0
-    )
-    let sParam = CHHapticDynamicParameter(
-      parameterID: .hapticSharpnessControl,
-      value: sharpness,
-      relativeTime: 0
-    )
-    try? player.sendParameters([iParam, sParam], atTime: 0)
-  }
-
-  func stop() {
-    guard running, let player = player else { return }
-    // 先把强度归零再停，避免"啪"地一下断掉；随后停止并释放播放器。
-    let silence = CHHapticDynamicParameter(
-      parameterID: .hapticIntensityControl,
-      value: 0,
-      relativeTime: 0
-    )
-    try? player.sendParameters([silence], atTime: 0)
-    try? player.stop(atTime: CHHapticTimeImmediate + 0.02)
-    running = false
-    self.player = nil
   }
 }
 

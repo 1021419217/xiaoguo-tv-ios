@@ -37,12 +37,6 @@ class _SwipeControlsState extends State<SwipeControls> {
   int? _seekFrom;
   double _seekOffset = 0;
   int? _lastHapticStep;
-  // 连续触觉（iOS Core Haptics）的速度状态
-  DateTime? _lastSeekMoveAt;
-  double _seekVelocity = 0;
-  DateTime? _lastHapticAt;
-  double _lastSentIntensity = 0;
-  bool _hapticRunning = false;
   _Level? _level;
   double? _value;
   double _pending = 0;
@@ -70,8 +64,6 @@ class _SwipeControlsState extends State<SwipeControls> {
       _seekOffset = 0;
       _lastHapticStep = null;
     });
-    // 兜底：若上一次手势异常退出没停掉触觉，这里先停，避免残留震动。
-    _stopHaptic();
   }
 
   void _seekUpdate(DragUpdateDetails details) {
@@ -84,7 +76,14 @@ class _SwipeControlsState extends State<SwipeControls> {
     setState(() => _seekOffset = clamped);
 
     if (preferences.swipeSeekHaptic) {
-      _updateHaptic(from, clamped, span, details.delta.dx);
+      // 每跨过一个刻度轻震一下，每屏约 12 下；按档位自适应，越滑越密。
+      final target = (from + clamped).round().clamp(0, _duration);
+      final step = (span / 12).round().clamp(1, 1 << 30);
+      final hapticStep = (target / step).round();
+      if (_lastHapticStep == null || hapticStep != _lastHapticStep) {
+        _lastHapticStep = hapticStep;
+        unawaited(HapticFeedback.selectionClick());
+      }
     }
   }
 
@@ -95,7 +94,6 @@ class _SwipeControlsState extends State<SwipeControls> {
       _seekFrom = null;
       _lastHapticStep = null;
     });
-    _stopHaptic();
     unawaited(_session.seekTo(Duration(milliseconds: target)));
   }
 
@@ -105,95 +103,7 @@ class _SwipeControlsState extends State<SwipeControls> {
         _seekFrom = null;
         _lastHapticStep = null;
       });
-      _stopHaptic();
     }
-  }
-
-  void _resetHaptic() {
-    _lastSeekMoveAt = null;
-    _seekVelocity = 0;
-    _lastHapticAt = null;
-    _lastSentIntensity = 0;
-  }
-
-  void _setHapticRunning(bool running) {
-    if (_hapticRunning == running) return;
-    _hapticRunning = running;
-    if (running) {
-      unawaited(AppDevice.hapticStart());
-    } else {
-      unawaited(AppDevice.hapticStop());
-    }
-  }
-
-  /// 速度驱动的震动：慢滑静默，手一加速就渐次绵密起来。
-  ///
-  /// iOS 用 Core Haptics 连续事件（真实酥麻感）；其他平台没有该引擎，
-  /// 退回原来的离散刻度 click，避免功能倒退。
-  void _updateHaptic(int from, double clamped, int span, double deltaX) {
-    if (defaultTargetPlatform != TargetPlatform.iOS) {
-      // 端点触发的离散震动（兼容平台）
-      final target = (from + clamped).round().clamp(0, _duration);
-      final step = (span / 12).round().clamp(1, 1 << 30);
-      final hapticStep = (target / step).round();
-      if (_lastHapticStep == null || hapticStep != _lastHapticStep) {
-        _lastHapticStep = hapticStep;
-        unawaited(HapticFeedback.selectionClick());
-      }
-      return;
-    }
-
-    final now = DateTime.now();
-    // 用「每秒在屏上滑过的像素」衡量速度；两次 update 间隔作分母。
-    final previous = _lastSeekMoveAt;
-    _lastSeekMoveAt = now;
-    if (previous == null) return;
-    final dt = now.difference(previous).inMicroseconds / 1e6;
-    if (dt <= 0 || dt > 0.2) {
-      // 间隔过长（停住或卡顿）视为速度归零，让震动平滑淡出而非突然中断。
-      _seekVelocity *= 0.5;
-    } else {
-      final instant = deltaX.abs() / dt; // px/s
-      // 指数平滑，抹掉单帧抖动，同时起步跟手、停手很快衰减。
-      _seekVelocity = _seekVelocity * 0.6 + instant * 0.4;
-    }
-
-    // 速度→强度：低于起步阈值完全静默，之后线性爬升到 1。
-    const startPxPerSec = 180.0;
-    const fullPxPerSec = 1800.0;
-    final intensity =
-        ((_seekVelocity - startPxPerSec) / (fullPxPerSec - startPxPerSec))
-            .clamp(0.0, 1.0);
-    // 锐度随速度提高：低强度偏圆润，高强度更细密酥麻。
-    final sharpness = 0.35 + intensity * 0.55;
-
-    // 慢滑（速度低于起步阈值）直接静默，不启动引擎。
-    if (intensity <= 0.001) {
-      _setHapticRunning(false);
-      return;
-    }
-
-    // 节流：60ms 内且强度变化不大就不重复跨 isolate，减少通道压力。
-    final lastAt = _lastHapticAt;
-    final since = lastAt == null ? 1 << 30 : now.difference(lastAt).inMilliseconds;
-    if (_hapticRunning && since < 60 && (intensity - _lastSentIntensity).abs() < 0.08) {
-      return;
-    }
-    _lastHapticAt = now;
-    _lastSentIntensity = intensity;
-
-    // 先确保引擎在跑（内部有去重，只有首次真正 start）。
-    _setHapticRunning(true);
-    unawaited(
-      AppDevice.hapticUpdate(intensity: intensity, sharpness: sharpness),
-    );
-  }
-
-  void _stopHaptic() {
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      _setHapticRunning(false);
-    }
-    _resetHaptic();
   }
 
   Future<void> _levelStart(DragStartDetails details) async {
