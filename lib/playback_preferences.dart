@@ -5,6 +5,20 @@ import 'catalog_sort.dart';
 
 const playbackSpeeds = [.5, .75, 1.0, 1.1, 1.25, 1.5, 2.0, 3.0];
 const boostSpeeds = [1.5, 2.0, 2.5, 3.0, 4.0];
+
+/// 横向滑动一整屏快进/快退的跨度（毫秒），档位从慢到快。
+const swipeSeekSpans = [
+  120000,
+  180000,
+  240000,
+  360000,
+  480000,
+  600000,
+  720000,
+];
+const defaultSwipeSeekSpan = 240000;
+
+String swipeSeekSpanLabel(int ms) => '${ms ~/ 1000} 秒/屏';
 const danmakuColors = [
   0xFFFFFFFF,
   0xFFFFE066,
@@ -98,6 +112,8 @@ class PlaybackPreferences {
     this.televisionDecoder = TelevisionDecoder.optimized,
     this.preopen,
     this.doubleTapSeek = true,
+    this.swipeSeekSpan = defaultSwipeSeekSpan,
+    this.swipeSeekHaptic = true,
     this.swipeLevels = true,
     this.swipeEpisodes = false,
     this.progressLine = true,
@@ -136,6 +152,8 @@ class PlaybackPreferences {
   final TelevisionDecoder televisionDecoder;
   final bool? preopen;
   final bool doubleTapSeek;
+  final int swipeSeekSpan;
+  final bool swipeSeekHaptic;
   final bool swipeLevels;
   final bool swipeEpisodes;
   final bool progressLine;
@@ -170,6 +188,8 @@ class PlaybackPreferences {
     TelevisionDecoder? televisionDecoder,
     bool? preopen,
     bool? doubleTapSeek,
+    int? swipeSeekSpan,
+    bool? swipeSeekHaptic,
     bool? swipeLevels,
     bool? swipeEpisodes,
     bool? progressLine,
@@ -201,6 +221,8 @@ class PlaybackPreferences {
     televisionDecoder: televisionDecoder ?? this.televisionDecoder,
     preopen: preopen ?? this.preopen,
     doubleTapSeek: doubleTapSeek ?? this.doubleTapSeek,
+    swipeSeekSpan: swipeSeekSpan ?? this.swipeSeekSpan,
+    swipeSeekHaptic: swipeSeekHaptic ?? this.swipeSeekHaptic,
     swipeLevels: swipeLevels ?? this.swipeLevels,
     swipeEpisodes: swipeEpisodes ?? this.swipeEpisodes,
     progressLine: progressLine ?? this.progressLine,
@@ -234,6 +256,8 @@ class PlaybackPreferences {
     'televisionDecoder': televisionDecoder.name,
     if (preopen != null) 'preopen': preopen,
     'doubleTapSeek': doubleTapSeek,
+    'swipeSeekSpan': swipeSeekSpan,
+    'swipeSeekHaptic': swipeSeekHaptic,
     'swipeLevels': swipeLevels,
     'swipeEpisodes': swipeEpisodes,
     'progressLine': progressLine,
@@ -298,6 +322,10 @@ class PlaybackPreferences {
           TelevisionDecoder.optimized,
       preopen: value['preopen'] as bool?,
       doubleTapSeek: value['doubleTapSeek'] as bool? ?? true,
+      swipeSeekSpan: swipeSeekSpans.contains(value['swipeSeekSpan'])
+          ? value['swipeSeekSpan'] as int
+          : defaultSwipeSeekSpan,
+      swipeSeekHaptic: value['swipeSeekHaptic'] as bool? ?? true,
       swipeLevels: value['swipeLevels'] as bool? ?? true,
       swipeEpisodes: value['swipeEpisodes'] as bool? ?? false,
       progressLine: value['progressLine'] as bool? ?? true,

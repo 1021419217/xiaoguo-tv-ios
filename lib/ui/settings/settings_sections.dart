@@ -223,6 +223,24 @@ class SettingsSection extends StatelessWidget {
               onChanged: (value) =>
                   savePreferences(preferences.copyWith(doubleTapSeek: value)),
             ),
+            ValueTile<int>(
+              title: '滑动快进速度',
+              subtitle: '横向滑动一整屏跳过的进度，越大越快',
+              options: {
+                for (final span in swipeSeekSpans)
+                  span: swipeSeekSpanLabel(span),
+              },
+              value: preferences.swipeSeekSpan,
+              onChanged: (span) =>
+                  savePreferences(preferences.copyWith(swipeSeekSpan: span)),
+            ),
+            SwitchTile(
+              title: '滑动快进震动',
+              subtitle: '横向快进/快退跨过刻度时轻微震动，模拟进度条手感',
+              value: preferences.swipeSeekHaptic,
+              onChanged: (value) =>
+                  savePreferences(preferences.copyWith(swipeSeekHaptic: value)),
+            ),
             SwitchTile(
               title: '滑动调节亮度/音量',
               subtitle: '左侧上下滑动调整亮度，右侧上下滑动调整音量',

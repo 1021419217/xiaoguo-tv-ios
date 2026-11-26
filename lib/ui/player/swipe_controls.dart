@@ -3,13 +3,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app_device.dart';
 import '../../playback_session.dart';
 import 'fade_presence.dart';
 import 'player_surface.dart';
 
-const _seekSpan = 120000;
 const _episodeSwipeDistance = 60.0;
 
 enum _Level { brightness, volume }
@@ -36,6 +36,7 @@ class SwipeControls extends StatefulWidget {
 class _SwipeControlsState extends State<SwipeControls> {
   int? _seekFrom;
   double _seekOffset = 0;
+  int? _lastHapticStep;
   _Level? _level;
   double? _value;
   double _pending = 0;
@@ -61,28 +62,48 @@ class _SwipeControlsState extends State<SwipeControls> {
     setState(() {
       _seekFrom = _session.player.state.position.inMilliseconds;
       _seekOffset = 0;
+      _lastHapticStep = null;
     });
   }
 
   void _seekUpdate(DragUpdateDetails details) {
     final from = _seekFrom;
     if (from == null) return;
-    final span = math.min(_duration, _seekSpan);
+    final preferences = _session.store.playbackPreferences;
+    final span = math.min(_duration, preferences.swipeSeekSpan);
     final offset = _seekOffset + details.delta.dx / context.size!.width * span;
-    setState(
-      () => _seekOffset = offset.clamp(-from, _duration - from).toDouble(),
-    );
+    final clamped = offset.clamp(-from, _duration - from).toDouble();
+    setState(() => _seekOffset = clamped);
+
+    if (preferences.swipeSeekHaptic) {
+      // 每跨过一个刻度轻震一下，每屏约 12 下；按档位自适应，越滑越密。
+      final target = (from + clamped).round().clamp(0, _duration);
+      final step = (span / 12).round().clamp(1, 1 << 30);
+      final hapticStep = (target / step).round();
+      if (_lastHapticStep == null || hapticStep != _lastHapticStep) {
+        _lastHapticStep = hapticStep;
+        unawaited(HapticFeedback.selectionClick());
+      }
+    }
   }
 
   void _seekEnd(DragEndDetails _) {
     if (_seekFrom == null) return;
     final target = _seekTarget;
-    setState(() => _seekFrom = null);
+    setState(() {
+      _seekFrom = null;
+      _lastHapticStep = null;
+    });
     unawaited(_session.seekTo(Duration(milliseconds: target)));
   }
 
   void _seekCancel() {
-    if (_seekFrom != null) setState(() => _seekFrom = null);
+    if (_seekFrom != null) {
+      setState(() {
+        _seekFrom = null;
+        _lastHapticStep = null;
+      });
+    }
   }
 
   Future<void> _levelStart(DragStartDetails details) async {
