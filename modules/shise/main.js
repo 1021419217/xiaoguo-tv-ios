@@ -1,10 +1,11 @@
 // 视色 shise.me 站源模块 · 小果影视 模块 API 1
 //
-//   首页最新  /videos.html?page={n}
-//   分类      /videos/cat-{slug}.html?page={n}    slug: jav / cn / movie / ai / other
-//   搜索      /search.html?keyword={词}&page={n}
+//   首页最新  /videos.html → 分页 /videos/{n}.html
+//   分类      /categories.html 列出的 7 个主系列，真实路径见 CATEGORIES.path
+//             分页是路径式 /xxx/{n}.html（不是 ?page=N，那个会被忽略）
+//   搜索      /search.html?keyword={词}（结果服务端渲染，分页同路径式）
 //   详情      /video/id-{hash}.html
-//   作者      /videos/model-{id}.html?page={n}
+//   作者      /videos/model-{id}.html → 分页 /videos/model-{id}/{n}.html
 //   播放      /hls/{hash}/master.m3u8 → 变体列表 → AES-128，交给 App 播放代理
 //
 // 与 xchina.co 同一套程序（封面/CDN/HLS 完全一致），但路由规则不同：
@@ -29,14 +30,25 @@ const BROWSER_HEADERS = {
   'Upgrade-Insecure-Requests': '1'
 };
 
+// 与站点 /categories.html 一致：7 个主系列 + 最新。
+// path 是 /categories.html 里父级 series-xxx 重定向后的真实可用路径。
+// 分页统一为 path + '/' + n + '.html'；首屏是 path + '.html'。
 const CATEGORIES = [
-  { id: 'new', name: '最新' },
-  { id: 'cn', name: '国产' },
-  { id: 'jav', name: '日本AV' },
-  { id: 'movie', name: '电影' },
-  { id: 'ai', name: 'AI视频' },
-  { id: 'other', name: '其他' }
+  { id: 'new',     name: '最新',     path: '/videos' },
+  { id: 'cn',      name: '中文AV',   path: '/videos/cat-cn' },
+  { id: 'jav',     name: '日本AV',   path: '/videos/cat-jav' },
+  { id: 'model',   name: '模特私拍', path: '/videos/xs-62' },
+  { id: 'amateur', name: '业余拍摄', path: '/videos/cat-cn' },
+  { id: 'movie',   name: '情色电影', path: '/videos/cat-movie' },
+  { id: 'other',   name: '其他影片', path: '/videos/cat-other' },
+  { id: 'ai',      name: 'AI视频',   path: '/videos/cat-ai' }
 ];
+function categoryPath(id) {
+  for (let i = 0; i < CATEGORIES.length; i++) {
+    if (CATEGORIES[i].id === id) return CATEGORIES[i].path;
+  }
+  return CATEGORIES[0].path;
+}
 
 function clean(s) {
   return String(s == null ? '' : s)
@@ -91,9 +103,9 @@ function parseCards(html) {
 
 function listPath(category, page) {
   const n = Number(page || 1) < 1 ? 1 : Number(page || 1);
-  const q = n > 1 ? '?page=' + n : '';
-  if (!category || category === 'new') return '/videos.html' + q;
-  return '/videos/cat-' + category + '.html' + q;
+  const base = categoryPath(category);
+  // 首屏 /videos.html、/videos/cat-cn.html；翻页 /videos/2.html、/videos/cat-cn/2.html
+  return n === 1 ? base + '.html' : base + '/' + n + '.html';
 }
 
 // ── 作者 / 演员 ─────────────────────────────────────────────

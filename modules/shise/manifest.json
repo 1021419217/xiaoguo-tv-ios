@@ -1,8 +1,8 @@
 {
   "id": "shise",
   "name": "视色 shise",
-  "version": "1.0.0",
-  "description": "视色（shise.me）：最新 + 5 个分类 + 搜索 + 作者作品页，单集长视频，HLS（AES-128）。与 xChina 同套程序，解析详情页演员/模特、时长/发行/系列信息。",
+  "version": "1.0.1",
+  "description": "视色（shise.me）：最新 + 分类页 7 个主系列（中文AV/日本AV/模特私拍/业余拍摄/情色电影/其他影片/AI视频）+ 搜索 + 作者作品页，单集长视频，HLS（AES-128）。与 xChina 同套程序，解析详情页演员/模特、时长/发行/系列信息。",
   "runtime": "js",
   "api": 1,
   "adult": true,
