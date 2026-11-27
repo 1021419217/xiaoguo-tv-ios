@@ -393,10 +393,12 @@ class PlaybackSession extends ChangeNotifier {
         _preloader.pause();
         return;
       }
-      if (duration <= 0 ||
-          position < 2000 ||
-          (position < duration ~/ 2 && duration - position > 45000) ||
-          ahead < 5000) {
+      // 预加载只解析下一集的播放地址（不下载视频内容），成本很低，
+      // 所以不必等"播放过半/剩余不足 45 秒"才开始——那样用户播几秒就切集时
+      // 完全没预加载，每次都要现拉地址、必然缓冲。改为播满 1.5 秒且当前
+      // 缓冲够 3 秒就准备下一集，切集时大概率已就绪（并走换新播放器的路径，
+      // 也顺带避开了复用旧播放器可能带来的位置残留）。
+      if (duration <= 0 || position < 1500 || ahead < 3000) {
         return;
       }
     }
@@ -899,27 +901,44 @@ class PlaybackSession extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 120));
     }
     if (!_current(ticket) || _closed) return;
-    // mpv 的自动续播/首帧对齐可能发生在 open 返回之后的几十到几百毫秒。
-    // 上一版在 open 刚返回就读 position（拿到 0）然后 return，兜底从未生效。
-    // 这里再等 350ms 让画面稳定，然后才读真实起播位置。
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (!_current(ticket) || _closed) return;
-    final before = player.state.position;
-    DiaryService.add('[Play] 切集诊断：起播位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
-    // 兜底：start=0 没挡住（例如某些 HLS 首分片时间戳不从 0 起）时，
-    // 这里再拉回开头一次。只在偏移 >2s 时做，避免正常起播抖动被误 seek。
-    if (before.inMilliseconds > 2000) {
-      DiaryService.add('[Play] 起播偏移异常，强制回开头');
-      try {
-        await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-        final after = player.state.position;
-        final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
-        DiaryService.add('[Play] 回开头后位置 ${tail}s'
-            '${after.inMilliseconds > 2000 ? '（仍偏移，疑似分片时间戳）' : ''}');
-      } catch (e) {
-        DiaryService.add('[Play] 回开头失败: $e');
+    // mpv 的 watch-later 续播恢复是**异步**的：常在 open 后几百毫秒、甚至
+    // 播了一会儿才把位置跳到旧值。只在某一个时间点读一次会漏掉（这正是
+    // 「快进过再切集才跳秒、直接切反而正常」的原因——快进留下了可被恢复的
+    // 位置）。这里盯住起播后的 2.5 秒，任何时刻位置明显偏离就拉回开头。
+    final watchUntil = DateTime.now().add(const Duration(milliseconds: 2500));
+    final startSeq = _seekSequence;
+    var corrected = false;
+    while (_current(ticket) && !_closed && DateTime.now().isBefore(watchUntil)) {
+      final pos = player.state.position;
+      if (pos.inMilliseconds > 2000) {
+        // 用户在这 2.5 秒内自己拖了进度（切集后立刻快进/后退也很常见），
+        // seekTo 会递增 _seekSequence —— 这是用户的意图，绝不能拉回开头。
+        if (_seekSequence != startSeq) break;
+        DiaryService.add(
+          '[Play] 切集诊断：起播偏移 ${(pos.inMilliseconds / 1000).toStringAsFixed(1)}s，回开头',
+        );
+        corrected = true;
+        try {
+          await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          final after = player.state.position;
+          final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
+          DiaryService.add(
+            '[Play] 回开头后位置 ${tail}s'
+            '${after.inMilliseconds > 2000 ? '（仍偏移，疑似分片时间戳）' : ''}',
+          );
+        } catch (e) {
+          DiaryService.add('[Play] 回开头失败: $e');
+        }
+        break;
       }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    if (!corrected) {
+      final pos = player.state.position;
+      DiaryService.add(
+        '[Play] 切集诊断：起播位置 ${(pos.inMilliseconds / 1000).toStringAsFixed(1)}s',
+      );
     }
   }
 
