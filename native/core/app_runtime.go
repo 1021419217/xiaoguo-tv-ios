@@ -286,7 +286,7 @@ func newNativeEngine(directory, cache, downloads string) (*nativeEngine, error) 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	transport.MaxIdleConnsPerHost = 8
-	transport.ResponseHeaderTimeout = 8 * time.Second // 8s+1次重试(16s)必须小于mpv network-timeout=20s，否则重试被mpv端超时截断
+	transport.ResponseHeaderTimeout = 20 * time.Second // 慢CDN(如今日看料)playlist出头要8s+，不能全局砍短；分片重试窗口靠mpv network-timeout放宽到50s兜住
 	transport.Proxy = router.proxy
 	cdn := newCDNTransport(transport, newDNSResolver(transport))
 	d.client = &http.Client{Transport: newHuangguoBrowserTransport(cdn, d), Timeout: 45 * time.Second,

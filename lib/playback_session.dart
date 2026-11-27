@@ -683,7 +683,7 @@ class PlaybackSession extends ChangeNotifier {
           'decryption_key=${plan.decryptionKey}',
       ].join(','),
     );
-    await platform.setProperty('network-timeout', '20');
+    await platform.setProperty('network-timeout', '50');
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');

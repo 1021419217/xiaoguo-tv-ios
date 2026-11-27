@@ -154,17 +154,24 @@ func (stream *nativeStreamServer) nativeRequest(request *http.Request) (*http.Re
 	// 两次尝试最坏 16s。
 	var response *http.Response
 	var err error
-	for attempt := 0; attempt < 2; attempt++ {
+	// 只对 segment 重试：entry_playlist/key 失败保持原行为（App 层有自动
+	// 恢复 refresh/换线路）。教训（3.0.12）：全局缩短响应头超时会让慢 CDN
+	// （如今日看料，playlist 出头就要 8s+）整体播不出，playlist 不能碰超时。
+	if info.asset == "segment" {
+		for attempt := 0; attempt < 2; attempt++ {
+			response, err = stream.downloader.doMediaRequestWithClient(request, &client)
+			if err == nil {
+				break
+			}
+			if request.Context().Err() != nil {
+				break // 会话已取消/超时，重试无意义
+			}
+			if attempt == 0 {
+				stream.nativeLog(info, "upstream_retry", request.URL.String(), "", 2, "")
+			}
+		}
+	} else {
 		response, err = stream.downloader.doMediaRequestWithClient(request, &client)
-		if err == nil {
-			break
-		}
-		if request.Context().Err() != nil {
-			break // 会话已取消/超时，重试无意义
-		}
-		if attempt == 0 {
-			stream.nativeLog(info, "upstream_retry", request.URL.String(), "", 2, "")
-		}
 	}
 	if err != nil {
 		stream.nativeLogError(info, "upstream_error", request.URL.String(), err, "")

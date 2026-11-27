@@ -2,6 +2,12 @@
 
 每个版本一节，标题为 `pubspec.yaml` 中的完整版本号。发布工作流会把对应一节写入 GitHub Release 说明。
 
+## 3.0.13+113
+
+- 修 3.0.12 引入的今日看料播不出：响应头超时 20s→8s 是全局的，慢 CDN（今日看料的 playlist 出头要 8 秒以上）全部超时。回滚为 20s。
+- 重试范围收窄：只对 segment（分片）重试——分片超时静默跳过才是跳秒根源；entry_playlist/key 等保持原行为，失败走 App 层自动恢复（refresh/换线路）。
+- mpv network-timeout 20s→50s：覆盖分片重试窗口（2 次尝试最坏 40s），代理重试期间 mpv 不会提前断开本地连接。
+
 ## 3.0.12+112
 
 - 跳秒真根因修复（3.0.11 诊断日志钉死）：上游 CDN 分片请求超时（deadline）时，App 流代理层零重试直接抛错，mpv 的 HLS demuxer 收到错误后**静默跳过该分片**、从下一个成功分片继续播——跳秒量=被跳过分片总时长，且跨 GOP 解码导致花屏两三秒。诊断证据：`seeking=no` 且 percent 与 time-pos 一致（真位置非显示错位）+ `upstream_error ... index3.ts error=deadline`。
