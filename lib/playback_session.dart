@@ -611,7 +611,11 @@ class PlaybackSession extends ChangeNotifier {
     // A 治本：开场定位从未真正推进过（_positionAdvanced=false），说明卡在
     // Media.start 的中间分片定位上。此时 currentPosition 会回退到记忆卡点，
     // 再用它恢复必然重复卡死。改为从 0 播，彻底打破死循环。
-    final position = _positionAdvanced ? currentPosition : 0.0;
+    // B 治本（跳秒「从 8 秒开始播」的真因）：起播早期（<15s）卡住后带进度
+    // 重开，等于 seek 回刚卡住的坏分片——分片还是坏的，再卡再恢复，循环；
+    // 用户看到的正是「这集从 8 秒/十几秒/40 秒开始播」，量随卡顿时机漂移。
+    // 起播窗口内一律从头重开：损失几秒进度，彻底绕开坏点。
+    final position = _positionAdvanced && currentPosition > 15 ? currentPosition : 0.0;
     if (!_positionAdvanced && position == 0.0) {
       DiaryService.add('[Play] 开场定位未成功，恢复改为从头播放');
     }
