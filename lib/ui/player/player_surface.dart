@@ -358,7 +358,7 @@ class _PlayerSurfaceState extends State<PlayerSurface> {
               duration: Motion.medium,
               child: _session.ready && _session.stalled
                   ? const IgnorePointer(
-                      child: Center(child: LoadingHalo(size: 56)),
+                      child: Center(child: LoadingHalo(size: 48, glow: false)),
                     )
                   : null,
             ),
@@ -1148,7 +1148,7 @@ class PlaybackLoading extends StatelessWidget {
         children: [
           // 加载圈也统一成中央键同款光晕，避免切集时冒出一个系统白色小圈，
           // 和播放中缓冲的大圈样式打架。
-          const LoadingHalo(size: 56),
+          const LoadingHalo(size: 56, glow: false),
           const SizedBox(height: 16),
           Text(
             session.loadingMessage,

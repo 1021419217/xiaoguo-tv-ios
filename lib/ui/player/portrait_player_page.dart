@@ -162,6 +162,9 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
       !_idle ||
       _dragging ||
       _session.error != null ||
+      // 缓冲圈嵌在中央键内部，缓冲时必须让播控常显，否则圈跟着按钮一起
+      // 淡出，卡住时画面只剩纯黑、什么提示都没有。
+      _session.stalled ||
       _session.loading && !_quietSwitch;
 
   /// 单击画面：显示 / 隐藏播控。暂停交给屏幕中央的按钮。
@@ -515,7 +518,7 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                           ),
                         ),
                         // 切集加载圈统一成中央键同款光晕，别再冒出系统白色小圈。
-                        if (current) const LoadingHalo(size: 80),
+                        if (current) const LoadingHalo(size: 56, glow: false),
                       ],
                     ),
                   )
@@ -598,8 +601,8 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                     setState(_wake);
                     session.togglePlayback();
                   },
-                  // 缓冲光圈不画在按钮里：它改成下面独立的居中层，
-                  // 这样控件自动隐藏后光圈仍在，不会只剩纯黑屏。
+                  // 缓冲弧嵌在按钮圆内，与图标叠放：不独立成层，就不会
+                  // 出现「光圈压偏在按钮下方」的错位感。
                   child: SizedBox(
                     width: 92,
                     height: 92,
@@ -615,24 +618,39 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
                             color: Colors.white.withValues(alpha: .22),
                           ),
                         ),
-                        child: AnimatedSwitcher(
-                          duration: Motion.of(context, Motion.short),
-                          transitionBuilder: (child, animation) =>
-                              ScaleTransition(
-                                scale: animation,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // 缓冲弧嵌在按钮圆内（54dp、无辉光）：不再跟按钮
+                            // 抢位置，也不会溢出圆形边框。
+                            if (session.stalled)
+                              const IgnorePointer(
+                                child: LoadingHalo(size: 54, glow: false),
+                              ),
+                            AnimatedOpacity(
+                              opacity: session.stalled ? .38 : 1,
+                              duration: Motion.of(context, Motion.short),
+                              child: AnimatedSwitcher(
+                                duration: Motion.of(context, Motion.short),
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                      scale: animation,
+                                      child: FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                    ),
+                                child: Icon(
+                                  session.paused
+                                      ? Icons.play_arrow_rounded
+                                      : Icons.pause_rounded,
+                                  key: ValueKey(session.paused),
+                                  size: 44,
+                                  color: Colors.white.withValues(alpha: .92),
                                 ),
                               ),
-                          child: Icon(
-                            session.paused
-                                ? Icons.play_arrow_rounded
-                                : Icons.pause_rounded,
-                            key: ValueKey(session.paused),
-                            size: 44,
-                            color: Colors.white.withValues(alpha: .92),
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -641,14 +659,6 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               ),
             ),
           ),
-        ),
-        // 缓冲光圈独立成层：只跟 stalled 走，不跟播控显隐走。控件自动隐藏后
-        // 它依然留在画面正中，杜绝「白圈 → 黑屏 → 再点又变大圈」的割裂感。
-        FadePresence(
-          duration: Motion.medium,
-          child: session.ready && session.stalled
-              ? const IgnorePointer(child: Center(child: LoadingHalo(size: 80)))
-              : null,
         ),
         FadePresence(
           duration: Motion.medium,

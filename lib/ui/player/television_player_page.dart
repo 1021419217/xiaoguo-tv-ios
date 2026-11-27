@@ -462,7 +462,7 @@ class _TelevisionPlayerPageState extends State<TelevisionPlayerPage>
                       duration: Motion.medium,
                       child: _session.ready && _session.stalled
                           ? const IgnorePointer(
-                              child: Center(child: LoadingHalo(size: 80)),
+                              child: Center(child: LoadingHalo(size: 56, glow: false)),
                             )
                           : null,
                     ),

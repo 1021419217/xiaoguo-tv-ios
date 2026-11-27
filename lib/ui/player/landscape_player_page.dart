@@ -502,7 +502,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
             duration: Motion.medium,
             child: session.loading ? PlaybackLoading(session: session) : null,
           ),
-          _bufferingHalo(),
           FadePresence(
             duration: Motion.medium,
             child: switch (session.error) {
@@ -931,7 +930,7 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                 _scheduleHide();
                 session.togglePlayback();
               },
-              // 缓冲时只在大圈外沿流转一圈弧光，不再往按钮里塞系统小圈。
+              // 缓冲弧嵌在按钮圆内（50dp、无辉光），不再独立成层抢位置。
               child: SizedBox(
                 width: 90,
                 height: 90,
@@ -948,24 +947,37 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
                           color: Colors.white.withValues(alpha: .22),
                         ),
                       ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 160),
-                        transitionBuilder: (child, animation) =>
-                            ScaleTransition(
-                              scale: animation,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (session.stalled)
+                            const IgnorePointer(
+                              child: LoadingHalo(size: 50, glow: false),
+                            ),
+                          AnimatedOpacity(
+                            opacity: session.stalled ? .38 : 1,
+                            duration: const Duration(milliseconds: 160),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 160),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                    scale: animation,
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
+                                  ),
+                              child: Icon(
+                                session.paused
+                                    ? Icons.play_arrow_rounded
+                                    : Icons.pause_rounded,
+                                key: ValueKey(session.paused),
+                                size: 40,
+                                color: Colors.white.withValues(alpha: .92),
                               ),
                             ),
-                        child: Icon(
-                          session.paused
-                              ? Icons.play_arrow_rounded
-                              : Icons.pause_rounded,
-                          key: ValueKey(session.paused),
-                          size: 40,
-                          color: Colors.white.withValues(alpha: .92),
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -977,15 +989,6 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
       ),
     );
   }
-
-  /// 缓冲光圈独立成层：只跟 stalled 走，不跟播控显隐走。控件自动隐藏后
-  /// 光圈仍在正中，避免只剩纯黑屏。与中央按钮平级放在视频 Stack 里。
-  Widget _bufferingHalo() => FadePresence(
-    duration: Motion.medium,
-    child: _session.ready && _session.stalled
-        ? const IgnorePointer(child: Center(child: LoadingHalo(size: 80)))
-        : null,
-  );
 
   Widget _icon(
     IconData icon,
