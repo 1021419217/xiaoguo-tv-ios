@@ -1,0 +1,19 @@
+{
+  "id": "shise",
+  "name": "视色 shise",
+  "version": "1.0.0",
+  "description": "视色（shise.me）：最新 + 5 个分类 + 搜索 + 作者作品页，单集长视频，HLS（AES-128）。与 xChina 同套程序，解析详情页演员/模特、时长/发行/系列信息。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "shise.me",
+    "*.shise.me"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://shise.me",
+  "browserFingerprint": true
+}

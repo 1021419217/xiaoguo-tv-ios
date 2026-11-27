@@ -811,9 +811,9 @@ class PlaybackSession extends ChangeNotifier {
         if (position > 0 && !plan.local) {
           unawaited(_resumeSeek(position, ticket));
         } else if (position == 0) {
-          // 切集/普通打开：强制从头。覆盖 mpv start 残留、watch-later、
-          // 同一 Player 实例复用带来的旧位置（切集跳秒的通用兜底）。
-          unawaited(_forceStart(ticket));
+          // 切集/普通打开：mpv 自动续播已在 _configure 里关掉，这里只记录
+          // 起播位置用于诊断，不再强制 seek（热 seek 会让切集后花屏）。
+          unawaited(_observeStart(ticket));
         }
       });
     } catch (error) {
@@ -842,11 +842,13 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 切集强制从头：不论 mpv 是残留了 start 属性、记住了同一播放器的
-  /// 上一次位置，还是 HLS 首分片时间戳偏移，只要拿到时长/缓冲就 seek 到 0。
-  /// 只用于「非续播」的切集/普通打开（position==0）；记忆续播走 _resumeSeek，
-  /// 两者互斥。失败或超时就放弃，不反复重开。
-  Future<void> _forceStart(int ticket) async {
+  /// 切集起播诊断：只记录 open 后 350ms 的真实起播位置，不再强制 seek。
+  ///
+  /// 跳秒根因已由 _configure 的 resume-playback=no 关掉 mpv 自动续播解决。
+  /// 原来的 seek(0) 是「跳秒之后再跳回来」，等于连续两次 seek：mpv 重置
+  /// 解码器、HLS 重新拉分片、VideoToolbox 重建会话，表现就是切集后
+  /// 花屏两三秒。保留诊断日志，用来确认起播位置是否已经回到 0。
+  Future<void> _observeStart(int ticket) async {
     if (!_current(ticket) || _closed) return;
     final deadline = DateTime.now().add(const Duration(seconds: 6));
     while (_current(ticket) && !_closed) {
@@ -864,15 +866,7 @@ class PlaybackSession extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 350));
     if (!_current(ticket) || _closed) return;
     final before = player.state.position;
-    DiaryService.add('[Play] 切集归零：起播位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
-    // 已经从头就别动，避免刚起播就被 seek 打断。
-    if (before < const Duration(milliseconds: 300)) return;
-    try {
-      await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
-      DiaryService.add('[Play] 切集归零：已 seek 到开头');
-    } catch (_) {
-      DiaryService.add('[Play] 切集归零：seek 失败，保持原样');
-    }
+    DiaryService.add('[Play] 切集诊断：起播位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
   }
 
   /// 记忆续播的二次定位：先从 0 播起来，等播放器拿到时长/缓冲后，
@@ -956,9 +950,9 @@ class PlaybackSession extends ChangeNotifier {
       await stopping;
       await _selectAudio(next, true);
       if (_current(ticket) && _foreground && _playIntent) await next.play();
-      // standby 是复用的 Player 实例：即使这里 open 过，mpv 仍可能残留
-      // 上一次的 start/watch-later 位置。切集一律强制归零。
-      if (_current(ticket)) unawaited(_forceStart(ticket));
+      // standby 是复用的 Player 实例，起播位置只记录到日记用于诊断；
+      // 不再强制 seek 回开头（热 seek 会让切集后花屏）。
+      if (_current(ticket)) unawaited(_observeStart(ticket));
     } catch (_) {
       if (_current(ticket)) _queueRecovery('open_exception');
     }
