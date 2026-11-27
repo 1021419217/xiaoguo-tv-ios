@@ -146,7 +146,26 @@ func (stream *nativeStreamServer) nativeRequest(request *http.Request) (*http.Re
 	client := *stream.downloader.client
 	client.Timeout = 0
 	info, _ := request.Context().Value(nativeStreamDiagnosticKey{}).(nativeStreamDiagnostic)
-	response, err := stream.downloader.doMediaRequestWithClient(request, &client)
+	// 分片/播放请求失败必须重试：上游 CDN 偶发超时（deadline）时，若把错误直接
+	// 抛回 mpv，其 HLS demuxer 会静默跳过该分片、从下一个成功分片继续播——
+	// 表现为「切集跳秒」（跳过量=被跳过分片总时长）与「跨 GOP 花屏」。
+	// 在代理层换新连接重试，绕开 mpv 的跳分片行为。重试总时长必须小于
+	// mpv 端 network-timeout=20s，故配合全局 ResponseHeaderTimeout=8s，
+	// 两次尝试最坏 16s。
+	var response *http.Response
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		response, err = stream.downloader.doMediaRequestWithClient(request, &client)
+		if err == nil {
+			break
+		}
+		if request.Context().Err() != nil {
+			break // 会话已取消/超时，重试无意义
+		}
+		if attempt == 0 {
+			stream.nativeLog(info, "upstream_retry", request.URL.String(), "", 2, "")
+		}
+	}
 	if err != nil {
 		stream.nativeLogError(info, "upstream_error", request.URL.String(), err, "")
 		return response, err

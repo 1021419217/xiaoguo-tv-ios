@@ -286,7 +286,7 @@ func newNativeEngine(directory, cache, downloads string) (*nativeEngine, error) 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	transport.MaxIdleConnsPerHost = 8
-	transport.ResponseHeaderTimeout = 20 * time.Second
+	transport.ResponseHeaderTimeout = 8 * time.Second // 8s+1次重试(16s)必须小于mpv network-timeout=20s，否则重试被mpv端超时截断
 	transport.Proxy = router.proxy
 	cdn := newCDNTransport(transport, newDNSResolver(transport))
 	d.client = &http.Client{Transport: newHuangguoBrowserTransport(cdn, d), Timeout: 45 * time.Second,
@@ -688,17 +688,6 @@ func (engine *nativeEngine) nativeCatalog(ctx context.Context, input nativeInput
 		}
 		seen[drama.ID] = true
 		result.Items = append(result.Items, NativeNormalize(drama))
-	}
-	// 联网抓取第 1 页（非搜索）：无论是进入页面自动加载还是主动下拉刷新，都清掉
-	// 该站源该分类的旧目录缓存，让本次抓回的新数据整页替换，确保用户每次进入
-	// 都能看到最新内容。否则 saveCatalogCache 会把旧片追加到列表尾部、并把页码
-	// 回退到上次浏览位置，用户看到的仍是旧内容（目录流站源尤其明显）。
-	// 只清本次加载的 cacheKey，不影响其他分类/站源，也不影响翻页（page>1）与搜索。
-	if page == 1 && query == "" {
-		engine.mu.Lock()
-		delete(engine.catalogs, cacheKey)
-		delete(engine.catalogStates, cacheKey)
-		engine.mu.Unlock()
 	}
 	engine.saveCatalogCache(cacheKey, &result)
 	return result, nil

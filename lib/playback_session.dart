@@ -705,7 +705,19 @@ class PlaybackSession extends ChangeNotifier {
         _standbyOpen &&
         _standbyIndex == index &&
         !_online) {
-      return _swap(index, playWhenReady);
+      final standbyPos = _standby!.state.position;
+      if (standbyPos > const Duration(seconds: 2)) {
+        // 预热期间上游分片超时被 mpv 跳过后，位置已落到流中间（被跳过的
+        // 开头分片不在缓存里，seek(0) 也拿不回）。此时放弃预热重新打开：
+        // 全新 demuxer 从 index0 请求，播放中失败是「卡住重试」而非「静默
+        // 跳过」——宁可卡一两秒，也不跳内容。
+        DiaryService.add(
+          '[Play] 预热开头已丢失(${standbyPos.inMilliseconds}ms)，放弃预热重新打开',
+        );
+        _dropStandby();
+      } else {
+        return _swap(index, playWhenReady);
+      }
     }
     _dropStandby();
     final warmed = recovery == null
