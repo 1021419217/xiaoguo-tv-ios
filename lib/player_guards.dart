@@ -20,6 +20,11 @@ Future<void> applyNoResumeGuard(Player player, {double startAt = 0}) async {
   try {
     await platform.setProperty('resume-playback', 'no');
     await platform.setProperty('save-position-on-quit', 'no');
+    // 不再把播放位置写进 watch-later 记录（默认会存 start）。
+    // 已有旧记录仍可能被读取，所以还要靠 open 时的 Media.start 兜住。
+    try {
+      await platform.setProperty('watch-later-options', '');
+    } catch (_) {}
     await platform.setProperty('start', startAt > 0 ? 'no' : '0');
   } catch (_) {
     // 个别 libmpv 版本不接受 'no'；忽略即可，调用方仍有起播兜底。

@@ -712,6 +712,41 @@ class PlaybackSession extends ChangeNotifier {
     // 说明还有别的恢复通道；3.0.5 起统一走公共防护（含显式 start=0）。
     // 这里覆盖「主播放器」和「切集预加载 standby」（_open 也调用本函数）。
     await applyNoResumeGuard(target, startAt: 0);
+    // 自检：把这些属性读回来写进日记。3.0.6 的教训是「设了却不知道有没有
+    // 生效」——日志里有真实值，下次定位不用再猜。
+    try {
+      final resume = await platform.getProperty('resume-playback');
+      final startProp = await platform.getProperty('start');
+      final saveQuit = await platform.getProperty('save-position-on-quit');
+      DiaryService.add(
+        '[Play] 防续播自检 resume-playback=$resume start=$startProp '
+        'save-position-on-quit=$saveQuit',
+      );
+    } catch (_) {}
+    // 深层兜底：清掉 mpv 的 watch-later 旧记录。这些文件按 URL 记录每集
+    // 「上次看到哪」——实测切集起播 17.5/17.4/18.7 秒正是这么来的。
+    // App 的记忆播放走自己的 WatchEntry，不依赖 mpv 这份记录，清空安全。
+    // 属性返回 `~~/watch_later` 这种未展开路径时 Directory 解析会失败，
+    // 这里静默跳过，不影响播放。
+    try {
+      final raw = await platform.getProperty('watch-later-directory');
+      final path = '${raw ?? ''}'.trim();
+      var cleared = 0;
+      if (path.isNotEmpty && path != 'no' && !path.startsWith('~~')) {
+        final dir = Directory(path);
+        if (await dir.exists()) {
+          await for (final entry in dir.list()) {
+            if (entry is File) {
+              try {
+                await entry.delete();
+                cleared += 1;
+              } catch (_) {}
+            }
+          }
+        }
+      }
+      DiaryService.add('[Play] 清续播记录 path=$path 删除$cleared个');
+    } catch (_) {}
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
@@ -825,18 +860,21 @@ class PlaybackSession extends ChangeNotifier {
         //     由 _resumeSeek 在拿到时长后精确定位（避免中间分片长缓冲）。
         // mpv 里 start 一旦被显式设置就不再做 watch-later 恢复，这是比
         // resume-playback=no 更硬的开关（3.0.4 证明后者单独用没挡住）。
-        final plat = player.platform;
-        if (plat is NativePlayer) {
-          try {
-            await plat.setProperty('start', position > 0 ? 'no' : '0');
-          } catch (_) {
-            // 个别 libmpv 版本不接受 'no'；忽略，后面 _observeStart 仍有兜底。
-          }
-        }
-        // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
-        // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
+        // 起播点写进 loadfile 的媒体参数：这是 mpv 里优先级最高的一层，
+        // 高于 setProperty('start') 和 watch-later 记录。
+        // 依据（实测日志）：3.0.6 已经设了 setProperty('start','0')，切集仍
+        // 从 17.5s/17.4s/18.7s 起播（每集自己上次看到的位置），随即被
+        // _observeStart 拉回 0.1s —— 能拉回说明 0 位置存在（排除分片时间戳），
+        // 真正原因就是 setProperty('start') 没挡住 watch-later。
+        // 这里只对「从头播」用 1 毫秒；记忆续播不传 start（仍按老路：先 0
+        // 打开再 _resumeSeek 精确定位），避免在打开阶段定位中间分片。
+        final fromStart = const Duration(milliseconds: 1);
         await player.open(
-          Media(plan.url, httpHeaders: plan.headers),
+          Media(
+            plan.url,
+            httpHeaders: plan.headers,
+            start: position > 0 ? Duration.zero : fromStart,
+          ),
           play: _foreground && _playIntent,
         );
         if (!_current(ticket)) return;
@@ -1142,8 +1180,13 @@ class PlaybackSession extends ChangeNotifier {
       await _configure(standby, plan);
       await _limitCache(standby, true);
       await _selectAudio(standby, false);
+      // 预加载的永远是「下一集从头」，同样用 loadfile 级 start 参数挡续播。
       await standby.open(
-        Media(plan.url, httpHeaders: plan.headers),
+        Media(
+          plan.url,
+          httpHeaders: plan.headers,
+          start: const Duration(milliseconds: 1),
+        ),
         play: false,
       );
     } catch (_) {
