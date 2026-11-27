@@ -683,7 +683,7 @@ class PlaybackSession extends ChangeNotifier {
           'decryption_key=${plan.decryptionKey}',
       ].join(','),
     );
-    await platform.setProperty('network-timeout', '20');
+    await platform.setProperty('network-timeout', '40'); // 覆盖分片代理层重试窗口(单次12s×2=24s)，防止mpv提前掐断本地连接
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
