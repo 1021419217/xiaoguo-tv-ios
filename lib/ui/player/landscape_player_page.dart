@@ -250,9 +250,13 @@ class _LandscapePlayerPageState extends State<LandscapePlayerPage>
     }
     if (_tapTimer?.isActive ?? false) {
       _tapTimer!.cancel();
-      // 中间双击不再暂停：暂停统一交给屏幕中央的按钮，
-      // 否则连点两下画面就会停，和「单击显隐播控」冲突。
-      if (side != 0) _startStreak(side);
+      // 双击：左右两侧仍是快退/快进；中间改为暂停/播放。
+      // （旧版中间双击不响应，只能去点屏幕中央按钮，操作不方便。）
+      if (side != 0) {
+        _startStreak(side);
+      } else {
+        _session.togglePlayback();
+      }
       return;
     }
     _tapTimer = Timer(const Duration(milliseconds: 300), _toggleControls);

@@ -536,9 +536,11 @@ class _PortraitPlayerPageState extends State<PortraitPlayerPage>
               child: LayoutBuilder(
                 builder: (context, constraints) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  // 单击只显隐播控；长按倍速由外层 Listener 以 240ms 计时，
+                  // 单击显隐播控；长按倍速由外层 Listener 以 240ms 计时，
                   // 不再用默认 500ms 的 onLongPressStart。
                   onTap: _pinching ? null : _toggleControls,
+                  // 双击暂停/播放（等价于屏幕中央按钮，省得去点小按钮）。
+                  onDoubleTap: _pinching ? null : session.togglePlayback,
                 ),
               ),
             ),
