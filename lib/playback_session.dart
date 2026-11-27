@@ -12,7 +12,6 @@ import 'diary_service.dart';
 import 'local_store.dart';
 import 'models.dart';
 import 'playback_loader.dart';
-import 'player_guards.dart';
 import 'playback_preferences.dart';
 import 'playback_preloader.dart';
 import 'playback_recovery.dart';
@@ -84,9 +83,6 @@ class PlaybackSession extends ChangeNotifier {
       )) {
         unawaited(_recover('position_stalled'));
       }
-      // 另一种卡顿：position 正常前进（音频在走）但画面不更新。
-      // position 维度的 stalled 抓不到，必须单独看渲染帧号。
-      unawaited(_checkVideoFrozen());
     });
     // 「记忆播放」关闭时，所有入口一律从头播：忽略上层传入的续播位置。
     // 这样详情、本地下载、投屏恢复的行为一致，也彻底不走 mpv 中间分片定位。
@@ -224,18 +220,6 @@ class PlaybackSession extends ChangeNotifier {
   // 自动恢复时应从 0 播，避免反复用同一个记忆卡点定位（死循环）。
   bool _positionAdvanced = false;
   double _unmutedVolume = 100;
-  // 视频冻结看门狗：位置/音频前进但画面不更新时，用帧号停滞判定并唤醒。
-  int _lastFrameNumber = -1;
-  Duration _framePosition = Duration.zero;
-  DateTime? _frozenSince;
-  DateTime? _lastWakeAt;
-  int _wakeAttempts = 0;
-  bool _frameCheckBusy = false;
-  // 防续播自检/清记录只做一次的开关（会话首次配置时执行）。
-  bool _guardsVerified = false;
-  // 唤醒多次仍不涨帧（多半是「画面本来就静止」的视频，不是故障），
-  // 就临时停用看门狗，宁可不管也不能反复 seek 破坏正常播放。
-  DateTime? _frameWatchOffUntil;
 
   Player get player => _player;
 
@@ -395,9 +379,6 @@ class PlaybackSession extends ChangeNotifier {
         _preloader.pause();
         return;
       }
-      // 预加载时机刻意保守：只在下半段 / 尾巴临近时准备，避免一开播就
-      // 和当前集抢带宽（解析下一集地址虽然不下载视频，但仍是并发请求）。
-      // ahead < 5000 再兜一道：当前缓冲不足 5 秒时绝不掺和。
       if (duration <= 0 ||
           position < 2000 ||
           (position < duration ~/ 2 && duration - position > 45000) ||
@@ -611,11 +592,7 @@ class PlaybackSession extends ChangeNotifier {
     // A 治本：开场定位从未真正推进过（_positionAdvanced=false），说明卡在
     // Media.start 的中间分片定位上。此时 currentPosition 会回退到记忆卡点，
     // 再用它恢复必然重复卡死。改为从 0 播，彻底打破死循环。
-    // B 治本（跳秒「从 8 秒开始播」的真因）：起播早期（<15s）卡住后带进度
-    // 重开，等于 seek 回刚卡住的坏分片——分片还是坏的，再卡再恢复，循环；
-    // 用户看到的正是「这集从 8 秒/十几秒/40 秒开始播」，量随卡顿时机漂移。
-    // 起播窗口内一律从头重开：损失几秒进度，彻底绕开坏点。
-    final position = _positionAdvanced && currentPosition > 15 ? currentPosition : 0.0;
+    final position = _positionAdvanced ? currentPosition : 0.0;
     if (!_positionAdvanced && position == 0.0) {
       DiaryService.add('[Play] 开场定位未成功，恢复改为从头播放');
     }
@@ -623,9 +600,7 @@ class PlaybackSession extends ChangeNotifier {
         ? PlaybackRecoveryAction.stop
         : _recovery.next(current);
     DiaryService.add(
-      '[Play] 自动恢复 原因=$reason 处理=${action.name} '
-      '定位=${position.toStringAsFixed(1)}s '
-      '线路=${current.routeIndex + 1}/${current.routeCount}',
+      '[Play] 自动恢复 原因=$reason 处理=${action.name} 线路=${current.routeIndex + 1}/${current.routeCount}',
     );
     if (action != PlaybackRecoveryAction.stop) {
       await play(_index, position: position, recovery: action);
@@ -651,7 +626,6 @@ class PlaybackSession extends ChangeNotifier {
     _loginRequired = false;
     final symptom = switch (reason) {
       'position_stalled' => '画面长时间没有进度',
-      'video_frozen' => '画面卡住不动（有声音）',
       'early_completion' => '视频提前结束',
       'open_exception' => '视频打开失败',
       _ => '播放器报错',
@@ -710,55 +684,6 @@ class PlaybackSession extends ChangeNotifier {
       ].join(','),
     );
     await platform.setProperty('network-timeout', '20');
-    // 切集跳秒的根因：mpv 的 resume-playback 默认 yes，open 同一 URL 时会
-    // 读 watch-later 把画面自动 seek 到上次记录的位置（十几/几十秒不等，
-    // 取决于该集上次看到哪）。这个 seek 发生在 open 之后，所以 Dart 层在
-    // open 刚返回时读到的 position 还是 0 —— 正是日志里「打开位置 0.0s」
-    // 却跳秒的矛盾来源。历史上单设 start='0' 修不好，也是被它覆盖。
-    // 续播一律由 App 自己的 _resumeSeek 精确控制，mpv 层不要自动恢复。
-    // 3.0.4 实测日志：只设 resume-playback=no 仍会跳到 8.0/28.0/29.7s，
-    // 说明还有别的恢复通道；3.0.5 起统一走公共防护（含显式 start=0）。
-    // 这里覆盖「主播放器」和「切集预加载 standby」（_open 也调用本函数）。
-    await applyNoResumeGuard(target, startAt: 0);
-    // 自检与清记录只在会话首次配置时做：这些是磁盘 IO，放在每次切集的
-    // 路径上会拖慢 open（用户反馈「每次切集都缓冲」与此有关）。
-    if (_guardsVerified) return;
-    _guardsVerified = true;
-    // 自检：把这些属性读回来写进日记。3.0.6 的教训是「设了却不知道有没有
-    // 生效」——日志里有真实值，下次定位不用再猜。
-    try {
-      final resume = await platform.getProperty('resume-playback');
-      final startProp = await platform.getProperty('start');
-      final saveQuit = await platform.getProperty('save-position-on-quit');
-      DiaryService.add(
-        '[Play] 防续播自检 resume-playback=$resume start=$startProp '
-        'save-position-on-quit=$saveQuit',
-      );
-    } catch (_) {}
-    // 深层兜底：清掉 mpv 的 watch-later 旧记录。这些文件按 URL 记录每集
-    // 「上次看到哪」——实测切集起播 17.5/17.4/18.7 秒正是这么来的。
-    // App 的记忆播放走自己的 WatchEntry，不依赖 mpv 这份记录，清空安全。
-    // 属性返回 `~~/watch_later` 这种未展开路径时 Directory 解析会失败，
-    // 这里静默跳过，不影响播放。
-    try {
-      final raw = await platform.getProperty('watch-later-directory');
-      final path = '${raw ?? ''}'.trim();
-      var cleared = 0;
-      if (path.isNotEmpty && path != 'no' && !path.startsWith('~~')) {
-        final dir = Directory(path);
-        if (await dir.exists()) {
-          await for (final entry in dir.list()) {
-            if (entry is File) {
-              try {
-                await entry.delete();
-                cleared += 1;
-              } catch (_) {}
-            }
-          }
-        }
-      }
-      DiaryService.add('[Play] 清续播记录 path=$path 删除$cleared个');
-    } catch (_) {}
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
@@ -806,12 +731,6 @@ class PlaybackSession extends ChangeNotifier {
     _resumePosition = position;
     _openedAt = position;
     _positionAdvanced = false;
-    // 换集/重开：重置画面看门狗（新的视频源要重新判断，不能沿用停用状态）。
-    _lastFrameNumber = -1;
-    _framePosition = Duration.zero;
-    _frozenSince = null;
-    _wakeAttempts = 0;
-    _frameWatchOffUntil = null;
     _index = index;
     _loading = true;
     _error = null;
@@ -866,27 +785,10 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
-        // 关键：open 前显式声明起播点，从源头掐掉 mpv 读 watch-later 跳位置。
-        //   position == 0（切集/普通打开）→ start=0，强制从头；
-        //   position > 0（记忆续播）→ start=no，清掉上一集残留的 0，
-        //     由 _resumeSeek 在拿到时长后精确定位（避免中间分片长缓冲）。
-        // mpv 里 start 一旦被显式设置就不再做 watch-later 恢复，这是比
-        // resume-playback=no 更硬的开关（3.0.4 证明后者单独用没挡住）。
-        // 起播点写进 loadfile 的媒体参数：这是 mpv 里优先级最高的一层，
-        // 高于 setProperty('start') 和 watch-later 记录。
-        // 依据（实测日志）：3.0.6 已经设了 setProperty('start','0')，切集仍
-        // 从 17.5s/17.4s/18.7s 起播（每集自己上次看到的位置），随即被
-        // _observeStart 拉回 0.1s —— 能拉回说明 0 位置存在（排除分片时间戳），
-        // 真正原因就是 setProperty('start') 没挡住 watch-later。
-        // 这里只对「从头播」用 1 毫秒；记忆续播不传 start（仍按老路：先 0
-        // 打开再 _resumeSeek 精确定位），避免在打开阶段定位中间分片。
-        final fromStart = const Duration(milliseconds: 1);
+        // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
+        // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
         await player.open(
-          Media(
-            plan.url,
-            httpHeaders: plan.headers,
-            start: position > 0 ? Duration.zero : fromStart,
-          ),
+          Media(plan.url, httpHeaders: plan.headers),
           play: _foreground && _playIntent,
         );
         if (!_current(ticket)) return;
@@ -901,10 +803,6 @@ class PlaybackSession extends ChangeNotifier {
         // 记忆续播：带超时的二次 seek；失败/超时就留在本集开头继续播。
         if (position > 0 && !plan.local) {
           unawaited(_resumeSeek(position, ticket));
-        } else if (position == 0) {
-          // 切集/普通打开：mpv 自动续播已在 _configure 里关掉，这里只记录
-          // 起播位置用于诊断，不再强制 seek（热 seek 会让切集后花屏）。
-          unawaited(_observeStart(ticket));
         }
       });
     } catch (error) {
@@ -933,172 +831,12 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 起播守卫：打开后持续监控 3 秒，区分「残留读数」与「真跳秒」。
-  ///
-  /// 核心认知（推翻了 watch-later 记忆说）：用户测试全用新视频、无任何
-  /// 历史记录，但切集起播仍显示 17.5/17.4/18.7s——恰好等于切集时上一集
-  /// 的进度。真因：open() 返回 ≠ mpv 已切换，此刻 player.state 还挂着
-  /// 上一集的位置（读数残留）。3.0.6 的单点采样读到它就 seek(0)，反而
-  /// 打断 loadfile，制造「每次切集都缓冲」。
-  /// 判据（三态）：
-  ///   ① 跳增后 600ms 读数掉回 <1s → 残留读数，不干预；
-  ///   ② 跳增后仍在以播放速度推进（+400ms 以上）→ 真从中间播，拉回开头；
-  ///   ③ 跳增后读数几乎不动 → loadfile 未完成，继续观察，不 seek。
-  /// 用户主动拖动走 seekTo（先递增 _seekSequence），识别到立即放手。
-  Future<void> _observeStart(int ticket) async {
-    if (!_current(ticket) || _closed) return;
-    final startSeq = _seekSequence;
-    var last = Duration.zero;
-    for (var i = 0; i < 12; i++) {
-      if (!_current(ticket) || _closed) return;
-      if (_seekSequence != startSeq) return;
-      final pos = player.state.position;
-      if (pos - last > const Duration(seconds: 5)) {
-        // 二次确认（关键）：open 返回 ≠ mpv 已切到新文件，此刻读到的
-        // 「大位置」极可能是上一集的残留读数（实测 17.5/17.4/18.7s 恰等于
-        // 切集时上一集的进度——用户每集播十几秒就切）。等 600ms 再读：
-        // 若已掉回 1s 内 → 只是残留读数，新视频正在从头播，绝不干预；
-        // 若仍在 2s 以上推进 → 才是真跳秒，拉回开头。
-        await Future<void>.delayed(const Duration(milliseconds: 600));
-        if (!_current(ticket) || _closed) return;
-        if (_seekSequence != startSeq) return;
-        final confirm = player.state.position;
-        final first = (pos.inMilliseconds / 1000).toStringAsFixed(1);
-        final second = (confirm.inMilliseconds / 1000).toStringAsFixed(1);
-        if (confirm < const Duration(seconds: 1)) {
-          DiaryService.add(
-            '[Play] 起播读数残留（$first s→$second s，实际从头播），不干预',
-          );
-          return;
-        }
-        if (confirm < pos + const Duration(milliseconds: 400)) {
-          // 读数还挂在旧值上不动：loadfile 尚未完成，继续等下一轮采样。
-          last = pos;
-          continue;
-        }
-        DiaryService.add('[Play] 起播真跳秒（$first→$second s 在推进），回开头');
-        try {
-          await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
-          await Future<void>.delayed(const Duration(milliseconds: 300));
-          final after = player.state.position;
-          final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
-          DiaryService.add(
-            '[Play] 回开头后位置 $tail s'
-            '${after.inMilliseconds > 2000 ? '（仍偏移，再次处理）' : ''}',
-          );
-          if (after.inMilliseconds > 2000 &&
-              _current(ticket) &&
-              !_closed &&
-              _seekSequence == startSeq) {
-            await player
-                .seek(Duration.zero)
-                .timeout(const Duration(seconds: 4));
-            DiaryService.add('[Play] 二次回开头完成');
-          }
-        } catch (e) {
-          DiaryService.add('[Play] 回开头失败: $e');
-        }
-        return;
-      }
-      last = pos;
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
-    final tail = (last.inMilliseconds / 1000).toStringAsFixed(1);
-    DiaryService.add('[Play] 切集诊断：起播正常（3 秒无跳变，现 $tail s）');
-  }
-
-  /// 视频冻结看门狗：进度/音频正常前进但画面定格时自动唤醒。
-  ///
-  /// 症状（用户实际遇到）：①切集后有的集画面不动、进度条却在走，手动快进
-  /// 一下才恢复；②切到别的 App 再回来，声音继续但画面不动，滑动几秒恢复。
-  /// 两者本质相同——音频/解复用通路正常，**视频解码或输出层停摆**。
-  ///
-  /// 判定依据是 mpv 的 `estimated-frame-number`（已渲染帧号）：位置前进了
-  /// 但帧号不涨，就是画面冻结。唤醒方式与用户手动滑动一致——在当前位置
-  /// 向前 seek 0.3 秒，触发关键帧重解、重建视频输出。连续两次仍无效才走
-  /// 常规恢复（切线路/重开），避免一直反复 seek。
-  Future<void> _checkVideoFrozen() async {
-    if (_frameCheckBusy || _closed || !_foreground || !_playIntent) return;
-    if (_loading || _error != null) return;
-    final offUntil = _frameWatchOffUntil;
-    if (offUntil != null && DateTime.now().isBefore(offUntil)) return;
-    if (!player.state.playing || player.state.buffering) {
-      _frozenSince = null;
-      return;
-    }
-    final platform = player.platform;
-    if (platform is! NativePlayer) return;
-    _frameCheckBusy = true;
-    try {
-      final raw = await platform.getProperty('estimated-frame-number');
-      final frames = int.tryParse('$raw'.trim()) ?? -1;
-      if (frames < 0) return;
-      final position = player.state.position;
-      final advanced = position - _framePosition;
-      final stuck =
-          _lastFrameNumber >= 0 && frames <= _lastFrameNumber;
-      _framePosition = position;
-      _lastFrameNumber = frames;
-      if (advanced > const Duration(milliseconds: 400) && stuck) {
-        final now = DateTime.now();
-        _frozenSince ??= now;
-        final frozenFor = now.difference(_frozenSince!);
-        final cooledDown = _lastWakeAt == null ||
-            now.difference(_lastWakeAt!) >= const Duration(seconds: 5);
-        if (frozenFor >= const Duration(seconds: 2) && cooledDown) {
-          _lastWakeAt = now;
-          _frozenSince = null;
-          _wakeAttempts += 1;
-          DiaryService.add(
-            '[Play] 画面冻结（位置在走/帧号不涨），第 $_wakeAttempts 次唤醒',
-          );
-          if (_wakeAttempts > 2) {
-            // 三次轻量唤醒都没让帧号动起来：更可能是「画面本来就静止」
-            // （过场黑屏/静态镜头），继续 seek 只会破坏播放体验。
-            // 临时停用 3 分钟，期间一律不干预；真有故障用户手动滑即可。
-            _wakeAttempts = 0;
-            _frameWatchOffUntil = DateTime.now().add(const Duration(minutes: 3));
-            DiaryService.add('[Play] 画面长时间静止，暂停自动唤醒 3 分钟');
-          } else {
-            unawaited(_wakeVideo(position));
-          }
-        }
-      } else if (!stuck) {
-        if (_frozenSince != null) {
-          DiaryService.add('[Play] 画面已恢复');
-        }
-        _frozenSince = null;
-        _wakeAttempts = 0;
-      }
-    } catch (_) {
-      // 该属性不可用就跳过检测，绝不影响正常播放。
-    } finally {
-      _frameCheckBusy = false;
-    }
-  }
-
-  Future<void> _wakeVideo(Duration position) async {
-    try {
-      await player
-          .seek(position + const Duration(milliseconds: 300))
-          .timeout(const Duration(seconds: 3));
-    } catch (e) {
-      DiaryService.add('[Play] 画面唤醒失败: $e');
-    }
-  }
-
   /// 记忆续播的二次定位：先从 0 播起来，等播放器拿到时长/缓冲后，
   /// 再 seek 到历史位置。这样避免 Media.start 在打开阶段定位中间分片的
   /// 长时间缓冲。任何一步失败或超时都放弃定位，留在本集开头继续播，
   /// 不再用同一个卡点反复重开（那是转圈 60 秒的根源）。
   Future<void> _resumeSeek(double position, int ticket) async {
     final target = Duration(milliseconds: (position * 1000).round());
-    // 这条路径是「记忆续播」：只有初始进入（从历史/继续观看）或卡顿自动
-    // 恢复带着旧进度重开时才会走到。它不打「切集诊断」日志、也不回开头，
-    // 所以用户看到「从 8 秒开始播」时，先看有没有这一行来区分是哪种情况。
-    DiaryService.add(
-      '[Play] 记忆续播定位 ${position.toStringAsFixed(1)}s（非切集）',
-    );
     // 先把记忆位置夹到实际时长内，避免历史进度超过真实长度导致定位卡死。
     final duration = player.state.duration;
     if (duration > Duration.zero && target >= duration - const Duration(seconds: 2)) {
@@ -1147,7 +885,6 @@ class PlaybackSession extends ChangeNotifier {
     _playIntent = playWhenReady;
     _resumePosition = 0;
     _openedAt = 0;
-    _positionAdvanced = false;
     _index = index;
     _error = null;
     _localFailure = false;
@@ -1174,9 +911,6 @@ class PlaybackSession extends ChangeNotifier {
       await stopping;
       await _selectAudio(next, true);
       if (_current(ticket) && _foreground && _playIntent) await next.play();
-      // standby 是复用的 Player 实例，起播位置只记录到日记用于诊断；
-      // 不再强制 seek 回开头（热 seek 会让切集后花屏）。
-      if (_current(ticket)) unawaited(_observeStart(ticket));
     } catch (_) {
       if (_current(ticket)) _queueRecovery('open_exception');
     }
@@ -1212,13 +946,8 @@ class PlaybackSession extends ChangeNotifier {
       await _configure(standby, plan);
       await _limitCache(standby, true);
       await _selectAudio(standby, false);
-      // 预加载的永远是「下一集从头」，同样用 loadfile 级 start 参数挡续播。
       await standby.open(
-        Media(
-          plan.url,
-          httpHeaders: plan.headers,
-          start: const Duration(milliseconds: 1),
-        ),
+        Media(plan.url, httpHeaders: plan.headers),
         play: false,
       );
     } catch (_) {
@@ -1560,13 +1289,6 @@ class PlaybackSession extends ChangeNotifier {
     DiaryService.add(visible ? '[Play] 应用回到前台' : '[Play] 应用不可见，暂停播放');
     _foreground = visible;
     _health.reset();
-    // 前后台切换会跨过一段时间：position 可能跳变而帧号停在上次。
-    // 清空帧检测基线，避免回来第一秒被判成「画面冻结」而误唤醒。
-    // 真正的冻结（iOS 回收 VideoToolbox）会由看门狗在 2 秒后抓住。
-    _lastFrameNumber = -1;
-    _framePosition = Duration.zero;
-    _frozenSince = null;
-    _wakeAttempts = 0;
     _sync();
     if (!visible) {
       endBoost();
