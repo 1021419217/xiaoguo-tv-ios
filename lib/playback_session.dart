@@ -231,6 +231,9 @@ class PlaybackSession extends ChangeNotifier {
   DateTime? _lastWakeAt;
   int _wakeAttempts = 0;
   bool _frameCheckBusy = false;
+  // 唤醒多次仍不涨帧（多半是「画面本来就静止」的视频，不是故障），
+  // 就临时停用看门狗，宁可不管也不能反复 seek 破坏正常播放。
+  DateTime? _frameWatchOffUntil;
 
   Player get player => _player;
 
@@ -753,6 +756,12 @@ class PlaybackSession extends ChangeNotifier {
     _resumePosition = position;
     _openedAt = position;
     _positionAdvanced = false;
+    // 换集/重开：重置画面看门狗（新的视频源要重新判断，不能沿用停用状态）。
+    _lastFrameNumber = -1;
+    _framePosition = Duration.zero;
+    _frozenSince = null;
+    _wakeAttempts = 0;
+    _frameWatchOffUntil = null;
     _index = index;
     _loading = true;
     _error = null;
@@ -927,6 +936,8 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _checkVideoFrozen() async {
     if (_frameCheckBusy || _closed || !_foreground || !_playIntent) return;
     if (_loading || _error != null) return;
+    final offUntil = _frameWatchOffUntil;
+    if (offUntil != null && DateTime.now().isBefore(offUntil)) return;
     if (!player.state.playing || player.state.buffering) {
       _frozenSince = null;
       return;
@@ -958,8 +969,12 @@ class PlaybackSession extends ChangeNotifier {
             '[Play] 画面冻结（位置在走/帧号不涨），第 $_wakeAttempts 次唤醒',
           );
           if (_wakeAttempts > 2) {
+            // 三次轻量唤醒都没让帧号动起来：更可能是「画面本来就静止」
+            // （过场黑屏/静态镜头），继续 seek 只会破坏播放体验。
+            // 临时停用 3 分钟，期间一律不干预；真有故障用户手动滑即可。
             _wakeAttempts = 0;
-            unawaited(_recover('video_frozen'));
+            _frameWatchOffUntil = DateTime.now().add(const Duration(minutes: 3));
+            DiaryService.add('[Play] 画面长时间静止，暂停自动唤醒 3 分钟');
           } else {
             unawaited(_wakeVideo(position));
           }
