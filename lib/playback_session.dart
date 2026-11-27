@@ -617,7 +617,9 @@ class PlaybackSession extends ChangeNotifier {
         ? PlaybackRecoveryAction.stop
         : _recovery.next(current);
     DiaryService.add(
-      '[Play] 自动恢复 原因=$reason 处理=${action.name} 线路=${current.routeIndex + 1}/${current.routeCount}',
+      '[Play] 自动恢复 原因=$reason 处理=${action.name} '
+      '定位=${position.toStringAsFixed(1)}s '
+      '线路=${current.routeIndex + 1}/${current.routeCount}',
     );
     if (action != PlaybackRecoveryAction.stop) {
       await play(_index, position: position, recovery: action);
@@ -921,63 +923,42 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 切集起播诊断 + 兜底归零。
+  /// 切集起播诊断：只判断「打开瞬间」是否被续播记录带偏。
   ///
-  /// 主防线是 applyNoResumeGuard（resume-playback=no + save-position-on-quit=no
-  /// + 显式 start=0），从源头不让 mpv 恢复上次位置，因此正常情况下不会触发
-  /// 这里的 seek，也就没有「两次 seek 导致花屏」的问题。
-  /// 只有起播仍明显偏离（>2s，例如某些 HLS 首分片时间戳不从 0 起）才归零一次，
-  /// 并把 seek 后的真实位置写进日记，便于区分是续播残留还是分片时间戳。
+  /// 关键教训（3.0.6 踩的坑）：**绝不能等 duration/buffer 就绪再读位置**。
+  /// 有些 HLS 源要播十几秒才上报时长，等它时 position 已经 17 秒了，会被
+  /// 误判成「起播偏移」，然后把本来正常播放的视频拉回开头——用户看到的是
+  /// 「播着播着跳回 0」。真正的 mpv 续播恢复发生在 loadfile 阶段（打开瞬间），
+  /// 所以只采样打开后的第一秒：只有这一秒内就明显 >2s 才算真跳。
   Future<void> _observeStart(int ticket) async {
     if (!_current(ticket) || _closed) return;
-    final deadline = DateTime.now().add(const Duration(seconds: 6));
-    while (_current(ticket) && !_closed) {
-      final state = player.state;
-      if (state.duration > Duration.zero || state.buffer > Duration.zero) {
-        break;
-      }
-      if (DateTime.now().isAfter(deadline)) return;
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-    }
-    if (!_current(ticket) || _closed) return;
-    // mpv 的 watch-later 续播恢复是**异步**的：常在 open 后几百毫秒、甚至
-    // 播了一会儿才把位置跳到旧值。只在某一个时间点读一次会漏掉（这正是
-    // 「快进过再切集才跳秒、直接切反而正常」的原因——快进留下了可被恢复的
-    // 位置）。这里盯住起播后的 2.5 秒，任何时刻位置明显偏离就拉回开头。
-    final watchUntil = DateTime.now().add(const Duration(milliseconds: 2500));
     final startSeq = _seekSequence;
-    var corrected = false;
-    while (_current(ticket) && !_closed && DateTime.now().isBefore(watchUntil)) {
+    var early = Duration.zero;
+    for (var i = 0; i < 5; i++) {
+      if (!_current(ticket) || _closed) return;
+      // 用户自己拖了进度：不是起播异常，直接放弃判断。
+      if (_seekSequence != startSeq) return;
       final pos = player.state.position;
-      if (pos.inMilliseconds > 2000) {
-        // 用户在这 2.5 秒内自己拖了进度（切集后立刻快进/后退也很常见），
-        // seekTo 会递增 _seekSequence —— 这是用户的意图，绝不能拉回开头。
-        if (_seekSequence != startSeq) break;
-        DiaryService.add(
-          '[Play] 切集诊断：起播偏移 ${(pos.inMilliseconds / 1000).toStringAsFixed(1)}s，回开头',
-        );
-        corrected = true;
-        try {
-          await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
-          await Future<void>.delayed(const Duration(milliseconds: 400));
-          final after = player.state.position;
-          final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
-          DiaryService.add(
-            '[Play] 回开头后位置 ${tail}s'
-            '${after.inMilliseconds > 2000 ? '（仍偏移，疑似分片时间戳）' : ''}',
-          );
-        } catch (e) {
-          DiaryService.add('[Play] 回开头失败: $e');
-        }
-        break;
-      }
+      if (pos > early) early = pos;
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
-    if (!corrected) {
-      final pos = player.state.position;
+    final label = (early.inMilliseconds / 1000).toStringAsFixed(1);
+    if (early.inMilliseconds <= 2000) {
+      DiaryService.add('[Play] 切集诊断：起播正常 $label s');
+      return;
+    }
+    DiaryService.add('[Play] 起播被续播记录带偏 $label s，回开头');
+    try {
+      await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final after = player.state.position;
+      final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
       DiaryService.add(
-        '[Play] 切集诊断：起播位置 ${(pos.inMilliseconds / 1000).toStringAsFixed(1)}s',
+        '[Play] 回开头后位置 $tail s'
+        '${after.inMilliseconds > 2000 ? '（仍偏移）' : ''}',
       );
+    } catch (e) {
+      DiaryService.add('[Play] 回开头失败: $e');
     }
   }
 
@@ -1067,6 +1048,12 @@ class PlaybackSession extends ChangeNotifier {
   /// 不再用同一个卡点反复重开（那是转圈 60 秒的根源）。
   Future<void> _resumeSeek(double position, int ticket) async {
     final target = Duration(milliseconds: (position * 1000).round());
+    // 这条路径是「记忆续播」：只有初始进入（从历史/继续观看）或卡顿自动
+    // 恢复带着旧进度重开时才会走到。它不打「切集诊断」日志、也不回开头，
+    // 所以用户看到「从 8 秒开始播」时，先看有没有这一行来区分是哪种情况。
+    DiaryService.add(
+      '[Play] 记忆续播定位 ${position.toStringAsFixed(1)}s（非切集）',
+    );
     // 先把记忆位置夹到实际时长内，避免历史进度超过真实长度导致定位卡死。
     final duration = player.state.duration;
     if (duration > Duration.zero && target >= duration - const Duration(seconds: 2)) {
