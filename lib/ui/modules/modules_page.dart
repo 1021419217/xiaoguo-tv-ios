@@ -611,7 +611,10 @@ class _ModulesPageState extends State<ModulesPage>
               return 0;
             }
             if (missing.containsKey(entry.id)) return 1;
-            return 2;
+            // 没装过的一律排在「已装且最新」之前——否则仓库里新加的站源
+            // 永远沉在列表底部，根本看不见（用户反馈）。
+            if (have == null) return 2;
+            return 3;
           }
 
           final byRank = rank(a).compareTo(rank(b));
@@ -1079,7 +1082,9 @@ class _InstalledCard extends StatelessWidget {
           ActionPill(
             icon: Icons.arrow_circle_up_outlined,
             label: '更新',
-            tone: ActionTone.accent,
+            // 和索引卡片里的「更新」用同一种绿 + 同一套毛玻璃，全局语义一致。
+            tone: ActionTone.info,
+            frosted: true,
             onPressed: onUpdate,
           ),
         ActionPill(
@@ -1154,7 +1159,17 @@ class _IndexCard extends StatelessWidget {
               : installedVersion == entry.version
               ? '重装'
               : '更新',
-          tone: ActionTone.accent,
+          // 四种主操作给四种颜色，避免一屏胶囊长得一模一样：
+          // 安装＝柔白实心（最该点的）、更新＝薄荷绿（有新东西）、
+          // 重装＝灰（次要）。纯白留给顶栏，卡片区不铺那么亮。
+          tone: restoreBuiltin
+              ? ActionTone.neutral
+              : installedVersion == null
+              ? ActionTone.install
+              : installedVersion == entry.version
+              ? ActionTone.neutral
+              : ActionTone.info,
+          frosted: true,
           onPressed: onInstall,
         ),
       ),
