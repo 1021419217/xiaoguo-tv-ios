@@ -873,6 +873,19 @@ class PlaybackSession extends ChangeNotifier {
     final next = _standby!;
     final previous = _player;
     final previousPlan = _plan;
+    // 跳秒修复：预热播放器若曾被无声推进，接管前拉回 0。
+    // 日志用于确认「预热被消耗」是否真实发生（配合 _open 里的强制暂停）。
+    if (next.state.playing || next.state.position > Duration.zero) {
+      DiaryService.add(
+        '[Play] 诊断：预热被消耗 pos=${next.state.position.inMilliseconds}ms '
+        'playing=${next.state.playing}',
+      );
+      try {
+        await next
+            .seek(Duration.zero)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
     final volume = previous.state.volume;
     unawaited(saveProgress());
     _preloader.clear();
@@ -950,6 +963,11 @@ class PlaybackSession extends ChangeNotifier {
         Media(plan.url, httpHeaders: plan.headers),
         play: false,
       );
+      // 跳秒修复（2026-11-27）：预热播放器曾在预热期间被无声推进（音轨已禁
+      // 所以听不到），切集 swap 后从"已播到的位置"开始——这就是跳秒。
+      // open(play:false) 的 pause 属异步设置，存在不生效的窗口；open 完成
+      // 后明确再压一次暂停，确保预热期间不消耗下一集内容。
+      await standby.pause();
     } catch (_) {
       if (identical(_standbyPlan, plan)) _dropStandby();
       return;
