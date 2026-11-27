@@ -27,9 +27,6 @@ type Downloader struct {
 	rankings          rankingCache
 	cfg               Config
 	client            *http.Client
-	// segmentClient 专供 HLS 分片：响应头超时 5s 快速失败换连接重试，
-	// 总超时由每次尝试的 ctx 控制（见 app_stream.go nativeServeSegment）。
-	segmentClient     *http.Client
 	reserveMu         sync.Mutex
 	reserveNext       uint64
 	reservations      map[uint64]func()
@@ -302,13 +299,6 @@ func newNativeEngine(directory, cache, downloads string) (*nativeEngine, error) 
 			}
 			return nil
 		}}
-	// 分片专用客户端：只调短「等响应头」的时间，让失败的分片能快速换连接重试；
-	// 不改动 d.client 的任何参数（playlist 等仍走 20s，这是 3.0.12 的教训）。
-	segmentTransport := transport.Clone()
-	segmentTransport.ResponseHeaderTimeout = 5 * time.Second
-	segmentTransport.MaxIdleConnsPerHost = 4
-	segmentCdn := newCDNTransport(segmentTransport, newDNSResolver(segmentTransport))
-	d.segmentClient = &http.Client{Transport: newHuangguoBrowserTransport(segmentCdn, d)}
 	engine := &nativeEngine{downloader: d, directory: directory, cacheDirectory: cache, defaultDownloads: nativeDefaultDownloads(directory), catalogs: map[string][]LibraryDrama{}, catalogStates: map[string]nativeCatalogState{}}
 	if filepath.IsAbs(downloads) {
 		engine.defaultDownloads = filepath.Clean(downloads)

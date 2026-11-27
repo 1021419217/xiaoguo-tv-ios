@@ -406,13 +406,6 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 		stream.nativeServeDecrypted(ctx, writer, request, session, asset)
 		return
 	}
-	// HLS 分片走「先完整下载、再一次性转发」通道。边下边转时一旦读到一半断流，
-	// 半截数据已发给 mpv → AES 解密失败 → ffmpeg hls demuxer 不重试、直接跳过
-	// 该分片 → 从后面分片继续 → 表现为切集跳秒/花屏。宁可重试，也不交半截数据。
-	if asset.kind == "segment" && strings.TrimSpace(request.Header.Get("Range")) == "" {
-		stream.nativeServeSegment(ctx, writer, request, session, asset, info)
-		return
-	}
 	upstream, err := http.NewRequestWithContext(ctx, request.Method, asset.address, nil)
 	if err != nil {
 		http.Error(writer, "媒体地址无效", http.StatusBadGateway)
@@ -520,78 +513,6 @@ func (stream *nativeStreamServer) nativeServe(writer http.ResponseWriter, reques
 		}
 		_, _ = io.Copy(writer, reader)
 	}
-}
-
-// nativeServeSegment 是 HLS 分片专用通道：完整下载 → 校验长度 → 一次性转发。
-// 读取阶段失败（连接中断/提前 EOF/长度不符）时换新连接重试，绝不把半截分片
-// 交给 mpv。原因：mpv 的 hls demuxer 对失败分片不重试而是静默跳过、从后续分片
-// 继续播，表现为切集跳到中间/花屏。单次尝试 15s、最多 2 次（最坏 30s），
-// 配套 mpv network-timeout=40s 保证重试窗口内本地连接不被提前掐断。
-func (stream *nativeStreamServer) nativeServeSegment(ctx context.Context, writer http.ResponseWriter, request *http.Request, session *nativeStreamSession, asset nativeStreamAsset, info nativeStreamDiagnostic) {
-	const (
-		maxSegmentBytes = 8 << 20
-		attempts        = 2
-		attemptTimeout  = 15 * time.Second
-	)
-	client := stream.downloader.segmentClient
-	if client == nil {
-		client = stream.downloader.client
-	}
-	var lastErr error
-	for attempt := 0; attempt < attempts; attempt++ {
-		if ctx.Err() != nil {
-			return
-		}
-		body, contentType, err := stream.readSegmentOnce(ctx, client, session, asset, maxSegmentBytes, attemptTimeout)
-		if err != nil {
-			lastErr = err
-			if ctx.Err() != nil {
-				return
-			}
-			stream.nativeLog(info, "segment_retry", asset.address, "reason="+nativeStreamError(err), attempt+1, "")
-			continue
-		}
-		stripped := stripFakeTSHeader(body)
-		writer.Header().Set("Content-Type", contentType)
-		writer.Header().Set("Content-Length", strconv.Itoa(len(stripped)))
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(stripped)
-		return
-	}
-	stream.nativeLogError(info, "upstream_read_error", asset.address, lastErr, "segment_retry_exhausted")
-	http.Error(writer, "读取媒体失败，请重试", http.StatusBadGateway)
-}
-
-func (stream *nativeStreamServer) readSegmentOnce(parent context.Context, client *http.Client, session *nativeStreamSession, asset nativeStreamAsset, limit int64, timeout time.Duration) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-	upstream, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.address, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	// Referer 先放进 header：doMediaRequestWithClient 会以它为准补齐 UA/Origin。
-	upstream.Header.Set("Referer", session.referer)
-	response, err := stream.downloader.doMediaRequestWithClient(upstream, client)
-	if err != nil {
-		return nil, "", err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
-		return nil, "", fmt.Errorf("上游状态码 %d", response.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
-	if err != nil {
-		return nil, "", err
-	}
-	if int64(len(body)) > limit {
-		return nil, "", errors.New("分片超过大小上限")
-	}
-	// 长度校验：上游声明了 Content-Length 就要求字节数完全一致。
-	// 这是「半截数据」的最后一道闸门（chunked/gzip 时长度未知，跳过）。
-	if response.ContentLength > 0 && int64(len(body)) != response.ContentLength {
-		return nil, "", fmt.Errorf("分片长度不符 %d/%d", len(body), response.ContentLength)
-	}
-	return body, response.Header.Get("Content-Type"), nil
 }
 
 func stripFakeTSHeader(data []byte) []byte {
