@@ -231,6 +231,8 @@ class PlaybackSession extends ChangeNotifier {
   DateTime? _lastWakeAt;
   int _wakeAttempts = 0;
   bool _frameCheckBusy = false;
+  // 防续播自检/清记录只做一次的开关（会话首次配置时执行）。
+  bool _guardsVerified = false;
   // 唤醒多次仍不涨帧（多半是「画面本来就静止」的视频，不是故障），
   // 就临时停用看门狗，宁可不管也不能反复 seek 破坏正常播放。
   DateTime? _frameWatchOffUntil;
@@ -714,6 +716,10 @@ class PlaybackSession extends ChangeNotifier {
     // 说明还有别的恢复通道；3.0.5 起统一走公共防护（含显式 start=0）。
     // 这里覆盖「主播放器」和「切集预加载 standby」（_open 也调用本函数）。
     await applyNoResumeGuard(target, startAt: 0);
+    // 自检与清记录只在会话首次配置时做：这些是磁盘 IO，放在每次切集的
+    // 路径上会拖慢 open（用户反馈「每次切集都缓冲」与此有关）。
+    if (_guardsVerified) return;
+    _guardsVerified = true;
     // 自检：把这些属性读回来写进日记。3.0.6 的教训是「设了却不知道有没有
     // 生效」——日志里有真实值，下次定位不用再猜。
     try {
@@ -923,15 +929,18 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 起播守卫：打开后持续监控 3 秒，抓 mpv 异步恢复的续播位置。
+  /// 起播守卫：打开后持续监控 3 秒，区分「残留读数」与「真跳秒」。
   ///
-  /// 为什么不能只采样一次（3.0.6 的教训）：watch-later 恢复发生在 demuxer
-  /// 打开后的任意时刻——早于采样点就被纠正（日志里的 17.5s），晚于采样点
-  /// 就漏网（用户看到的 8s：从 8 秒开始播且没被拉回）。
-  /// 判定用「跳变」而非「绝对值」：正常播放每 250ms 只前进约 0.25s，
-  /// 被记录带偏是一次性跳增数秒。阈值 5s：既抓住 8s/17s 级别的跳变，
-  /// 又不误伤 mpv 偶尔的分片对齐（<5s）。用户主动拖动走 seekTo（先递增
-  /// _seekSequence），这里识别到序号变化立即放手，绝不和用户抢。
+  /// 核心认知（推翻了 watch-later 记忆说）：用户测试全用新视频、无任何
+  /// 历史记录，但切集起播仍显示 17.5/17.4/18.7s——恰好等于切集时上一集
+  /// 的进度。真因：open() 返回 ≠ mpv 已切换，此刻 player.state 还挂着
+  /// 上一集的位置（读数残留）。3.0.6 的单点采样读到它就 seek(0)，反而
+  /// 打断 loadfile，制造「每次切集都缓冲」。
+  /// 判据（三态）：
+  ///   ① 跳增后 600ms 读数掉回 <1s → 残留读数，不干预；
+  ///   ② 跳增后仍在以播放速度推进（+400ms 以上）→ 真从中间播，拉回开头；
+  ///   ③ 跳增后读数几乎不动 → loadfile 未完成，继续观察，不 seek。
+  /// 用户主动拖动走 seekTo（先递增 _seekSequence），识别到立即放手。
   Future<void> _observeStart(int ticket) async {
     if (!_current(ticket) || _closed) return;
     final startSeq = _seekSequence;
@@ -941,8 +950,29 @@ class PlaybackSession extends ChangeNotifier {
       if (_seekSequence != startSeq) return;
       final pos = player.state.position;
       if (pos - last > const Duration(seconds: 5)) {
-        final jumped = (pos.inMilliseconds / 1000).toStringAsFixed(1);
-        DiaryService.add('[Play] 起播被续播记录带偏 $jumped s，回开头');
+        // 二次确认（关键）：open 返回 ≠ mpv 已切到新文件，此刻读到的
+        // 「大位置」极可能是上一集的残留读数（实测 17.5/17.4/18.7s 恰等于
+        // 切集时上一集的进度——用户每集播十几秒就切）。等 600ms 再读：
+        // 若已掉回 1s 内 → 只是残留读数，新视频正在从头播，绝不干预；
+        // 若仍在 2s 以上推进 → 才是真跳秒，拉回开头。
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (!_current(ticket) || _closed) return;
+        if (_seekSequence != startSeq) return;
+        final confirm = player.state.position;
+        final first = (pos.inMilliseconds / 1000).toStringAsFixed(1);
+        final second = (confirm.inMilliseconds / 1000).toStringAsFixed(1);
+        if (confirm < const Duration(seconds: 1)) {
+          DiaryService.add(
+            '[Play] 起播读数残留（$first s→$second s，实际从头播），不干预',
+          );
+          return;
+        }
+        if (confirm < pos + const Duration(milliseconds: 400)) {
+          // 读数还挂在旧值上不动：loadfile 尚未完成，继续等下一轮采样。
+          last = pos;
+          continue;
+        }
+        DiaryService.add('[Play] 起播真跳秒（$first→$second s 在推进），回开头');
         try {
           await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
           await Future<void>.delayed(const Duration(milliseconds: 300));
