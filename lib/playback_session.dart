@@ -684,6 +684,13 @@ class PlaybackSession extends ChangeNotifier {
       ].join(','),
     );
     await platform.setProperty('network-timeout', '20');
+    // 切集跳秒的根因：mpv 的 resume-playback 默认 yes，open 同一 URL 时会
+    // 读 watch-later 把画面自动 seek 到上次记录的位置（十几/几十秒不等，
+    // 取决于该集上次看到哪）。这个 seek 发生在 open 之后，所以 Dart 层在
+    // open 刚返回时读到的 position 还是 0 —— 正是日志里「打开位置 0.0s」
+    // 却跳秒的矛盾来源。历史上单设 start='0' 修不好，也是被它覆盖。
+    // 续播一律由 App 自己的 _resumeSeek 精确控制，这里彻底关掉 mpv 自动续播。
+    await platform.setProperty('resume-playback', 'no');
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
@@ -851,8 +858,13 @@ class PlaybackSession extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 120));
     }
     if (!_current(ticket) || _closed) return;
+    // mpv 的自动续播/首帧对齐可能发生在 open 返回之后的几十到几百毫秒。
+    // 上一版在 open 刚返回就读 position（拿到 0）然后 return，兜底从未生效。
+    // 这里再等 350ms 让画面稳定，然后才读真实起播位置。
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!_current(ticket) || _closed) return;
     final before = player.state.position;
-    DiaryService.add('[Play] 切集归零：打开位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
+    DiaryService.add('[Play] 切集归零：起播位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
     // 已经从头就别动，避免刚起播就被 seek 打断。
     if (before < const Duration(milliseconds: 300)) return;
     try {

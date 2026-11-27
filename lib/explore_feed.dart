@@ -189,9 +189,12 @@ class ExploreFeed extends ChangeNotifier {
       return;
     }
     final catalog = _catalog = SourceCatalog(repository, SourceSite.byId(id));
-    // 切源后首屏必须拿新站数据：默认 force:false 会命中 Go 层 15 分钟缓存，
-    // 导致切进来还是上一站/旧内容，必须手动刷新才变。
-    _select(catalog.recommends ? recommendTab : CatalogCategory.all, force: true);
+    // 切源首屏先走缓存秒开：DramaFeed.reload 只在 force=false 时才显示
+    // cached()。上一版这里传了 force:true，把缓存显示整段跳过，切源瞬间
+    // 只剩一个网络请求在途，列表为空 → 界面显示「这里还没有剧」，必须
+    // 手动点刷新才出内容。非 force 的 reload 同样会发起网络刷新，缓存
+    // 只是先顶上，拿到新数据后自动替换，不影响「切源要更新」的诉求。
+    _select(catalog.recommends ? recommendTab : CatalogCategory.all);
     unawaited(_loadCategories(catalog));
   }
 
