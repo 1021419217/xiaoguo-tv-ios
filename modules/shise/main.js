@@ -139,105 +139,125 @@ function nameOk(name) {
   return true;
 }
 
-// JSON-LD actor[]：本站只有 name，可能多个
-function jsonActors(html) {
+// ── 详情页结构化数据：直接 JSON.parse ld+json，避免正则错配 ──
+// 旧实现用正则「name 往后找第一个 url」，若首个演员没有 url 会错配成
+// 下一个演员的 url；且拿不到 identifier。JSON.parse 最可靠。
+function ldNodes(html) {
   const out = [];
   const blocks = String(html || '').match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
-  for (const block of blocks) {
-    const body = block.replace(/^[\s\S]*?>/, '').replace(/<\/script>$/i, '');
-    const arr = /"actor"\s*:\s*\[([\s\S]{0,2000}?)\]/g;
-    let am;
-    while ((am = arr.exec(body)) !== null) {
-      const seg = am[1];
-      const names = /"name"\s*:\s*"([^"]{1,60})"/g;
-      let nm;
-      while ((nm = names.exec(seg)) !== null) {
-        const u = seg.substring(nm.index).match(/"url"\s*:\s*"([^"]{1,220})"/);
-        out.push({ author: nm[1], url: u ? u[1] : '' });
+  for (let i = 0; i < blocks.length; i++) {
+    const body = blocks[i].replace(/^[\s\S]*?>/, ' ').replace(/<\/script>$/i, '').trim();
+    if (!body) continue;
+    try {
+      const data = JSON.parse(body);
+      const arr = Array.isArray(data) ? data : [data];
+      for (let j = 0; j < arr.length; j++) {
+        if (arr[j] && arr[j]['@type']) out.push(arr[j]);
       }
-    }
-    const one = /"actor"\s*:\s*\{([\s\S]{0,600}?)\}/g;
-    let om;
-    while ((om = one.exec(body)) !== null) {
-      const n = om[1].match(/"name"\s*:\s*"([^"]{1,60})"/);
-      const u = om[1].match(/"url"\s*:\s*"([^"]{1,220})"/);
-      if (n) out.push({ author: n[1], url: u ? u[1] : '' });
-    }
+    } catch (e) { /* 非纯 JSON 的块跳过 */ }
   }
-  return out.filter(function (a) { return nameOk(a.author); });
+  return out;
 }
 
-// 侧栏 /videos/model-{id}.html 胶囊：给 JSON-LD 的名字补 id + url
-function domModels(html) {
+function ldVideo(html) {
+  const nodes = ldNodes(html);
+  let video = null, crumbs = null;
+  for (let i = 0; i < nodes.length; i++) {
+    const t = nodes[i]['@type'];
+    if (t === 'VideoObject') video = nodes[i];
+    else if (t === 'BreadcrumbList') crumbs = nodes[i];
+  }
+  return { video: video, crumbs: crumbs };
+}
+
+// actor[]：name 一定有；url/identifier 只有「有模特页」的演员才有（如菠萝包这类没有）
+function ldActors(html) {
+  const video = ldVideo(html).video;
+  const out = [];
+  if (!video || !video.actor) return out;
+  const raw = Array.isArray(video.actor) ? video.actor : [video.actor];
+  for (let i = 0; i < raw.length; i++) {
+    const a = raw[i];
+    if (!a) continue;
+    const name = clean(a.name || '').replace(/\s+/g, ' ').trim();
+    if (!nameOk(name)) continue;
+    const url = a.url ? xcUrl(a.url) : '';
+    let id = a.identifier != null ? String(a.identifier) : '';
+    if (!id && url) id = modelId(url);
+    out.push({ author: name, authorId: id, authorUrl: url });
+  }
+  return out;
+}
+
+// 系列（片商）：面包屑里指向 /videos/xs- 的那一项；兜底取倒数第二项（末项是片名）
+function ldSeries(html) {
+  const items = (ldVideo(html).crumbs || {}).itemListElement || [];
+  let series = '';
+  for (let i = 0; i < items.length; i++) {
+    const it = String(items[i].item || '');
+    if (/\/videos\/xs-/.test(it)) series = items[i].name || series;
+  }
+  if (!series && items.length >= 2) series = items[items.length - 2].name || '';
+  series = clean(series).replace(/\s+/g, ' ').trim();
+  if (!nameOk(series) || /^(首页|视频|影片|分类|全部)$/.test(series)) return '';
+  return series;
+}
+
+// DOM 兜底：本片演员头像墙是 div.model-item；侧栏推荐位是 a 链接，不取
+function domActorNames(html) {
   const out = [];
   const src = xcStripData(html);
-  const re = /<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]{0,400}?)<\/a>/gi;
+  const re = /<div[^>]*class="model-item"[^>]*>\s*<div>([^<]{1,24})<\/div>/g;
   let m;
   while ((m = re.exec(src)) !== null) {
-    const href = m[1] || m[2] || m[3] || '';
-    if (href.indexOf('/videos/model-') < 0) continue;
-    const text = clean(m[4].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
-    if (!nameOk(text)) continue;
-    const url = xcUrl(href);
-    out.push({ author: text, authorId: modelId(url), authorUrl: url });
+    const nm = clean(m[1]).replace(/\s+/g, ' ').trim();
+    if (nameOk(nm)) out.push(nm);
   }
   return out;
 }
 
 function resolveAuthor(html) {
-  const actors = jsonActors(html);
-  const models = domModels(html);
-  // 先按名字把 model 链接配给 JSON-LD actor
+  let actors = ldActors(html);
+  if (!actors.length) {
+    const names = domActorNames(html);
+    for (let i = 0; i < names.length; i++) {
+      actors.push({ author: names[i], authorId: '', authorUrl: '' });
+    }
+  }
   let primary = null;
   if (actors.length) {
-    primary = { author: clean(actors[0].author).replace(/\s+/g, ' ').trim() };
-    for (const mo of models) {
-      if (mo.author === primary.author) {
-        primary.authorId = mo.authorId;
-        primary.authorUrl = mo.authorUrl;
-        break;
-      }
-    }
+    primary = {
+      author: actors[0].author,
+      authorId: actors[0].authorId || '',
+      authorUrl: actors[0].authorUrl || ''
+    };
   }
-  if (!primary && models.length) {
-    const tally = {};
-    for (const a of models) {
-      const sig = String(a.authorId || a.author).toLowerCase();
-      if (!tally[sig]) tally[sig] = { n: 0, info: a };
-      tally[sig].n += 1;
-    }
-    let best = null;
-    for (const k in tally) if (!best || tally[k].n > best.n) best = tally[k];
-    if (best && best.n >= 1) primary = best.info;
-  }
-  return { primary: primary, actors: actors, models: models };
+  return { primary: primary, actors: actors };
 }
 
 // 详情信息表：时长 / 发行 / 系列（App 只认固定字段名）
-function meta(html, authors) {
+function meta(html) {
   const m = {};
-  const ld = String(html || '').match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/i);
-  const body = ld ? ld[1] : '';
-  const ogdur = String(html).match(/og:duration"[^>]*content="(\d+)"/);
+  const video = ldVideo(html).video || {};
+  // 时长：优先 JSON-LD duration(ISO8601)，兜底 og:duration 秒数
   let durText = '';
-  const iso = body.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
-  if (iso) {
+  const iso = String(video.duration || '').match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (iso && (iso[1] || iso[2] || iso[3])) {
     const h = Number(iso[1] || 0), mm = Number(iso[2] || 0), ss = Number(iso[3] || 0);
     durText = (h ? h + ':' : '') + (h && mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
-  } else if (ogdur) {
-    const total = Number(ogdur[1]);
-    const hh = Math.floor(total / 3600), mm = Math.floor(total % 3600 / 60), ss = total % 60;
-    durText = (hh ? hh + ':' : '') + (hh && mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+  } else {
+    const ogdur = String(html).match(/og:duration"[^>]*content="(\d+)"/);
+    if (ogdur) {
+      const total = Number(ogdur[1]);
+      const hh = Math.floor(total / 3600), mm = Math.floor(total % 3600 / 60), ss = total % 60;
+      durText = (hh ? hh + ':' : '') + (hh && mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+    }
   }
   if (durText) m['时长'] = durText;
-  const up = body.match(/"uploadDate"\s*:\s*"(\d{4})-(\d{2})-(\d{2})/);
+  const up = String(video.uploadDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (up) m['发行'] = up[1] + '-' + up[2] + '-' + up[3];
-  const crumbs = String(html).match(/\{"@type":"ListItem","position":\d+,"name":"([^"]{1,40})","item":"[^"]*\/videos\/xs-[^"]*"\}/g) || [];
-  if (crumbs.length) {
-    const nm = crumbs[crumbs.length - 1].match(/"name":"([^"]{1,40})"/);
-    if (nm) m['系列'] = nm[1];
-  }
-  if (authors && authors.length > 1) m['演员'] = authors.map(function (a) { return a.author; }).join('、');
+  const series = ldSeries(html);
+  if (series) m['系列'] = series;
   return m;
 }
 
@@ -388,7 +408,7 @@ module.exports = {
         if (info.primary.authorUrl) drama.authorUrl = info.primary.authorUrl;
       }
       const actorNames = info.actors.map(function (a) { return a.author; });
-      const metaData = meta(html, actorNames);
+      const metaData = meta(html);
       for (const mk in metaData) drama[mk] = metaData[mk];
       if (metaData['时长']) drama.durationText = metaData['时长'];
       if (metaData['发行']) drama.onlineDate = metaData['发行'];

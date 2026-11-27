@@ -132,30 +132,65 @@ function xcNameOk(name) {
   return true;
 }
 
-function xcJsonAuthors(html) {
+// ── 详情页结构化数据：直接 JSON.parse ld+json ──
+// 旧实现用正则「name 后必须跟 url」，无模特页的演员（只有 name）直接丢失；
+// 多演员时还可能把下一个演员的 url 错配过来。JSON.parse 才能拿到 identifier。
+function xcLdNodes(html) {
   const out = [];
   const blocks = String(html || '').match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
-  for (const block of blocks) {
-    if (block.indexOf('actor') < 0) continue;
-    const body = block.replace(/^[\s\S]*?>/, '').replace(/<\/script>$/i, '');
-    // actor 可能是数组也可能是单个对象，两种都截一段出来再取 name/url
-    const segs = [];
-    const arr = /"actor"\s*:\s*\[([\s\S]{0,2000}?)\]/g;
-    let am;
-    while ((am = arr.exec(body)) !== null) segs.push(am[1]);
-    const obj = /"actor"\s*:\s*\{([\s\S]{0,600}?)\}/g;
-    let om;
-    while ((om = obj.exec(body)) !== null) segs.push(om[1]);
-    for (const seg of segs) {
-      const a = /"name"\s*:\s*"([^"]{1,60})"[\s\S]{0,200}?"url"\s*:\s*"([^"]{1,220})"/g;
-      let m;
-      while ((m = a.exec(seg)) !== null) out.push({ author: m[1], url: m[2] });
-      const b = /"url"\s*:\s*"([^"]{1,220})"[\s\S]{0,200}?"name"\s*:\s*"([^"]{1,60})"/g;
-      let n;
-      while ((n = b.exec(seg)) !== null) out.push({ author: n[2], url: n[1] });
-    }
+  for (let i = 0; i < blocks.length; i++) {
+    const body = blocks[i].replace(/^[\s\S]*?>/, ' ').replace(/<\/script>$/i, '').trim();
+    if (!body) continue;
+    try {
+      const data = JSON.parse(body);
+      const arr = Array.isArray(data) ? data : [data];
+      for (let j = 0; j < arr.length; j++) if (arr[j] && arr[j]['@type']) out.push(arr[j]);
+    } catch (e) { /* 非纯 JSON 跳过 */ }
   }
   return out;
+}
+
+function xcLdVideo(html) {
+  const nodes = xcLdNodes(html);
+  let video = null, crumbs = null;
+  for (let i = 0; i < nodes.length; i++) {
+    const t = nodes[i]['@type'];
+    if (t === 'VideoObject') video = nodes[i];
+    else if (t === 'BreadcrumbList') crumbs = nodes[i];
+  }
+  return { video: video, crumbs: crumbs };
+}
+
+// 演员：name 一定有；url/identifier 只有「有模特页」的才有（如菠萝包这类没有）
+function xcJsonAuthors(html) {
+  const video = xcLdVideo(html).video;
+  const out = [];
+  if (!video || !video.actor) return out;
+  const raw = Array.isArray(video.actor) ? video.actor : [video.actor];
+  for (let i = 0; i < raw.length; i++) {
+    const a = raw[i];
+    if (!a) continue;
+    const name = clean(a.name || '').replace(/\s+/g, ' ').trim();
+    if (!xcNameOk(name)) continue;
+    const url = a.url ? xcUrl(a.url) : '';
+    let id = a.identifier != null ? String(a.identifier) : '';
+    if (!id && url) id = xcModelId(url);
+    out.push({ author: name, authorId: id, authorUrl: url, url: url });
+  }
+  return out;
+}
+
+// 系列（片商）：面包屑里 /video-series/ 那一项；兜底取倒数第二项（末项是片名）
+function xcLdSeries(html) {
+  const items = (xcLdVideo(html).crumbs || {}).itemListElement || [];
+  let series = '';
+  for (let i = 0; i < items.length; i++) {
+    if (/\/video-series\//.test(String(items[i].item || ''))) series = items[i].name || series;
+  }
+  if (!series && items.length >= 2) series = items[items.length - 2].name || '';
+  series = clean(series).replace(/\s+/g, ' ').trim();
+  if (!xcNameOk(series) || /^(首页|视频|影片|分类|全部)$/.test(series)) return '';
+  return series;
 }
 
 function xcDomAuthors(html) {
@@ -175,13 +210,9 @@ function xcDomAuthors(html) {
 }
 
 function xcAuthor(html) {
-  // ① JSON-LD：整页唯一，最可靠
+  // ① JSON-LD：整页唯一、最可靠；有 name 就算，不强求有 url（菠萝包这类没有模特页）
   const json = xcJsonAuthors(html);
-  for (const a of json) {
-    if (!xcNameOk(a.author)) continue;
-    const url = xcUrl(a.url);
-    return { author: clean(a.author).replace(/\s+/g, ' ').trim(), authorId: xcModelId(url), authorUrl: url };
-  }
+  if (json.length) return json[0];
   // ② 作者胶囊：按 UID 去重投票，同一个 id 出现 2 次以上才算。
   //    详情页侧栏也可能有 /model/ 链接（推荐），投票能挡掉只出现一次的。
   const dom = xcDomAuthors(html);
@@ -214,34 +245,26 @@ function xcAuthorDiag(html) {
 }
 
 // 元数据：详情页信息表用（源给什么列什么）
-function xcMeta(html, author, allAuthors) {
+function xcMeta(html) {
   const meta = {};
-  const ld = String(html || '').match(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/i);
-  const body = ld ? ld[1] : '';
+  const video = xcLdVideo(html).video || {};
+  // 时长：页面「时长 mm:ss」优先，再 JSON-LD duration(ISO8601)
   const dur = String(html).match(/时长\s*([0-9]{1,3}:[0-9]{2})/);
   let durText = dur ? dur[1] : '';
   if (!durText) {
-    const iso = body.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
-    if (iso) {
-      const h = Number(iso[1] || 0), mm = Number(iso[2] || 0);
-      durText = (h ? h + ':' : '') + (h && mm < 10 ? '0' : '') + mm + ':' + (Number(iso[3] || 0) < 10 ? '0' : '') + Number(iso[3] || 0);
+    const iso = String(video.duration || '').match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (iso && (iso[1] || iso[2] || iso[3])) {
+      const h = Number(iso[1] || 0), mm = Number(iso[2] || 0), ss = Number(iso[3] || 0);
+      durText = (h ? h + ':' : '') + (h && mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
     }
   }
   if (durText) meta['时长'] = durText;
 
-  const up = body.match(/"uploadDate"\s*:\s*"(\d{4})-(\d{2})-(\d{2})/);
+  const up = String(video.uploadDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (up) meta['发行'] = up[1] + '-' + up[2] + '-' + up[3];
 
-  // 系列：BreadcrumbList 里 /video-series/ 那一层
-  const crumbs = String(html).match(/\{"@type":"ListItem","position":\d+,"name":"([^"]{1,40})","item":"[^"]*\/video-series\/[^"]*"\}/g) || [];
-  if (crumbs.length) {
-    const nm = crumbs[crumbs.length - 1].match(/"name":"([^"]{1,40})"/);
-    if (nm) meta['系列'] = nm[1];
-  }
-
-  if (allAuthors && allAuthors.length > 1) {
-    meta['演员'] = allAuthors.map(function (a) { return a.author; }).join('、');
-  }
+  const series = xcLdSeries(html);
+  if (series) meta['系列'] = series;
   return meta;
 }
 
@@ -280,7 +303,8 @@ function toDrama(item) {
     sourceId: item.sourceId,
     title: title,
     name: title,
-    desc: item.duration ? '时长 ' + item.duration : '',
+    durationText: item.duration || '',
+    desc: '',
     intro: '',
     cover: item.cover || '',
     totalEpisode: 1
@@ -441,8 +465,18 @@ module.exports = {
         if (author.authorUrl) drama.authorUrl = author.authorUrl;
       }
       const allAuthors = xcJsonAuthors(html).filter(function (a) { return xcNameOk(a.author); });
-      const meta = xcMeta(html, author, allAuthors);
+      const meta = xcMeta(html);
       for (const mk in meta) drama[mk] = meta[mk];
+      // 信息表用的是中文 key（时长/发行/系列），App 只认这些字段名，
+      // 不映射过去界面就不显示——之前数据全抓到却看不到，就是这里断的。
+      if (meta['时长']) drama.durationText = meta['时长'];
+      if (meta['发行']) drama.onlineDate = meta['发行'];
+      if (meta['系列']) drama.maker = meta['系列'];
+      // 演员数组：只有一个模特时 xcMeta 不会填「演员」，这里统一取全部
+      const actorNames = (allAuthors || [])
+        .map(function (a) { return a.author; })
+        .filter(function (n) { return n; });
+      if (actorNames.length) drama.actors = actorNames;
       if (author) {
         host.log('xChina作者 v1.3.0: ' + author.author + (author.authorId ? ' (model ' + author.authorId + ')' : ' (无 model 链接)'));
       } else {
