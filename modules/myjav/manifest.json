@@ -1,0 +1,19 @@
+{
+  "id": "myjav",
+  "name": "MyJav",
+  "version": "1.0.0",
+  "description": "MyJav（cn.myjav.tv）：日本AV，最新 + 9 个标签分类 + 搜索 + 演员作品页，单集长视频，HLS（AES-128）。与 xChina 同 CDN，解析番号/时长/演员/片商/系列/发布日。",
+  "runtime": "js",
+  "api": 1,
+  "adult": true,
+  "hosts": [
+    "cn.myjav.tv",
+    "*.myjav.tv"
+  ],
+  "capabilities": [
+    "search"
+  ],
+  "allowEmptyCatalog": false,
+  "baseUrl": "https://cn.myjav.tv",
+  "browserFingerprint": true
+}

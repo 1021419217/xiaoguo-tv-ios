@@ -1,8 +1,8 @@
 {
   "id": "xchina",
   "name": "小黄书 xChina",
-  "version": "1.3.3",
-  "description": "xChina（小黄书）：最新 + 5 个分类 + 搜索，单集长视频，HLS（AES-128）。1.3.3 重写详情解析（JSON.parse 取 JSON-LD）：无模特页的演员不再被丢掉、多演员全部列出、有模特页的带 id 可直接进作品页；修正系列/时长/发行，不再把推荐位误当作者。",
+  "version": "1.4.0",
+  "description": "xChina（小黄书）：最新 + 7 个分类（国产/日本AV/中文AV/模特私拍/电影/AI视频/其他）+ 搜索，单集长视频，HLS（AES-128）。1.4.0 分类对齐站点分类页，补上中文AV(/video-series/197)与模特私拍(/video-series/62)；详情解析用 JSON.parse 取 JSON-LD，多演员全列、有模特页的带 id、修正系列/时长/发行。",
   "runtime": "js",
   "api": 1,
   "adult": true,

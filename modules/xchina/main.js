@@ -28,14 +28,25 @@ const BROWSER_HEADERS = {
   'Upgrade-Insecure-Requests': '1'
 };
 
+// 对齐站点 /categories.html：5 个 cat 分类 + 中文AV(/video-series/197)
+// + 模特私拍(/video-series/62)。series 页和 cat 页卡片结构相同。
+// path 是完整基路径，分页在后面接 /{n}。
 const CATEGORIES = [
-  { id: 'new', name: '最新' },
-  { id: 'cn', name: '国产' },
-  { id: 'jav', name: '日本AV' },
-  { id: 'movie', name: '电影' },
-  { id: 'ai', name: 'AI视频' },
-  { id: 'other', name: '其他' }
+  { id: 'new',    name: '最新',     path: '/videos/new' },
+  { id: 'cn',     name: '国产',     path: '/video-category/cn' },
+  { id: 'jav',    name: '日本AV',   path: '/video-category/jav' },
+  { id: 'cnav',   name: '中文AV',   path: '/video-series/197' },
+  { id: 'model',  name: '模特私拍', path: '/video-series/62' },
+  { id: 'movie',  name: '电影',     path: '/video-category/movie' },
+  { id: 'ai',     name: 'AI视频',   path: '/video-category/ai' },
+  { id: 'other',  name: '其他',     path: '/video-category/other' }
 ];
+function categoryPath(id) {
+  for (let i = 0; i < CATEGORIES.length; i++) {
+    if (CATEGORIES[i].id === id) return CATEGORIES[i].path;
+  }
+  return CATEGORIES[0].path;
+}
 
 function clean(s) {
   return String(s == null ? '' : s)
@@ -88,8 +99,8 @@ function parseCards(html) {
 
 function listPath(category, page) {
   const n = Number(page || 1) < 1 ? 1 : Number(page || 1);
-  if (!category || category === 'new') return n === 1 ? '/videos/new' : '/videos/new/' + n;
-  return n === 1 ? '/video-category/' + category : '/video-category/' + category + '/' + n;
+  const base = categoryPath(category);
+  return n === 1 ? base : base + '/' + n;
 }
 
 // ── 作者（演员 / 模特）抓取 ─────────────────────────────

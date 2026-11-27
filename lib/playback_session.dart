@@ -690,7 +690,10 @@ class PlaybackSession extends ChangeNotifier {
     // open 刚返回时读到的 position 还是 0 —— 正是日志里「打开位置 0.0s」
     // 却跳秒的矛盾来源。历史上单设 start='0' 修不好，也是被它覆盖。
     // 续播一律由 App 自己的 _resumeSeek 精确控制，这里彻底关掉 mpv 自动续播。
+    // 3.0.4 实测日志：只设 resume-playback=no 仍会跳到 8.0/28.0/29.7s，
+    // 说明还有别的恢复通道——watch-later 的保存/读取要一并关死。
     await platform.setProperty('resume-playback', 'no');
+    await platform.setProperty('save-position-on-quit', 'no');
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
@@ -792,6 +795,20 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
+        // 关键：open 前显式声明起播点，从源头掐掉 mpv 读 watch-later 跳位置。
+        //   position == 0（切集/普通打开）→ start=0，强制从头；
+        //   position > 0（记忆续播）→ start=no，清掉上一集残留的 0，
+        //     由 _resumeSeek 在拿到时长后精确定位（避免中间分片长缓冲）。
+        // mpv 里 start 一旦被显式设置就不再做 watch-later 恢复，这是比
+        // resume-playback=no 更硬的开关（3.0.4 证明后者单独用没挡住）。
+        final plat = player.platform;
+        if (plat is NativePlayer) {
+          try {
+            await plat.setProperty('start', position > 0 ? 'no' : '0');
+          } catch (_) {
+            // 个别 libmpv 版本不接受 'no'；忽略，后面 _observeStart 仍有兜底。
+          }
+        }
         // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
         // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
         await player.open(
@@ -867,6 +884,21 @@ class PlaybackSession extends ChangeNotifier {
     if (!_current(ticket) || _closed) return;
     final before = player.state.position;
     DiaryService.add('[Play] 切集诊断：起播位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
+    // 兜底：start=0 没挡住（例如某些 HLS 首分片时间戳不从 0 起）时，
+    // 这里再拉回开头一次。只在偏移 >2s 时做，避免正常起播抖动被误 seek。
+    if (before.inMilliseconds > 2000) {
+      DiaryService.add('[Play] 起播偏移异常，强制回开头');
+      try {
+        await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        final after = player.state.position;
+        final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
+        DiaryService.add('[Play] 回开头后位置 ${tail}s'
+            '${after.inMilliseconds > 2000 ? '（仍偏移，疑似分片时间戳）' : ''}');
+      } catch (e) {
+        DiaryService.add('[Play] 回开头失败: $e');
+      }
+    }
   }
 
   /// 记忆续播的二次定位：先从 0 播起来，等播放器拿到时长/缓冲后，
