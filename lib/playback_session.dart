@@ -923,43 +923,54 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 切集起播诊断：只判断「打开瞬间」是否被续播记录带偏。
+  /// 起播守卫：打开后持续监控 3 秒，抓 mpv 异步恢复的续播位置。
   ///
-  /// 关键教训（3.0.6 踩的坑）：**绝不能等 duration/buffer 就绪再读位置**。
-  /// 有些 HLS 源要播十几秒才上报时长，等它时 position 已经 17 秒了，会被
-  /// 误判成「起播偏移」，然后把本来正常播放的视频拉回开头——用户看到的是
-  /// 「播着播着跳回 0」。真正的 mpv 续播恢复发生在 loadfile 阶段（打开瞬间），
-  /// 所以只采样打开后的第一秒：只有这一秒内就明显 >2s 才算真跳。
+  /// 为什么不能只采样一次（3.0.6 的教训）：watch-later 恢复发生在 demuxer
+  /// 打开后的任意时刻——早于采样点就被纠正（日志里的 17.5s），晚于采样点
+  /// 就漏网（用户看到的 8s：从 8 秒开始播且没被拉回）。
+  /// 判定用「跳变」而非「绝对值」：正常播放每 250ms 只前进约 0.25s，
+  /// 被记录带偏是一次性跳增数秒。阈值 5s：既抓住 8s/17s 级别的跳变，
+  /// 又不误伤 mpv 偶尔的分片对齐（<5s）。用户主动拖动走 seekTo（先递增
+  /// _seekSequence），这里识别到序号变化立即放手，绝不和用户抢。
   Future<void> _observeStart(int ticket) async {
     if (!_current(ticket) || _closed) return;
     final startSeq = _seekSequence;
-    var early = Duration.zero;
-    for (var i = 0; i < 5; i++) {
+    var last = Duration.zero;
+    for (var i = 0; i < 12; i++) {
       if (!_current(ticket) || _closed) return;
-      // 用户自己拖了进度：不是起播异常，直接放弃判断。
       if (_seekSequence != startSeq) return;
       final pos = player.state.position;
-      if (pos > early) early = pos;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (pos - last > const Duration(seconds: 5)) {
+        final jumped = (pos.inMilliseconds / 1000).toStringAsFixed(1);
+        DiaryService.add('[Play] 起播被续播记录带偏 $jumped s，回开头');
+        try {
+          await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          final after = player.state.position;
+          final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
+          DiaryService.add(
+            '[Play] 回开头后位置 $tail s'
+            '${after.inMilliseconds > 2000 ? '（仍偏移，再次处理）' : ''}',
+          );
+          if (after.inMilliseconds > 2000 &&
+              _current(ticket) &&
+              !_closed &&
+              _seekSequence == startSeq) {
+            await player
+                .seek(Duration.zero)
+                .timeout(const Duration(seconds: 4));
+            DiaryService.add('[Play] 二次回开头完成');
+          }
+        } catch (e) {
+          DiaryService.add('[Play] 回开头失败: $e');
+        }
+        return;
+      }
+      last = pos;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    final label = (early.inMilliseconds / 1000).toStringAsFixed(1);
-    if (early.inMilliseconds <= 2000) {
-      DiaryService.add('[Play] 切集诊断：起播正常 $label s');
-      return;
-    }
-    DiaryService.add('[Play] 起播被续播记录带偏 $label s，回开头');
-    try {
-      await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      final after = player.state.position;
-      final tail = (after.inMilliseconds / 1000).toStringAsFixed(1);
-      DiaryService.add(
-        '[Play] 回开头后位置 $tail s'
-        '${after.inMilliseconds > 2000 ? '（仍偏移）' : ''}',
-      );
-    } catch (e) {
-      DiaryService.add('[Play] 回开头失败: $e');
-    }
+    final tail = (last.inMilliseconds / 1000).toStringAsFixed(1);
+    DiaryService.add('[Play] 切集诊断：起播正常（3 秒无跳变，现 $tail s）');
   }
 
   /// 视频冻结看门狗：进度/音频正常前进但画面定格时自动唤醒。
