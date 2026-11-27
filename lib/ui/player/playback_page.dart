@@ -36,6 +36,8 @@ class _PlaybackPageState extends State<PlaybackPage> {
   bool _shown = false;
   Player? _bound;
   StreamSubscription<bool>? _playing;
+  /// 自动横屏只做一次：避免用户手动转回竖屏后，尺寸变化又把屏幕拉回横屏。
+  bool _autoLandscapeApplied = false;
 
   PlaybackSession get _session => widget.handle.session;
 
@@ -52,7 +54,10 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _pip.addListener(_pipChanged);
     _pip.onAction = _action;
     _bind();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sync();
+      _maybeAutoLandscape();
+    });
   }
 
   @override
@@ -75,7 +80,42 @@ class _PlaybackPageState extends State<PlaybackPage> {
     _bind();
     _sync();
     final wide = _measure();
-    if (wide != _wideVideo) setState(() => _wideVideo = wide);
+    if (wide != _wideVideo) {
+      setState(() => _wideVideo = wide);
+      // 自动横屏看过横屏视频后，如果切到下一集是竖屏视频，要把方向放回来，
+      // 否则竖屏视频会卡在锁定横屏的屏幕里，只剩一小条画面。
+      if (!wide && _autoLandscapeApplied) {
+        _autoLandscapeApplied = false;
+        unawaited(AppDevice.releaseOrientation());
+      }
+    }
+    _maybeAutoLandscape();
+  }
+
+  /// 横屏视频默认横屏播放：视频尺寸确认是横屏后切到锁定横屏。
+  /// 只在手机形态、非电视、视频宽高比 >= 1 时触发一次；退出播放时由
+  /// LandscapePlayerPage.dispose() 释放方向，不会把系统卡在横屏。
+  void _maybeAutoLandscape() {
+    if (_autoLandscapeApplied ||
+        !mounted ||
+        !widget.store.playbackPreferences.autoLandscapeForWide ||
+        !_wideVideo ||
+        _television ||
+        AppScope.formFactorOf(context) != FormFactor.phone) {
+      return;
+    }
+    _autoLandscapeApplied = true;
+    unawaited(
+      AppDevice.setPlayerOrientation(PlayerOrientation.lockedLandscape),
+    );
+  }
+
+  /// 两个开关互斥：设置页会同步关闭另一个，这里再兜底一次，防止旧配置
+  /// 同时打开时两边打架。自动横屏优先。
+  bool get _portraitStyleForWide {
+    final preferences = widget.store.playbackPreferences;
+    return preferences.portraitStyleForWide &&
+        !preferences.autoLandscapeForWide;
   }
 
   void _bind() {
@@ -254,7 +294,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         FormFactor.television => TelevisionPlayerPage(handle: widget.handle),
       };
     }
-    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
+    final portraitStyle = _portraitStyleForWide;
     return switch (form) {
       FormFactor.pad || FormFactor.window => _padPage(context, mini),
       FormFactor.phone
@@ -290,7 +330,7 @@ class _PlaybackPageState extends State<PlaybackPage> {
         onMiniWindow: mini,
       );
     }
-    final portraitStyle = widget.store.playbackPreferences.portraitStyleForWide;
+    final portraitStyle = _portraitStyleForWide;
     return _wideVideo && !portraitStyle
         ? LandscapePlayerPage(
             store: widget.store,

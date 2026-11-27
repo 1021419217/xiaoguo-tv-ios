@@ -281,12 +281,34 @@ class SettingsSection extends StatelessWidget {
                   : null,
             ),
             SwitchTile(
-              title: '横屏视频也使用竖屏样式',
-              subtitle: '竖屏观看横屏视频时画面居中，上下滑动切集，点选集右边的按钮进入全屏',
-              value: preferences.portraitStyleForWide,
+              title: '横屏视频默认横屏播放',
+              subtitle: '横屏视频一进入播放就自动切到横屏；与下方的竖屏样式互斥',
+              value: preferences.autoLandscapeForWide,
               onChanged: (value) => savePreferences(
-                preferences.copyWith(portraitStyleForWide: value),
+                preferences.copyWith(
+                  autoLandscapeForWide: value,
+                  portraitStyleForWide: value
+                      ? false
+                      : preferences.portraitStyleForWide,
+                ),
               ),
+            ),
+            SwitchTile(
+              title: '横屏视频也使用竖屏样式',
+              subtitle: preferences.autoLandscapeForWide
+                  ? '需先关闭「横屏视频默认横屏播放」'
+                  : '竖屏观看横屏视频时画面居中，上下滑动切集，点选集右边的按钮进入全屏',
+              value: preferences.portraitStyleForWide,
+              onChanged: preferences.autoLandscapeForWide
+                  ? null
+                  : (value) => savePreferences(
+                      preferences.copyWith(
+                        portraitStyleForWide: value,
+                        autoLandscapeForWide: value
+                            ? false
+                            : preferences.autoLandscapeForWide,
+                      ),
+                    ),
             ),
             SwitchTile(
               title: '横屏底部进度线',

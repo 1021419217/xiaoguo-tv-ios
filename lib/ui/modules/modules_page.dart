@@ -16,7 +16,8 @@ import 'module_install.dart';
 import '../settings/sorani_account_view.dart';
 import '../widgets/action_pill.dart';
 import '../widgets/bar_button.dart';
-import '../widgets/capsule_tabs.dart';
+import '../widgets/category_tabs.dart';
+import '../widgets/choice_panel.dart';
 import '../widgets/focus_ring.dart';
 import '../widgets/form_text_field.dart';
 import '../widgets/group_card.dart';
@@ -111,6 +112,44 @@ class _ModulesPageState extends State<ModulesPage>
 
   void _tabChanged() {
     if (!_tabs.indexIsChanging) setState(() {});
+  }
+
+  /// 与首页 / 下载页同一套下划线分类栏。把 TabBarView 的连续滑动进度
+  /// 喂给 [CategoryTabs]，手指拖到一半横线就跟到一半（上游跟手动画）。
+  Widget _tabBar() {
+    final labels = [
+      '已安装 ${_modules?.length ?? 0}',
+      '导入',
+      '在线 ${_onlineCount()}',
+      '个人仓库 ${_personalIndex?.entries.length ?? 0}',
+      '内置',
+    ];
+    final options = [
+      for (var i = 0; i < labels.length; i++) ChoiceOption(i, labels[i]),
+    ];
+    void select(int index) {
+      if (index == _tabs.index) return;
+      _tabs.animateTo(index);
+      setState(() {});
+    }
+
+    Widget tabs(double? progress) => CategoryTabs<int>(
+      options: options,
+      selected: _tabs.index,
+      progress: progress,
+      onSelected: select,
+    );
+
+    final animation = _tabs.animation;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: animation == null
+          ? tabs(null)
+          : AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) => tabs(animation.value),
+            ),
+    );
   }
 
   Future<void> _refresh() async {
@@ -709,36 +748,8 @@ class _ModulesPageState extends State<ModulesPage>
           const SizedBox(width: 12),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: Padding(
-            // 左右 16 与下方按钮/卡片对齐；五个分类在轨道内均匀铺满整行。
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: SizedBox(
-              width: double.infinity,
-              child: CapsuleTabs(
-                // 段宽由文字 + padding 自己撑开，剩余空间 spaceEvenly 均分：
-                // 既不像等分那样让「导入/内置」空出半截，也不会把
-                // 「个人仓库 4」末尾的数字挤到段外被遮住。
-                stretch: true,
-                fontSize: 13.5,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                labels: [
-                  '已安装 ${_modules?.length ?? 0}',
-                  '导入',
-                  '在线 ${_onlineCount()}',
-                  '个人仓库 ${_personalIndex?.entries.length ?? 0}',
-                  '内置',
-                ],
-                index: _tabs.index,
-                animation: _tabs.animation,
-                onChanged: (index) {
-                  if (index == _tabs.index) return;
-                  _tabs.animateTo(index);
-                  setState(() {});
-                },
-              ),
-            ),
-          ),
+          preferredSize: const Size.fromHeight(48),
+          child: _tabBar(),
         ),
       ),
       body: Column(

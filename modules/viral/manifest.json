@@ -1,13 +1,18 @@
 {
   "id": "viral",
   "name": "ViralXXX",
-  "version": "1.8.1",
-  "description": "viralxxxporn.com（病毒式 XXX / OnlyFans 泄露）：中文界面，10 个分类 + 搜索，单集长视频，MP4 直链（480p/720p/1080p）。",
+  "version": "1.8.6",
+  "description": "viralxxxporn.com（病毒式 XXX / OnlyFans 泄露）：中文界面，10 个分类 + 搜索，单集长视频，MP4 直链（480p/720p/1080p）；演员与发布者双入口分别点进看作品。",
   "runtime": "js",
   "api": 1,
   "adult": true,
-  "hosts": ["viralxxxporn.com", "*.viralxxxporn.com"],
-  "capabilities": ["search"],
+  "hosts": [
+    "viralxxxporn.com",
+    "*.viralxxxporn.com"
+  ],
+  "capabilities": [
+    "search"
+  ],
   "allowEmptyCatalog": false,
   "baseUrl": "https://viralxxxporn.com"
 }

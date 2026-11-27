@@ -1443,7 +1443,19 @@ class _DetailPageState extends State<DetailPage> {
           ),
         ),
         Text(meta.join(' · '), style: sub(m.meta)),
-        if (drama.hasAuthor) _authorEntry(drama, m),
+        // 人物入口：站源可给出多个可点人物（如 viral 的演员 + 发布者）。
+        // 主作者一个胶囊，meta 里额外的 uploader 再跟一个，分别进各自作品页。
+        if (drama.hasAuthor || _secondaryPeople(drama).isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (drama.hasAuthor) _authorEntry(drama, m),
+              for (final person in _secondaryPeople(drama))
+                _personEntry(drama.source, person.$1, person.$2, person.$3, m),
+            ],
+          ),
         if (drama.score.isNotEmpty)
           Text('评分 ${drama.score}', style: sub(m.meta)),
         if (drama.category.isNotEmpty) Text(drama.category, style: sub(m.meta)),
@@ -1519,6 +1531,76 @@ class _DetailPageState extends State<DetailPage> {
       authorUrl: drama.authorUrl,
     ),
   );
+
+  /// 站源可在 meta 里附带额外的人物入口（key 以 xg 开头，避免污染资料表）。
+  /// 现在是 viral 的发布者：演员占主作者胶囊，发布者作为第二个胶囊。
+  /// 三元组 = (显示文案, authorName, authorId)。
+  List<(String, String, String)> _secondaryPeople(Drama drama) {
+    final out = <(String, String, String)>[];
+    final name = drama.meta['xgUploaderName']?.trim() ?? '';
+    final id = drama.meta['xgUploaderId']?.trim() ?? '';
+    if (name.isNotEmpty && id.isNotEmpty) {
+      out.add(('上传者 $name', name, id));
+    }
+    return out;
+  }
+
+  /// 额外人物入口胶囊：外观与主作者胶囊一致，点进去同样是 AuthorPage。
+  Widget _personEntry(
+    String source,
+    String label,
+    String authorName,
+    String authorId,
+    _Metrics m,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    return FocusRing(
+      radius: 999,
+      child: Material(
+        color: colors.onSurface.withValues(alpha: 0.055),
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => openPage<void>(
+            context,
+            (_) => AuthorPage(
+              store: widget.store,
+              source: source,
+              author: authorName,
+              authorId: authorId,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 5,
+              children: [
+                Icon(
+                  Icons.person_outline_rounded,
+                  size: 15,
+                  color: colors.onSurfaceVariant,
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: m.tag,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 15,
+                  color: colors.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _followingHeadline(DramaDetails details, _Metrics m, double top) =>
       ConstrainedBox(
@@ -1664,6 +1746,8 @@ class _DetailPageState extends State<DetailPage> {
   List<(String, String, bool)> _metaRows(Map<String, String> meta) {
     final rows = <(String, String, bool)>[];
     for (final entry in meta.entries) {
+      // xg 前缀是站源给 App 内部用的结构化字段（如人物入口），不当资料展示。
+      if (entry.key.toLowerCase().startsWith('xg')) continue;
       if (entry.value.trim().isEmpty) continue;
       final label = metaLabel(entry.key);
       if (label.isEmpty) continue;

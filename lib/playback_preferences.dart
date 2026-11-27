@@ -122,6 +122,7 @@ class PlaybackPreferences {
     this.autoHideControls = true,
     this.hideSystemBars = true,
     this.portraitStyleForWide = false,
+    this.autoLandscapeForWide = false,
     this.autoPictureInPicture = false,
     this.videoFit = VideoFit.auto,
   });
@@ -162,6 +163,9 @@ class PlaybackPreferences {
   final bool autoHideControls;
   final bool hideSystemBars;
   final bool portraitStyleForWide;
+
+  /// 横屏视频一进入播放就自动切到锁定横屏。与 [portraitStyleForWide] 互斥。
+  final bool autoLandscapeForWide;
   final bool autoPictureInPicture;
   final VideoFit videoFit;
 
@@ -198,6 +202,7 @@ class PlaybackPreferences {
     bool? autoHideControls,
     bool? hideSystemBars,
     bool? portraitStyleForWide,
+    bool? autoLandscapeForWide,
     bool? autoPictureInPicture,
     VideoFit? videoFit,
   }) => PlaybackPreferences(
@@ -231,6 +236,7 @@ class PlaybackPreferences {
     autoHideControls: autoHideControls ?? this.autoHideControls,
     hideSystemBars: hideSystemBars ?? this.hideSystemBars,
     portraitStyleForWide: portraitStyleForWide ?? this.portraitStyleForWide,
+    autoLandscapeForWide: autoLandscapeForWide ?? this.autoLandscapeForWide,
     autoPictureInPicture: autoPictureInPicture ?? this.autoPictureInPicture,
     videoFit: videoFit ?? this.videoFit,
   );
@@ -266,6 +272,7 @@ class PlaybackPreferences {
     'autoHideControls': autoHideControls,
     'hideSystemBars': hideSystemBars,
     'portraitStyleForWide': portraitStyleForWide,
+    'autoLandscapeForWide': autoLandscapeForWide,
     'autoPictureInPicture': autoPictureInPicture,
     'videoFit': videoFit.name,
   };
@@ -334,6 +341,7 @@ class PlaybackPreferences {
       autoHideControls: value['autoHideControls'] as bool? ?? true,
       hideSystemBars: value['hideSystemBars'] as bool? ?? true,
       portraitStyleForWide: value['portraitStyleForWide'] as bool? ?? false,
+      autoLandscapeForWide: value['autoLandscapeForWide'] as bool? ?? false,
       autoPictureInPicture: value['autoPictureInPicture'] as bool? ?? false,
       videoFit: VideoFit.values.asNameMap()[value['videoFit']] ?? VideoFit.auto,
     );
