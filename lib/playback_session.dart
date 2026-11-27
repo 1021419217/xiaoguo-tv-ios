@@ -804,6 +804,7 @@ class PlaybackSession extends ChangeNotifier {
           play: _foreground && _playIntent,
         );
         if (!_current(ticket)) return;
+        unawaited(_watchStartupJump(player));
         _openedIndex = index;
         _health.reset();
         await _setRate(_rate);
@@ -947,6 +948,7 @@ class PlaybackSession extends ChangeNotifier {
 
   // 起播后 4 秒内监控位置轨迹：捕获「从开头突然跳到中间」的瞬间，
   // 并抓取 mpv 内部属性快照，区分「真 seek」与「HLS 时间戳偏移(假跳秒)」。
+  // 另覆盖「起播即位于中间」模式：首个读数就 >2s 时同样抓快照。
   Future<void> _watchStartupJump(Player p) async {
     final ticket = _generation;
     Duration? last;
@@ -954,7 +956,19 @@ class PlaybackSession extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 200));
       if (_closed || !_current(ticket) || p != _player) return;
       final pos = p.state.position;
-      if (last != null &&
+      if (last == null && pos > const Duration(seconds: 2)) {
+        final snap = <String>[
+          'dur=${p.state.duration.inMilliseconds}ms',
+          'time-pos=${await _mpvProp(p, 'time-pos')}',
+          'percent=${await _mpvProp(p, 'percent-pos')}',
+          'seeking=${await _mpvProp(p, 'seeking')}',
+          'start=${await _mpvProp(p, 'start')}',
+          'cache=${await _mpvProp(p, 'demuxer-cache-duration')}',
+        ].join(' ');
+        DiaryService.add(
+          '[Play] 起播即位于中间 pos=${pos.inMilliseconds}ms $snap',
+        );
+      } else if (last != null &&
           last < const Duration(milliseconds: 1500) &&
           pos - last > const Duration(seconds: 1)) {
         final snap = <String>[
