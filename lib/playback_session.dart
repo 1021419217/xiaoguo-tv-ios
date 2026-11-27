@@ -785,13 +785,6 @@ class PlaybackSession extends ChangeNotifier {
         _plan = plan;
         installed = true;
         _acceptErrors = true;
-        // mpv 的 start 是播放器级持久属性：一旦某次续播设过秒数，同一个
-        // Player 实例下次 open 会沿用，导致切集后从旧进度起播。续播现在靠
-        // 下方 _resumeSeek 二次定位，这里必须先归零，保证从开头打开。
-        final native = player.platform;
-        if (native is NativePlayer) {
-          await native.setProperty('start', '0');
-        }
         // B：先从 0 打开，让 mpv 解析完整 HLS 索引与分片边界，再 seek 到
         // 记忆位置。比 Media.start 在打开阶段直接定位中间分片稳定得多。
         await player.open(
@@ -810,6 +803,10 @@ class PlaybackSession extends ChangeNotifier {
         // 记忆续播：带超时的二次 seek；失败/超时就留在本集开头继续播。
         if (position > 0 && !plan.local) {
           unawaited(_resumeSeek(position, ticket));
+        } else if (position == 0) {
+          // 切集/普通打开：强制从头。覆盖 mpv start 残留、watch-later、
+          // 同一 Player 实例复用带来的旧位置（切集跳秒的通用兜底）。
+          unawaited(_forceStart(ticket));
         }
       });
     } catch (error) {
@@ -835,6 +832,34 @@ class PlaybackSession extends ChangeNotifier {
     } finally {
       if (warmed != null && !installed) await _release(warmed.session);
       if (retained != null) await _release(retained!.session);
+    }
+  }
+
+  /// 切集强制从头：不论 mpv 是残留了 start 属性、记住了同一播放器的
+  /// 上一次位置，还是 HLS 首分片时间戳偏移，只要拿到时长/缓冲就 seek 到 0。
+  /// 只用于「非续播」的切集/普通打开（position==0）；记忆续播走 _resumeSeek，
+  /// 两者互斥。失败或超时就放弃，不反复重开。
+  Future<void> _forceStart(int ticket) async {
+    if (!_current(ticket) || _closed) return;
+    final deadline = DateTime.now().add(const Duration(seconds: 6));
+    while (_current(ticket) && !_closed) {
+      final state = player.state;
+      if (state.duration > Duration.zero || state.buffer > Duration.zero) {
+        break;
+      }
+      if (DateTime.now().isAfter(deadline)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+    if (!_current(ticket) || _closed) return;
+    final before = player.state.position;
+    DiaryService.add('[Play] 切集归零：打开位置 ${(before.inMilliseconds / 1000).toStringAsFixed(1)}s');
+    // 已经从头就别动，避免刚起播就被 seek 打断。
+    if (before < const Duration(milliseconds: 300)) return;
+    try {
+      await player.seek(Duration.zero).timeout(const Duration(seconds: 4));
+      DiaryService.add('[Play] 切集归零：已 seek 到开头');
+    } catch (_) {
+      DiaryService.add('[Play] 切集归零：seek 失败，保持原样');
     }
   }
 
@@ -919,6 +944,9 @@ class PlaybackSession extends ChangeNotifier {
       await stopping;
       await _selectAudio(next, true);
       if (_current(ticket) && _foreground && _playIntent) await next.play();
+      // standby 是复用的 Player 实例：即使这里 open 过，mpv 仍可能残留
+      // 上一次的 start/watch-later 位置。切集一律强制归零。
+      if (_current(ticket)) unawaited(_forceStart(ticket));
     } catch (_) {
       if (_current(ticket)) _queueRecovery('open_exception');
     }
@@ -954,13 +982,6 @@ class PlaybackSession extends ChangeNotifier {
       await _configure(standby, plan);
       await _limitCache(standby, true);
       await _selectAudio(standby, false);
-      // 竖屏切集走 _swap() 直接把这个 standby 提升为主播放器、不再 open，
-      // 所以必须在这里就把 start 归零，否则会沿用 mpv 残留的续播秒数，
-      // 切集后跳到 20/30/40 秒不等。这是竖屏独有、横屏正常的原因。
-      final platform = standby.platform;
-      if (platform is NativePlayer) {
-        await platform.setProperty('start', '0');
-      }
       await standby.open(
         Media(plan.url, httpHeaders: plan.headers),
         play: false,
