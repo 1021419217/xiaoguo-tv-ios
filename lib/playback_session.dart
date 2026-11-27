@@ -875,7 +875,8 @@ class PlaybackSession extends ChangeNotifier {
     final previousPlan = _plan;
     // 跳秒修复：预热播放器若曾被无声推进，接管前拉回 0。
     // 日志用于确认「预热被消耗」是否真实发生（配合 _open 里的强制暂停）。
-    if (next.state.playing || next.state.position > Duration.zero) {
+    if (next.state.playing ||
+        next.state.position > const Duration(milliseconds: 500)) {
       DiaryService.add(
         '[Play] 诊断：预热被消耗 pos=${next.state.position.inMilliseconds}ms '
         'playing=${next.state.playing}',
@@ -923,9 +924,50 @@ class PlaybackSession extends ChangeNotifier {
       await _setRate(_rate);
       await stopping;
       await _selectAudio(next, true);
-      if (_current(ticket) && _foreground && _playIntent) await next.play();
+      if (_current(ticket) && _foreground && _playIntent) {
+        await next.play();
+        unawaited(_watchStartupJump(next));
+      }
     } catch (_) {
       if (_current(ticket)) _queueRecovery('open_exception');
+    }
+  }
+
+  // 起播后 4 秒内监控位置轨迹：捕获「从开头突然跳到中间」的瞬间，
+  // 并抓取 mpv 内部属性快照，区分「真 seek」与「HLS 时间戳偏移(假跳秒)」。
+  Future<void> _watchStartupJump(Player p) async {
+    final ticket = _generation;
+    Duration? last;
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (_closed || !_current(ticket) || p != _player) return;
+      final pos = p.state.position;
+      if (last != null &&
+          last < const Duration(milliseconds: 1500) &&
+          pos - last > const Duration(seconds: 1)) {
+        final snap = <String>[
+          'dur=${p.state.duration.inMilliseconds}ms',
+          'time-pos=${await _mpvProp(p, 'time-pos')}',
+          'percent=${await _mpvProp(p, 'percent-pos')}',
+          'seeking=${await _mpvProp(p, 'seeking')}',
+          'start=${await _mpvProp(p, 'start')}',
+          'cache=${await _mpvProp(p, 'demuxer-cache-duration')}',
+        ].join(' ');
+        DiaryService.add(
+          '[Play] 跳变捕获 ${last.inMilliseconds}ms->${pos.inMilliseconds}ms $snap',
+        );
+      }
+      last = pos;
+    }
+  }
+
+  Future<String> _mpvProp(Player p, String name) async {
+    final platform = p.platform;
+    if (platform is! NativePlayer) return '?';
+    try {
+      return (await platform.getProperty(name))?.toString() ?? '?';
+    } catch (_) {
+      return '?';
     }
   }
 
