@@ -84,6 +84,9 @@ class PlaybackSession extends ChangeNotifier {
       )) {
         unawaited(_recover('position_stalled'));
       }
+      // 另一种卡顿：position 正常前进（音频在走）但画面不更新。
+      // position 维度的 stalled 抓不到，必须单独看渲染帧号。
+      unawaited(_checkVideoFrozen());
     });
     // 「记忆播放」关闭时，所有入口一律从头播：忽略上层传入的续播位置。
     // 这样详情、本地下载、投屏恢复的行为一致，也彻底不走 mpv 中间分片定位。
@@ -221,6 +224,13 @@ class PlaybackSession extends ChangeNotifier {
   // 自动恢复时应从 0 播，避免反复用同一个记忆卡点定位（死循环）。
   bool _positionAdvanced = false;
   double _unmutedVolume = 100;
+  // 视频冻结看门狗：位置/音频前进但画面不更新时，用帧号停滞判定并唤醒。
+  int _lastFrameNumber = -1;
+  Duration _framePosition = Duration.zero;
+  DateTime? _frozenSince;
+  DateTime? _lastWakeAt;
+  int _wakeAttempts = 0;
+  bool _frameCheckBusy = false;
 
   Player get player => _player;
 
@@ -627,6 +637,7 @@ class PlaybackSession extends ChangeNotifier {
     _loginRequired = false;
     final symptom = switch (reason) {
       'position_stalled' => '画面长时间没有进度',
+      'video_frozen' => '画面卡住不动（有声音）',
       'early_completion' => '视频提前结束',
       'open_exception' => '视频打开失败',
       _ => '播放器报错',
@@ -900,6 +911,80 @@ class PlaybackSession extends ChangeNotifier {
       } catch (e) {
         DiaryService.add('[Play] 回开头失败: $e');
       }
+    }
+  }
+
+  /// 视频冻结看门狗：进度/音频正常前进但画面定格时自动唤醒。
+  ///
+  /// 症状（用户实际遇到）：①切集后有的集画面不动、进度条却在走，手动快进
+  /// 一下才恢复；②切到别的 App 再回来，声音继续但画面不动，滑动几秒恢复。
+  /// 两者本质相同——音频/解复用通路正常，**视频解码或输出层停摆**。
+  ///
+  /// 判定依据是 mpv 的 `estimated-frame-number`（已渲染帧号）：位置前进了
+  /// 但帧号不涨，就是画面冻结。唤醒方式与用户手动滑动一致——在当前位置
+  /// 向前 seek 0.3 秒，触发关键帧重解、重建视频输出。连续两次仍无效才走
+  /// 常规恢复（切线路/重开），避免一直反复 seek。
+  Future<void> _checkVideoFrozen() async {
+    if (_frameCheckBusy || _closed || !_foreground || !_playIntent) return;
+    if (_loading || _error != null) return;
+    if (!player.state.playing || player.state.buffering) {
+      _frozenSince = null;
+      return;
+    }
+    final platform = player.platform;
+    if (platform is! NativePlayer) return;
+    _frameCheckBusy = true;
+    try {
+      final raw = await platform.getProperty('estimated-frame-number');
+      final frames = int.tryParse(String(raw).trim()) ?? -1;
+      if (frames < 0) return;
+      final position = player.state.position;
+      final advanced = position - _framePosition;
+      final stuck =
+          _lastFrameNumber >= 0 && frames <= _lastFrameNumber;
+      _framePosition = position;
+      _lastFrameNumber = frames;
+      if (advanced > const Duration(milliseconds: 400) && stuck) {
+        final now = DateTime.now();
+        _frozenSince ??= now;
+        final frozenFor = now.difference(_frozenSince!);
+        final cooledDown = _lastWakeAt == null ||
+            now.difference(_lastWakeAt!) >= const Duration(seconds: 5);
+        if (frozenFor >= const Duration(seconds: 2) && cooledDown) {
+          _lastWakeAt = now;
+          _frozenSince = null;
+          _wakeAttempts += 1;
+          DiaryService.add(
+            '[Play] 画面冻结（位置在走/帧号不涨），第 $_wakeAttempts 次唤醒',
+          );
+          if (_wakeAttempts > 2) {
+            _wakeAttempts = 0;
+            unawaited(_recover('video_frozen'));
+          } else {
+            unawaited(_wakeVideo(position));
+          }
+        }
+      } else if (!stuck) {
+        if (_frozenSince != null) {
+          DiaryService.add('[Play] 画面已恢复');
+        }
+        _frozenSince = null;
+        _wakeAttempts = 0;
+      }
+    } catch (_) {
+      // 该属性不可用就跳过检测，绝不影响正常播放。
+    } finally {
+      _frameCheckBusy = false;
+    }
+  }
+
+  Future<void> _wakeVideo(Duration position) async {
+    try {
+      await player
+          .seek(position + const Duration(milliseconds: 300))
+          .timeout(const Duration(seconds: 3));
+    } catch (e) {
+      DiaryService.add('[Play] 画面唤醒失败: $e');
     }
   }
 
@@ -1365,6 +1450,13 @@ class PlaybackSession extends ChangeNotifier {
     DiaryService.add(visible ? '[Play] 应用回到前台' : '[Play] 应用不可见，暂停播放');
     _foreground = visible;
     _health.reset();
+    // 前后台切换会跨过一段时间：position 可能跳变而帧号停在上次。
+    // 清空帧检测基线，避免回来第一秒被判成「画面冻结」而误唤醒。
+    // 真正的冻结（iOS 回收 VideoToolbox）会由看门狗在 2 秒后抓住。
+    _lastFrameNumber = -1;
+    _framePosition = Duration.zero;
+    _frozenSince = null;
+    _wakeAttempts = 0;
     _sync();
     if (!visible) {
       endBoost();
