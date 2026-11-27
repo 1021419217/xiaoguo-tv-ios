@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core_bridge.dart';
 import '../playback_session.dart' show videoDisplaySize;
+import '../player_guards.dart';
 import 'live_models.dart';
 import 'live_repository.dart';
 import 'live_sources.dart';
@@ -75,6 +76,9 @@ class LivePlaybackController extends ChangeNotifier {
             .setProperty('force-seekable', 'yes', waitForInitialization: true)
             .catchError((Object _) {}),
       );
+      // 与主播放器同一套防护：直播/短剧切台时不让 mpv 读 watch-later
+      // 把画面恢复到上次位置（这条路径 3.0.4 之前完全没设过）。
+      unawaited(applyNoResumeGuard(player));
     }
     _controller = VideoController(player);
     _subscriptions.add(player.stream.error.listen(_onError));

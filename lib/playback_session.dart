@@ -12,6 +12,7 @@ import 'diary_service.dart';
 import 'local_store.dart';
 import 'models.dart';
 import 'playback_loader.dart';
+import 'player_guards.dart';
 import 'playback_preferences.dart';
 import 'playback_preloader.dart';
 import 'playback_recovery.dart';
@@ -689,11 +690,11 @@ class PlaybackSession extends ChangeNotifier {
     // 取决于该集上次看到哪）。这个 seek 发生在 open 之后，所以 Dart 层在
     // open 刚返回时读到的 position 还是 0 —— 正是日志里「打开位置 0.0s」
     // 却跳秒的矛盾来源。历史上单设 start='0' 修不好，也是被它覆盖。
-    // 续播一律由 App 自己的 _resumeSeek 精确控制，这里彻底关掉 mpv 自动续播。
+    // 续播一律由 App 自己的 _resumeSeek 精确控制，mpv 层不要自动恢复。
     // 3.0.4 实测日志：只设 resume-playback=no 仍会跳到 8.0/28.0/29.7s，
-    // 说明还有别的恢复通道——watch-later 的保存/读取要一并关死。
-    await platform.setProperty('resume-playback', 'no');
-    await platform.setProperty('save-position-on-quit', 'no');
+    // 说明还有别的恢复通道；3.0.5 起统一走公共防护（含显式 start=0）。
+    // 这里覆盖「主播放器」和「切集预加载 standby」（_open 也调用本函数）。
+    await applyNoResumeGuard(target, startAt: 0);
     if (!plan.local &&
         (Uri.tryParse(plan.url)?.path.toLowerCase().endsWith('.m3u8') ?? false)) {
       await platform.setProperty('demuxer-readahead-secs', '30');
@@ -859,12 +860,13 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  /// 切集起播诊断：只记录 open 后 350ms 的真实起播位置，不再强制 seek。
+  /// 切集起播诊断 + 兜底归零。
   ///
-  /// 跳秒根因已由 _configure 的 resume-playback=no 关掉 mpv 自动续播解决。
-  /// 原来的 seek(0) 是「跳秒之后再跳回来」，等于连续两次 seek：mpv 重置
-  /// 解码器、HLS 重新拉分片、VideoToolbox 重建会话，表现就是切集后
-  /// 花屏两三秒。保留诊断日志，用来确认起播位置是否已经回到 0。
+  /// 主防线是 applyNoResumeGuard（resume-playback=no + save-position-on-quit=no
+  /// + 显式 start=0），从源头不让 mpv 恢复上次位置，因此正常情况下不会触发
+  /// 这里的 seek，也就没有「两次 seek 导致花屏」的问题。
+  /// 只有起播仍明显偏离（>2s，例如某些 HLS 首分片时间戳不从 0 起）才归零一次，
+  /// 并把 seek 后的真实位置写进日记，便于区分是续播残留还是分片时间戳。
   Future<void> _observeStart(int ticket) async {
     if (!_current(ticket) || _closed) return;
     final deadline = DateTime.now().add(const Duration(seconds: 6));
