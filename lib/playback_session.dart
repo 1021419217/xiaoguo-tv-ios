@@ -947,7 +947,7 @@ class PlaybackSession extends ChangeNotifier {
     _frameCheckBusy = true;
     try {
       final raw = await platform.getProperty('estimated-frame-number');
-      final frames = int.tryParse(String(raw).trim()) ?? -1;
+      final frames = int.tryParse('$raw'.trim()) ?? -1;
       if (frames < 0) return;
       final position = player.state.position;
       final advanced = position - _framePosition;
