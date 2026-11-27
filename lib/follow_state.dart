@@ -192,9 +192,16 @@ class FollowCheck {
 
 int resumeEpisodeIndex(List<Episode> episodes, WatchEntry? watch) {
   if (episodes.isEmpty || watch == null) return 0;
+  // 只点开过、几乎没播（<3 秒）当作没看过，从第一集开始。
+  // 短视频/列表的自动预览、误触详情都会留下这种"假进度"，不清掉的话
+  // 下次进来会莫名从某一集（往往是最后一集）接着播。
+  if (watch.position < 3) return 0;
   final current = episodes.indexWhere((item) => item.number == watch.episode);
   if (current >= 0 && !watch.finished) return current;
   final next = episodes.indexWhere((item) => item.number > watch.episode);
   if (next >= 0) return next;
-  return current >= 0 ? current : episodes.length - 1;
+  // 记录里的集号在当前剧集列表里对不上（换源、集数变动、记录串了），
+  // 以前兜底到「最后一集」，表现为没看过却直接播最后几集；
+  // 现在一律回到第一集，符合"没头绪就看开头"的直觉。
+  return current >= 0 ? current : 0;
 }

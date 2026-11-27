@@ -31,7 +31,8 @@ const BROWSER_HEADERS = {
 
 // 分类 = 最新 + 站点真实标签（/tags 页核对过）。path 已含查询串。
 const CATEGORIES = [
-  { id: 'new',     name: '最新',   path: '/videos?x=updated' },
+  { id: 'new',        name: '最新', path: '/videos?x=updated' },
+  { id: 'uncensored', name: '无码', path: '/videos?x=uncensored' },
   { id: 'bigtits', name: '巨乳',   path: '/videos?t=Big+Tits' },
   { id: 'amateur', name: '素人',   path: '/videos?t=Amateur' },
   { id: 'married', name: '人妻',   path: '/videos?t=Married+Woman' },
