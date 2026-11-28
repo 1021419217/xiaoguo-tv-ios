@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import '../../app_device.dart';
 import '../../core_bridge.dart';
 import '../../local_store.dart';
 import '../../models.dart';
@@ -119,10 +118,7 @@ class _ModulesPageState extends State<ModulesPage>
     super.dispose();
   }
 
-  /// 上次已震动反馈的标签页。listener 每帧都触发，必须去重。
-  int _vibratedTab = 0;
-
-  /// 点击跨多页时动画会依次经过中间页，这些不是用户意图，屏蔽中途震动。
+  /// 点击跨多页时动画会依次经过中间页，屏蔽中途状态抖动。
   int? _animatingTo;
 
   void _tabChanged() {
@@ -133,12 +129,12 @@ class _ModulesPageState extends State<ModulesPage>
     // 滑过一半立刻切换，三者同步。
     final pos = _tabs.animation?.value ?? _tabs.index.toDouble();
     final page = pos.round().clamp(0, _tabs.length - 1).toInt();
-    if (_animatingTo != null) {
-      if (page == _animatingTo && !_tabs.indexIsChanging) _animatingTo = null;
-    } else if (page != _vibratedTab) {
-      _vibratedTab = page;
-      unawaited(AppDevice.softTick());
+    if (_animatingTo != null &&
+        page == _animatingTo &&
+        !_tabs.indexIsChanging) {
+      _animatingTo = null;
     }
+    // 模块页切换不带震动（用户要求取消），只保留跟手高亮。
     if (!_tabs.indexIsChanging) setState(() {});
   }
 

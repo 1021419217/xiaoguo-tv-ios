@@ -3,8 +3,6 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../../app_device.dart';
 import '../../download_converter.dart';
 import '../../download_overview.dart';
 import '../../follow_updater.dart';
@@ -208,7 +206,7 @@ class _AppShellState extends State<AppShell>
       return navigator.popUntil((route) => route.isFirst);
     }
     // 全剧TV 同款手感：再次点当前 tab 触发回顶 / 刷新时给一次轻震。
-    unawaited(AppDevice.softTick());
+    unawaited(HapticFeedback.selectionClick());
     if (tab == AppTab.explore) return _explore.currentState?.reselect();
     for (final position in _tabScrolls[tab.index].positions) {
       if (position.pixels <= position.minScrollExtent) continue;
@@ -352,7 +350,7 @@ class _AppShellState extends State<AppShell>
                       child: NavigationBar(
                         selectedIndex: tabs.indexOf(_tab),
                         onDestinationSelected: (index) {
-                          unawaited(AppDevice.softTick());
+                          unawaited(HapticFeedback.selectionClick());
                           _tap(tabs[index]);
                         },
                         destinations: [

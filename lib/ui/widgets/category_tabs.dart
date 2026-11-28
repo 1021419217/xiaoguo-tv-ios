@@ -17,6 +17,7 @@ class CategoryTabs<T> extends StatefulWidget {
     this.onShowAll,
     this.autoReveal = true,
     this.progress,
+    this.pager,
   });
   final List<ChoiceOption<T>> options;
   final T selected;
@@ -29,6 +30,11 @@ class CategoryTabs<T> extends StatefulWidget {
   /// 传了就每帧按它插值下划线位置，让下划线跟着外层 TabBarView / PageView
   /// 一起走；不传则仍是「选中值变了再滑过去」的老行为。
   final double? progress;
+
+  /// 上游同款：直接把 PageView 的 [PageController] 传进来。
+  /// 下划线画家 [repaint: pager]，每帧读 `pager.page` 在相邻两个 tab 间插值，
+  /// 不需要外部 notifier，也不重建分类条——跟手且始终可见。
+  final PageController? pager;
 
   @override
   State<CategoryTabs<T>> createState() => CategoryTabsState<T>();
@@ -48,11 +54,11 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   @override
   void didUpdateWidget(covariant CategoryTabs<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 跟手横条（progress != null）禁止自动滚动分类条：滑动时 selected 每帧
-    // 跟着 PageView 变，无条件居中会和跟手下划线打架，表现为整条弹跳。
-    // 只有「全部分类」面板选完才走 revealSelected() 主动定位一次。
+    // 与上游一致：选中项变化就把该项滚到正中（alignment: 0.5）。
+    // pager 模式下 selected 只在页面停稳时变，居中一次，不会每帧弹跳。
+    // 旧的 progress 模式下 selected 每帧都在变，仍禁止自动滚动。
     if (widget.autoReveal &&
-        widget.progress == null &&
+        (widget.pager != null || widget.progress == null) &&
         oldWidget.selected != widget.selected) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
     }
@@ -66,12 +72,21 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
     super.dispose();
   }
 
-  /// 贴边最小滚动（2.5.5+50 的用户认可版本）：选中项已经可见就完全不动，
-  /// 只有确实滚出视口时才贴边滚一下。不再无条件 alignment:0.5 居中——
-  /// 那会在长分类条上产生大幅弹跳，用户明确要求去掉。
+  /// pager 模式照抄上游：选中项滚到正中。因为 selected 是离散值（只在
+  /// 页面停稳后变），一次切页只滚一次，不会像旧 progress 模式那样每帧弹跳。
+  /// 旧 progress 模式仍保留贴边最小滚动给还在用它的页面。
   void _reveal() {
     final context = _keys[widget.selected]?.currentContext;
     if (context == null || !mounted) return;
+    if (widget.pager != null) {
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
     final box = context.findRenderObject();
     final viewport = _scroll.position.context.storageContext.findRenderObject();
     if (box is! RenderBox || viewport is! RenderBox) return;
@@ -170,10 +185,11 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
       (value, _) => !widget.options.any((option) => option.value == value),
     );
     final television = form == FormFactor.television;
-    // 有连续进度时每帧插值，不再走「测量后动画」那条路。
-    final progress = widget.progress;
-    if (progress == null) {
-      // 帧后测量选中 tab 的位置，驱动那条下划线定位 / 滑动。
+    // pager 模式：画家直接订阅 PageController，跟手重绘，完全不走测量/插值。
+    // progress 模式：每帧按 notifier 插值。两者都没有：帧后测量选中项。
+    final pager = widget.pager;
+    final progress = pager == null ? widget.progress : null;
+    if (progress == null && pager == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _measure(padding));
     }
     final interpolated = progress == null
@@ -255,9 +271,30 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
                               ),
                           ],
                         ),
-                        // 上游机制：一条线测量选中项后，从左滑到右；线宽贴合
-                        // 文字宽度。颜色走中性高光而非主题色，融入玻璃界面。
-                        if (indicator != null)
+                        // 上游机制：画家直接读 pager.page 每帧插值，线跟着
+                        // 手指走、始终可见；颜色走中性高光而非主题色。
+                        if (pager case final pager?)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _PagerIndicator(
+                                  pager: pager,
+                                  row: _row,
+                                  tabs: [
+                                    for (final option in widget.options)
+                                      _keys[option.value]!,
+                                  ],
+                                  selected: widget.options.indexWhere(
+                                    (option) => option.value == widget.selected,
+                                  ),
+                                  inset: padding,
+                                  color: lineColor,
+                                ),
+                              ),
+                            ),
+                          )
+                        // 非 pager 模式：一条线测量选中项后滑过去。
+                        else if (indicator != null)
                           AnimatedPositioned(
                             duration: sliding
                                 ? Motion.of(context, Motion.medium)
@@ -312,6 +349,60 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
       ),
     );
   }
+}
+
+/// 上游同款跟手下划线画家：订阅 PageController 每帧重绘，在相邻两个 tab
+/// 之间按真实滑动进度插值，线始终跟着手指、不会因为重建而消失。
+class _PagerIndicator extends CustomPainter {
+  _PagerIndicator({
+    required this.pager,
+    required this.row,
+    required this.tabs,
+    required this.selected,
+    required this.inset,
+    required this.color,
+  }) : super(repaint: pager);
+  final PageController pager;
+  final GlobalKey row;
+  final List<GlobalKey> tabs;
+  final int selected;
+  final double inset;
+  final Color color;
+
+  Rect? _rect(int index) {
+    if (index < 0 || index >= tabs.length) return null;
+    final tab = tabs[index].currentContext?.findRenderObject();
+    final parent = row.currentContext?.findRenderObject();
+    if (tab is! RenderBox || parent is! RenderBox || !tab.hasSize) return null;
+    final origin = tab.localToGlobal(Offset.zero, ancestor: parent);
+    return Rect.fromLTWH(origin.dx + inset, 0, tab.size.width - inset * 2, 0);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final page =
+        pager.hasClients &&
+            pager.positions.length == 1 &&
+            pager.position.hasContentDimensions
+        ? pager.page ?? selected.toDouble()
+        : selected.toDouble();
+    final low = page.floor();
+    final from = _rect(low);
+    final to = _rect(low + 1) ?? from;
+    if (from == null || to == null) return;
+    final rect = Rect.lerp(from, to, page - low)!;
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTWH(rect.left, size.height - 3, rect.width, 3),
+        topLeft: const Radius.circular(3),
+        topRight: const Radius.circular(3),
+      ),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PagerIndicator oldDelegate) => true;
 }
 
 /// 分类条按标签配图标：火（推荐/热门）、时钟（最新）、柱状（排行）、网格（分类）。

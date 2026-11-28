@@ -60,9 +60,12 @@ class ExplorePageState extends State<ExplorePage> {
   final _search = TextEditingController();
   final _tabsKey = GlobalKey<CategoryTabsState<String>>();
   final _refreshKey = GlobalKey<PullRefreshState>();
-  /// 首页分类条的跟手连续进度：由 SwipeCategoryLayer 每帧回传，
-  /// 只重建分类条、不牵动整页。
-  final _tabProgress = ValueNotifier<double>(0);
+
+  /// 上游同款：分类条和 PageView 共用同一个控制器，下划线画家直接订阅它，
+  /// 不需要额外的进度 notifier。
+  PageController? _pager;
+  String? _pagerSource;
+
   bool _autoVerifying = false;
 
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
@@ -126,7 +129,7 @@ class ExplorePageState extends State<ExplorePage> {
     _pageScrolls.clear();
     _pageRefreshKeys.clear();
     _search.dispose();
-    _tabProgress.dispose();
+    _pager?.dispose();
     super.dispose();
   }
 
@@ -182,7 +185,7 @@ class ExplorePageState extends State<ExplorePage> {
 
   void _selectTab(String id) {
     if (id != _explore!.tab.id) {
-      unawaited(AppDevice.softTick());
+      unawaited(HapticFeedback.selectionClick());
       _explore!.select(id);
       return;
     }
@@ -212,7 +215,7 @@ class ExplorePageState extends State<ExplorePage> {
       grid: ChoiceGrid.categories,
     );
     if (value != null) {
-      unawaited(AppDevice.softTick());
+      unawaited(HapticFeedback.selectionClick());
       explore.select(value);
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _tabsKey.currentState?.revealSelected(),
@@ -295,20 +298,19 @@ class ExplorePageState extends State<ExplorePage> {
             padding: EdgeInsets.symmetric(
               horizontal: form == FormFactor.phone ? 0 : inset,
             ),
-            // 跟手蚯蚓横条：PageView 的连续进度只重建这一层分类栏。
-            child: ValueListenableBuilder<double>(
-              valueListenable: _tabProgress,
-              builder: (context, progress, _) => CategoryTabs<String>(
-                key: _tabsKey,
-                options: [
-                  for (final tab in explore.tabs)
-                    ChoiceOption(tab.id, tab.name),
-                ],
-                selected: explore.tab.id,
-                progress: explore.tabs.length > 1 ? progress : null,
-                onSelected: _selectTab,
-                onShowAll: _pickCategory,
-              ),
+            // 上游同款：分类条与 PageView 共用控制器，下划线画家自己订阅，
+            // 滑动时分类条不重建，线始终跟手可见。
+            child: CategoryTabs<String>(
+              key: _tabsKey,
+              options: [
+                for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
+              ],
+              selected: explore.tab.id,
+              pager: _swipes(form) && explore.tabs.length > 1
+                  ? _pagerFor(explore)
+                  : null,
+              onSelected: _selectTab,
+              onShowAll: _pickCategory,
             ),
           ),
           Positioned(
@@ -471,6 +473,20 @@ class ExplorePageState extends State<ExplorePage> {
   bool _swipes(FormFactor form) =>
       form == FormFactor.phone || form == FormFactor.pad;
 
+  /// 与上游 _pagerFor 一致：按站源复用同一个 PageController，
+  /// 换站源时才重建并以上次分类为初始页。
+  PageController _pagerFor(ExploreFeed explore) {
+    final source = explore.source?.id;
+    final pager = _pager;
+    if (pager != null && source == _pagerSource) return pager;
+    if (pager != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => pager.dispose());
+    }
+    _pagerSource = source;
+    final index = explore.tabs.indexWhere((tab) => tab.id == explore.tab.id);
+    return _pager = PageController(initialPage: index < 0 ? 0 : index);
+  }
+
   Widget _swipeTabs(
     ExploreFeed explore,
     FormFactor form,
@@ -506,7 +522,7 @@ class ExplorePageState extends State<ExplorePage> {
       labels: [for (final tab in tabs) tab.name],
       onIndexChanged: (i) => explore.select(tabs[i].id),
       hintTop: hintTop,
-      progress: _tabProgress,
+      pager: _pagerFor(explore),
       itemBuilder: (context, page) {
         final tab = tabs[page];
         return KeyedSubtree(

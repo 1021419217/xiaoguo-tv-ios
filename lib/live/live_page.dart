@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../app_device.dart';
 import '../ui/app_scope.dart';
 import '../local_store.dart';
 
@@ -609,7 +607,7 @@ class _LivePageState extends State<LivePage> {
       controller: _pager,
       itemCount: _visiblePlatforms.length + 1,
       onPageChanged: (page) {
-        unawaited(AppDevice.softTick());
+        unawaited(HapticFeedback.selectionClick());
         final id = _idAtPage(page);
         if (id == null) return;
         _selectPlatform(id, fromSwipe: true);
