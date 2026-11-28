@@ -58,6 +58,8 @@ class _HistoryPageState extends State<HistoryPage> {
   final _entered = <Object>{};
   var _source = '';
   Set<String>? _selection;
+  /// 跟手横条的连续进度，由 SwipeCategoryLayer 每帧回传。
+  final _tabProgress = ValueNotifier<double>(0);
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _HistoryPageState extends State<HistoryPage> {
     _firstPoster.dispose();
     _editButton.dispose();
     _searchField.dispose();
+    _tabProgress.dispose();
     super.dispose();
   }
 
@@ -298,13 +301,17 @@ class _HistoryPageState extends State<HistoryPage> {
 
   /// 首页同款下划线分类条，替代原来的紫色 ChoiceChip。
   /// 站源筛选本质就是分类切换，没理由和首页长两套样子。
-  Widget _sourceTabs(_View view) => CategoryTabs<String>(
-    options: [
-      const ChoiceOption('', '全部'),
-      for (final site in view.sources) ChoiceOption(site.id, site.name),
-    ],
-    selected: view.source,
-    onSelected: (id) => setState(() => _source = id),
+  Widget _sourceTabs(_View view) => ValueListenableBuilder<double>(
+    valueListenable: _tabProgress,
+    builder: (context, progress, _) => CategoryTabs<String>(
+      options: [
+        const ChoiceOption('', '全部'),
+        for (final site in view.sources) ChoiceOption(site.id, site.name),
+      ],
+      selected: view.source,
+      progress: view.sources.isNotEmpty ? progress : null,
+      onSelected: (id) => setState(() => _source = id),
+    ),
   );
 
   /// 左右滑动切换下方「站源」分类，与追剧页、下载页的手势保持一致。
@@ -326,6 +333,7 @@ class _HistoryPageState extends State<HistoryPage> {
       labels: ['全部', for (final site in view.sources) site.name],
       onIndexChanged: (next) => setState(() => _source = ids[next]),
       hintTop: 8,
+      progress: _tabProgress,
       itemBuilder: (context, i) {
         final id = ids[i];
         return buildPage(

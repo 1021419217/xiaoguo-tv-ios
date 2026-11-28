@@ -461,18 +461,30 @@ class _LivePageState extends State<LivePage> {
   /// 不再在分类条尾部并排挤三个胶囊。
   Widget _platformBar() {
     final favourites = widget.store.favourites.length;
-    return CategoryTabs<String>(
-      options: [
-        ChoiceOption(
-          _favouritesId,
-          favourites == 0 ? '收藏' : '收藏 $favourites',
-        ),
-        for (final platform in _visiblePlatforms)
-          ChoiceOption(platform.id, platform.name),
-      ],
+    final options = [
+      ChoiceOption(
+        _favouritesId,
+        favourites == 0 ? '收藏' : '收藏 $favourites',
+      ),
+      for (final platform in _visiblePlatforms)
+        ChoiceOption(platform.id, platform.name),
+    ];
+    Widget tabs(double? progress) => CategoryTabs<String>(
+      options: options,
       selected: _platform,
+      progress: progress,
       onSelected: _selectPlatform,
       onShowAll: _pickCategory,
+    );
+    // 与首页同款跟手横条：直接读 _pager 的连续位置。手机端才有 PageView，
+    // 宽屏/电视走网格、_pager 无 client，此时退化为选中值驱动的普通横条。
+    final pager = _pager;
+    return AnimatedBuilder(
+      animation: pager,
+      builder: (context, _) {
+        final p = pager.hasClients ? pager.page : null;
+        return tabs(p == null ? null : p.clamp(0.0, (options.length - 1).toDouble()));
+      },
     );
   }
 

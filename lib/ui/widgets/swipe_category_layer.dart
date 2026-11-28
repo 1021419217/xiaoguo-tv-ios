@@ -25,6 +25,7 @@ class SwipeCategoryLayer extends StatefulWidget {
     this.itemBuilder,
     this.hintTop = 12,
     this.reservedTop,
+    this.progress,
   });
 
   final int itemCount;
@@ -44,6 +45,11 @@ class SwipeCategoryLayer extends StatefulWidget {
   /// 旧模式专用：落在 [reservedTop] 以内的按下不参与切分类手势
   /// （首页大海报自己的 PageView 用）。真 PageView 模式由嵌套手势优先接管。
   final double Function()? reservedTop;
+
+  /// 连续滑动进度出口（0..itemCount-1）。传入后用 ValueNotifier 每帧回传
+  /// PageView 的实时位置，供外层分类条画「跟手蚯蚓横条」；不传则无影响。
+  /// 用 notifier 而不是回调，是为了让外层只重建分类条、不牵动整页 setState。
+  final ValueNotifier<double>? progress;
 
   @override
   State<SwipeCategoryLayer> createState() => _SwipeCategoryLayerState();
@@ -103,6 +109,18 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
         if (notification is ScrollStartNotification &&
             notification.dragDetails != null) {
           _animatingTo = null;
+        }
+        // 每帧把 PageView 的连续位置喂给外层分类条，做跟手横条。
+        // 用 notifier.value 直接赋值（相等时不通知），避免无谓重建。
+        final notifier = widget.progress;
+        if (notifier != null &&
+            notification is ScrollNotification &&
+            controller.hasClients) {
+          final p = controller.page;
+          if (p != null) {
+            final value = p.clamp(0.0, (widget.itemCount - 1).toDouble());
+            if (notifier.value != value) notifier.value = value;
+          }
         }
         return false;
       },

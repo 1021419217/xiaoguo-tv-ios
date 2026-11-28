@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
@@ -72,16 +74,22 @@ Map<String, String> _missingSources(
 
 class _ModulesPageState extends State<ModulesPage>
     with SingleTickerProviderStateMixin {
+  // 页面级缓存：切走再切回时先用上次的列表渲染，不再显示转圈圈。
+  // 数据仍会在后台刷新，但用户看到的始终是内容而不是「闪一下的圆圈」。
+  static List<SourceModule>? _modulesCache;
+  static ModuleStore? _indexCache;
+  static ModuleStore? _personalCache;
+
   late final _tabs = TabController(length: 5, vsync: this)
     ..addListener(_tabChanged);
-  List<SourceModule>? _modules;
+  List<SourceModule>? _modules = _modulesCache;
   List<String>? _moving;
   String? _error;
   bool _testing = false;
   Map<String, int?> _latency = const {};
-  ModuleStore? _index;
+  ModuleStore? _index = _indexCache;
   String? _indexError;
-  ModuleStore? _personalIndex;
+  ModuleStore? _personalIndex = _personalCache;
   String? _personalIndexError;
   /// 个人仓库索引的拉取时间：用来在页面上显示「索引更新于 X 分钟前」，
   /// 让用户能判断是「索引本身旧了」还是「真的没有新版本」。
@@ -110,7 +118,17 @@ class _ModulesPageState extends State<ModulesPage>
     super.dispose();
   }
 
+  /// 上次已震动反馈的标签页。TabController 的 listener 每帧都触发，
+  /// 必须按 index 去重，否则一次滑动会狂震几十下。
+  int _vibratedTab = 0;
+
   void _tabChanged() {
+    if (!mounted) return;
+    // 与首页滑分类同款：每越过一个分类轻震一次（点击切页也震一次）。
+    if (_tabs.index != _vibratedTab) {
+      _vibratedTab = _tabs.index;
+      unawaited(HapticFeedback.selectionClick());
+    }
     if (!_tabs.indexIsChanging) setState(() {});
   }
 
@@ -156,11 +174,13 @@ class _ModulesPageState extends State<ModulesPage>
     try {
       final modules = await _repository.modules();
       if (mounted) {
+        final list = [
+          for (final module in modules)
+            if (module.id != 'supjav') module,
+        ];
         setState(() {
-          _modules = [
-            for (final module in modules)
-              if (module.id != 'supjav') module,
-          ];
+          _modules = list;
+          _modulesCache = list;
           _error = null;
         });
       }
@@ -170,22 +190,22 @@ class _ModulesPageState extends State<ModulesPage>
   }
 
   Future<void> _loadIndex({bool notify = false}) async {
-    setState(() {
-      _index = null;
-      _indexError = null;
-    });
+    // 不再把旧索引清空：保留旧数据继续显示，避免切换分类时圆圈闪一下。
     try {
       final index = await _repository.moduleIndex();
       if (mounted) {
-        setState(
-          () => _index = ModuleStore(
-            [
-              for (final entry in index.entries)
-                if (entry.id != 'supjav') entry,
-            ],
-            warning: index.warning,
-          ),
+        final store = ModuleStore(
+          [
+            for (final entry in index.entries)
+              if (entry.id != 'supjav') entry,
+          ],
+          warning: index.warning,
         );
+        setState(() {
+          _index = store;
+          _indexCache = store;
+          _indexError = null;
+        });
         if (notify) _toastRefresh(_index?.entries.length ?? 0, null);
       }
     } catch (failure) {
@@ -214,22 +234,22 @@ class _ModulesPageState extends State<ModulesPage>
   }
 
   Future<void> _loadPersonalIndex({bool notify = false}) async {
-    setState(() {
-      _personalIndex = null;
-      _personalIndexError = null;
-    });
+    // 同上：保留旧数据，不闪圆圈。
     try {
       final index = await _repository.personalModuleIndex();
       if (mounted) {
-        setState(
-          () => _personalIndex = ModuleStore(
-            [
-              for (final entry in index.entries)
-                if (entry.id != 'supjav') entry,
-            ],
-            warning: index.warning,
-          ),
+        final store = ModuleStore(
+          [
+            for (final entry in index.entries)
+              if (entry.id != 'supjav') entry,
+          ],
+          warning: index.warning,
         );
+        setState(() {
+          _personalIndex = store;
+          _personalCache = store;
+          _personalIndexError = null;
+        });
         _personalIndexAt = DateTime.now();
         if (notify) {
           final entries = _personalIndex?.entries ?? const [];
@@ -490,9 +510,9 @@ class _ModulesPageState extends State<ModulesPage>
       // 加起来一百多像素高。改成一行两个按钮，节省了大部分纵向空间。
       if (!_store.locked)
         Padding(
-          // 上下留白对称：Tab 栏自带 10px 底距，这里补 2px 凑成 12；
-          // 下方给 12px，与 header 归零后的间距一致，不再「上空下紧」。
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+          // 上下留白对称：Tab 栏本身没有垂直内距，这里上下都给 12px，
+          // 与底部列表卡片的间距一致，不再「上窄下宽」。
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(
             children: [
               Expanded(
@@ -1312,14 +1332,31 @@ class _AddressDialogState extends State<_AddressDialog> {
   );
 }
 
+/// 冷启动首帧的静态占位：不用 CircularProgressIndicator，避免数据秒回后
+/// 转圈圈只闪一帧造成的割裂感。用与卡片接近高度的浅色块过渡，稳定不跳。
 class _Loading extends StatelessWidget {
   const _Loading();
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.all(24),
-    child: Center(child: CircularProgressIndicator()),
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (var i = 0; i < 3; i++)
+            Container(
+              height: 92,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Note extends StatelessWidget {

@@ -60,6 +60,9 @@ class ExplorePageState extends State<ExplorePage> {
   final _search = TextEditingController();
   final _tabsKey = GlobalKey<CategoryTabsState<String>>();
   final _refreshKey = GlobalKey<PullRefreshState>();
+  /// 首页分类条的跟手连续进度：由 SwipeCategoryLayer 每帧回传，
+  /// 只重建分类条、不牵动整页。
+  final _tabProgress = ValueNotifier<double>(0);
   bool _autoVerifying = false;
 
   /// 手机端顶栏是浮在内容上的磨砂层，需要知道自己多高，才能给内容留出首屏空白。
@@ -123,6 +126,7 @@ class ExplorePageState extends State<ExplorePage> {
     _pageScrolls.clear();
     _pageRefreshKeys.clear();
     _search.dispose();
+    _tabProgress.dispose();
     super.dispose();
   }
 
@@ -291,14 +295,20 @@ class ExplorePageState extends State<ExplorePage> {
             padding: EdgeInsets.symmetric(
               horizontal: form == FormFactor.phone ? 0 : inset,
             ),
-            child: CategoryTabs<String>(
-              key: _tabsKey,
-              options: [
-                for (final tab in explore.tabs) ChoiceOption(tab.id, tab.name),
-              ],
-              selected: explore.tab.id,
-              onSelected: _selectTab,
-              onShowAll: _pickCategory,
+            // 跟手蚯蚓横条：PageView 的连续进度只重建这一层分类栏。
+            child: ValueListenableBuilder<double>(
+              valueListenable: _tabProgress,
+              builder: (context, progress, _) => CategoryTabs<String>(
+                key: _tabsKey,
+                options: [
+                  for (final tab in explore.tabs)
+                    ChoiceOption(tab.id, tab.name),
+                ],
+                selected: explore.tab.id,
+                progress: explore.tabs.length > 1 ? progress : null,
+                onSelected: _selectTab,
+                onShowAll: _pickCategory,
+              ),
             ),
           ),
           Positioned(
@@ -496,6 +506,7 @@ class ExplorePageState extends State<ExplorePage> {
       labels: [for (final tab in tabs) tab.name],
       onIndexChanged: (i) => explore.select(tabs[i].id),
       hintTop: hintTop,
+      progress: _tabProgress,
       itemBuilder: (context, page) {
         final tab = tabs[page];
         return KeyedSubtree(
