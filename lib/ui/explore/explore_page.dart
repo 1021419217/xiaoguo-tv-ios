@@ -182,7 +182,7 @@ class ExplorePageState extends State<ExplorePage> {
 
   void _selectTab(String id) {
     if (id != _explore!.tab.id) {
-      unawaited(HapticFeedback.selectionClick());
+      unawaited(AppDevice.softTick());
       _explore!.select(id);
       return;
     }
@@ -212,7 +212,7 @@ class ExplorePageState extends State<ExplorePage> {
       grid: ChoiceGrid.categories,
     );
     if (value != null) {
-      unawaited(HapticFeedback.selectionClick());
+      unawaited(AppDevice.softTick());
       explore.select(value);
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _tabsKey.currentState?.revealSelected(),

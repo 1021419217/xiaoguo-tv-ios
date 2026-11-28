@@ -12,6 +12,21 @@ class AppDevice {
   final String version;
   static const channel = MethodChannel('duanju/device');
 
+  /// 切页轻震：iOS 走原生 UIImpactFeedbackGenerator(.soft)，比 Flutter
+  /// 内置 selectionClick（UISelectionFeedbackGenerator）更柔、更短；
+  /// 原生不可用时回退内置。抖音/上游同款"轻一下不打扰"的触感。
+  static Future<void> softTick() async {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        await channel.invokeMethod<void>('softTick');
+        return;
+      } catch (_) {
+        // 老包原生没有该方法时静默回退内置反馈。
+      }
+    }
+    await HapticFeedback.selectionClick();
+  }
+
   /// 站点人机验证：用原生 WKWebView 打开站点走一遍 Cloudflare 挑战，
   /// 成功后返回它拿到的 cookie 与 WebView 的真实 UA（cf_clearance 绑 UA）。
   static Future<({String cookie, String userAgent})?> solveChallenge(

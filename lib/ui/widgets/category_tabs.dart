@@ -48,7 +48,12 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
   @override
   void didUpdateWidget(covariant CategoryTabs<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.autoReveal && oldWidget.selected != widget.selected) {
+    // 跟手横条（progress != null）禁止自动滚动分类条：滑动时 selected 每帧
+    // 跟着 PageView 变，无条件居中会和跟手下划线打架，表现为整条弹跳。
+    // 只有「全部分类」面板选完才走 revealSelected() 主动定位一次。
+    if (widget.autoReveal &&
+        widget.progress == null &&
+        oldWidget.selected != widget.selected) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
     }
   }
@@ -61,15 +66,27 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
     super.dispose();
   }
 
-  /// 对齐上游 2.0.4+116：每次选中变化都把该项滚到分类条正中，不做
-  /// 「已可见就不动」的最小滚动。上游是 alignment: 0.5 无条件居中。
+  /// 贴边最小滚动（2.5.5+50 的用户认可版本）：选中项已经可见就完全不动，
+  /// 只有确实滚出视口时才贴边滚一下。不再无条件 alignment:0.5 居中——
+  /// 那会在长分类条上产生大幅弹跳，用户明确要求去掉。
   void _reveal() {
     final context = _keys[widget.selected]?.currentContext;
     if (context == null || !mounted) return;
+    final box = context.findRenderObject();
+    final viewport = _scroll.position.context.storageContext.findRenderObject();
+    if (box is! RenderBox || viewport is! RenderBox) return;
+    final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+    final width = _scroll.position.viewportDimension;
+    final right = left + box.size.width;
+    if (left >= -16 && right <= width + 16) return;
+    final atStart = left < 0;
     Scrollable.ensureVisible(
       context,
-      alignment: 0.5,
-      duration: const Duration(milliseconds: 200),
+      alignment: atStart ? 0 : 1,
+      alignmentPolicy: atStart
+          ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
     );
   }

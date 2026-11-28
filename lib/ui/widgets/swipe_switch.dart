@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../app_device.dart';
 import '../theme/motion.dart';
 
 class SwipeSwitch extends StatefulWidget {
@@ -124,7 +124,7 @@ class _SwipeSwitchState extends State<SwipeSwitch>
     _drag = 0;
     final target = widget.index + (next ? 1 : (previous ? -1 : 0));
     if (target != widget.index && target >= 0 && target < widget.count) {
-      unawaited(HapticFeedback.selectionClick());
+      unawaited(AppDevice.softTick());
       widget.onSwitch(target);
       return;
     }

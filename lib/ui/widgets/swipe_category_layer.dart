@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_device.dart';
 import '../app_scope.dart';
 
 /// 「左右翻页切换分类」层，对齐上游短剧之家的 TabView(.page) 手感。
@@ -96,6 +97,14 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     final index = widget.index.clamp(0, widget.itemCount - 1);
     final controller = _pages ??= PageController(initialPage: index);
 
+    // 进页面 / 切站源重建时，把进度出口对齐到真实初始页。
+    // 外层 notifier 初始固定 0，若当前不是第 0 页（记住上次分类、切站源后
+    // 落到别的分类），下划线会停在错误位置——这就是首页横条"完全错误"。
+    final notifier = widget.progress;
+    if (notifier != null && !controller.hasClients) {
+      if (notifier.value != index.toDouble()) notifier.value = index.toDouble();
+    }
+
     // 点击分类胶囊等「外部改 index」：让 PageView 吸附过去。
     final current = controller.hasClients ? controller.page : null;
     if (current == null || (current - index).abs() > 0.02) {
@@ -138,7 +147,7 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
             return;
           }
           if (page == widget.index) return;
-          unawaited(HapticFeedback.selectionClick());
+          unawaited(AppDevice.softTick());
           widget.onIndexChanged(page);
         },
         itemBuilder: (context, page) => widget.itemBuilder!(context, page),
@@ -201,7 +210,7 @@ class _SwipeCategoryLayerState extends State<SwipeCategoryLayer>
     if (widget.itemCount < 2) return;
     final next = widget.index + delta;
     if (next < 0 || next >= widget.itemCount) return;
-    unawaited(HapticFeedback.selectionClick());
+    unawaited(AppDevice.softTick());
     _anim.forward(from: 0);
     widget.onIndexChanged(next);
     setState(() => _dragX = 0);

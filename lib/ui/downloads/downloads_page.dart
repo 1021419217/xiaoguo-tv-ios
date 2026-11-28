@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app_device.dart';
 import '../../cover_shape.dart';
 import '../../download_collections.dart';
 import '../../download_converter.dart';
@@ -112,7 +113,7 @@ class _DownloadsPageState extends State<DownloadsPage>
     // 与首页滑分类同款：每越过一个分类轻震一次。
     if (index != _vibratedPage) {
       _vibratedPage = index;
-      unawaited(HapticFeedback.selectionClick());
+      unawaited(AppDevice.softTick());
     }
     setState(() {
       _page = index;
@@ -129,7 +130,7 @@ class _DownloadsPageState extends State<DownloadsPage>
       if (!mounted || target == _page) return;
       if (target != _vibratedPage) {
         _vibratedPage = target;
-        unawaited(HapticFeedback.selectionClick());
+        unawaited(AppDevice.softTick());
       }
       setState(() => _page = target);
       return;

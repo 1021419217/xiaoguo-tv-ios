@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../../app_device.dart';
 import '../../core_bridge.dart';
 import '../../local_store.dart';
 import '../../models.dart';
@@ -118,16 +119,25 @@ class _ModulesPageState extends State<ModulesPage>
     super.dispose();
   }
 
-  /// 上次已震动反馈的标签页。TabController 的 listener 每帧都触发，
-  /// 必须按 index 去重，否则一次滑动会狂震几十下。
+  /// 上次已震动反馈的标签页。listener 每帧都触发，必须去重。
   int _vibratedTab = 0;
+
+  /// 点击跨多页时动画会依次经过中间页，这些不是用户意图，屏蔽中途震动。
+  int? _animatingTo;
 
   void _tabChanged() {
     if (!mounted) return;
-    // 与首页滑分类同款：每越过一个分类轻震一次（点击切页也震一次）。
-    if (_tabs.index != _vibratedTab) {
-      _vibratedTab = _tabs.index;
-      unawaited(HapticFeedback.selectionClick());
+    // 关键：用连续动画进度判断"越过中点"的那一刻，而不是离散 _tabs.index。
+    // _tabs.index 在手指滑动期间保持不变、要等页面停稳才跳，导致震动和
+    // 文字高亮比跟手下划线慢近一秒；animation.value.round() 与下划线同源，
+    // 滑过一半立刻切换，三者同步。
+    final pos = _tabs.animation?.value ?? _tabs.index.toDouble();
+    final page = pos.round().clamp(0, _tabs.length - 1).toInt();
+    if (_animatingTo != null) {
+      if (page == _animatingTo && !_tabs.indexIsChanging) _animatingTo = null;
+    } else if (page != _vibratedTab) {
+      _vibratedTab = page;
+      unawaited(AppDevice.softTick());
     }
     if (!_tabs.indexIsChanging) setState(() {});
   }
@@ -147,13 +157,18 @@ class _ModulesPageState extends State<ModulesPage>
     ];
     void select(int index) {
       if (index == _tabs.index) return;
+      // 跨多页点击：记录目标，中途不震、高亮交给连续进度跟手。
+      _animatingTo = index;
       _tabs.animateTo(index);
       setState(() {});
     }
 
     Widget tabs(double? progress) => CategoryTabs<int>(
       options: options,
-      selected: _tabs.index,
+      // 高亮读连续进度取整，与下划线同源：滑过一半立刻换，不再等停稳。
+      selected: progress == null
+          ? _tabs.index
+          : progress.round().clamp(0, labels.length - 1).toInt(),
       progress: progress,
       onSelected: select,
     );

@@ -202,6 +202,18 @@ import WebKit
             result(["cookie": cookie, "ua": agent ?? ""])
           }
           return
+        case "softTick":
+          // 切页轻震：.soft 是 iOS 最轻的一档反馈，比 selection 更柔、更短，
+          // 用于分类滑动每次越过一个页的触感，避免连滑时"咚咚"吵。
+          if #available(iOS 13.0, *) {
+            let generator = UIImpactFeedbackGenerator(style: .soft)
+            generator.impactOccurred()
+          } else {
+            let generator = UISelectionFeedbackGenerator()
+            generator.selectionChanged()
+          }
+          result(nil)
+          return
         case "getBrightness":
           result(self.screen.map { Double($0.brightness) })
           return
