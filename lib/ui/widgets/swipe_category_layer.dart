@@ -4,7 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../app_device.dart';
+import '../../app_device.dart';
 import '../app_scope.dart';
 
 /// 「左右翻页切换分类」层，对齐上游短剧之家的 TabView(.page) 手感。
