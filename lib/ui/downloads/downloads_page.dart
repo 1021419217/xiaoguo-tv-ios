@@ -506,25 +506,16 @@ class _DownloadsPageState extends State<DownloadsPage>
       _animateTo(index == 0 ? 0 : 1);
     }
 
-    Widget tabs(double? progress) => CategoryTabs<int>(
-      options: options,
-      selected: _page >= 1 ? 1 : 0,
-      progress: progress,
-      onSelected: select,
-    );
-
+    // 与首页同款：分类条和 PageView 共用 _tabs，画家自己订阅控制器重绘。
+    // 页 0 = 下载中、页 >=1 = 已下载，映射到两条主标签 0..1。
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      // PageController 滚动时每帧回传位置，只重建这条分类栏。
-      child: AnimatedBuilder(
-        animation: _tabs,
-        builder: (context, _) {
-          final p = _tabs.hasClients ? _tabs.page : null;
-          final projected = p == null
-              ? null
-              : (p >= 1 ? 1.0 : (p < 0 ? 0.0 : p));
-          return tabs(projected);
-        },
+      child: CategoryTabs<int>(
+        options: options,
+        selected: _page >= 1 ? 1 : 0,
+        pager: _tabs,
+        projectPage: (p) => p >= 1 ? 1.0 : (p < 0 ? 0.0 : p),
+        onSelected: select,
       ),
     );
   }
@@ -739,26 +730,18 @@ class _DownloadsPageState extends State<DownloadsPage>
       _animateTo(i + 1);
     }
 
+    // 与首页同款画家：页 p>=1 对应站源序号 p-1。画家自己订阅 _tabs 重绘。
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: inset),
-      child: AnimatedBuilder(
-        animation: _tabs,
-        builder: (context, _) {
-          final p = _tabs.hasClients ? _tabs.page : null;
-          // 页 p>=1 对应站源序号 p-1， clamp 防止越界。
-          final progress = p == null
-              ? null
-              : (p - 1).clamp(0.0, (options.length - 1).toDouble());
-          return CategoryTabs<String>(
-            key: const ValueKey('download-source-tabs-done'),
-            options: options,
-            selected: view.source,
-            progress: progress,
-            onSelected: (id) {
-              final i = options.indexWhere((o) => o.value == id);
-              if (i >= 0) jump(i);
-            },
-          );
+      child: CategoryTabs<String>(
+        key: const ValueKey('download-source-tabs-done'),
+        options: options,
+        selected: view.source,
+        pager: _tabs,
+        projectPage: (p) => p - 1,
+        onSelected: (id) {
+          final i = options.indexWhere((o) => o.value == id);
+          if (i >= 0) jump(i);
         },
       ),
     );

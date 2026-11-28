@@ -468,22 +468,14 @@ class _LivePageState extends State<LivePage> {
       for (final platform in _visiblePlatforms)
         ChoiceOption(platform.id, platform.name),
     ];
-    Widget tabs(double? progress) => CategoryTabs<String>(
+    // 与首页同款：分类条和 PageView 共用 _pager，下划线画家自己订阅控制器，
+    // 跟手且始终可见。宽屏/电视走网格、_pager 无 client，画家自动退回选中值。
+    return CategoryTabs<String>(
       options: options,
       selected: _platform,
-      progress: progress,
+      pager: _pager,
       onSelected: _selectPlatform,
       onShowAll: _pickCategory,
-    );
-    // 与首页同款跟手横条：直接读 _pager 的连续位置。手机端才有 PageView，
-    // 宽屏/电视走网格、_pager 无 client，此时退化为选中值驱动的普通横条。
-    final pager = _pager;
-    return AnimatedBuilder(
-      animation: pager,
-      builder: (context, _) {
-        final p = pager.hasClients ? pager.page : null;
-        return tabs(p == null ? null : p.clamp(0.0, (options.length - 1).toDouble()));
-      },
     );
   }
 

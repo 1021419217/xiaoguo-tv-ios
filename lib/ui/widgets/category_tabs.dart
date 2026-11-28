@@ -18,6 +18,7 @@ class CategoryTabs<T> extends StatefulWidget {
     this.autoReveal = true,
     this.progress,
     this.pager,
+    this.projectPage,
   });
   final List<ChoiceOption<T>> options;
   final T selected;
@@ -35,6 +36,11 @@ class CategoryTabs<T> extends StatefulWidget {
   /// 下划线画家 [repaint: pager]，每帧读 `pager.page` 在相邻两个 tab 间插值，
   /// 不需要外部 notifier，也不重建分类条——跟手且始终可见。
   final PageController? pager;
+
+  /// 页面位置 → 分类下标的映射（默认恒等，与上游一致）。
+  /// 下载页特殊：页 0 是「下载中」、页 >=1 是各站源，主分类只有 2 项、
+  /// 站源分类从页 1 起，需要把 pager.page 投影到各自的下标空间。
+  final double Function(double page)? projectPage;
 
   @override
   State<CategoryTabs<T>> createState() => CategoryTabsState<T>();
@@ -289,6 +295,7 @@ class CategoryTabsState<T> extends State<CategoryTabs<T>> {
                                   ),
                                   inset: padding,
                                   color: lineColor,
+                                  project: widget.projectPage,
                                 ),
                               ),
                             ),
@@ -361,6 +368,7 @@ class _PagerIndicator extends CustomPainter {
     required this.selected,
     required this.inset,
     required this.color,
+    this.project,
   }) : super(repaint: pager);
   final PageController pager;
   final GlobalKey row;
@@ -368,6 +376,7 @@ class _PagerIndicator extends CustomPainter {
   final int selected;
   final double inset;
   final Color color;
+  final double Function(double page)? project;
 
   Rect? _rect(int index) {
     if (index < 0 || index >= tabs.length) return null;
@@ -380,17 +389,19 @@ class _PagerIndicator extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final page =
+    final live =
         pager.hasClients &&
-            pager.positions.length == 1 &&
-            pager.position.hasContentDimensions
-        ? pager.page ?? selected.toDouble()
-        : selected.toDouble();
-    final low = page.floor();
+        pager.positions.length == 1 &&
+        pager.position.hasContentDimensions;
+    final raw = live ? pager.page : null;
+    // 只有真实页位置才做投影；兜底值 selected 已经是分类下标，不能再映射。
+    final projected = (raw == null ? selected.toDouble() : project?.call(raw) ?? raw)
+        .clamp(0.0, (tabs.length - 1).toDouble());
+    final low = projected.floor();
     final from = _rect(low);
     final to = _rect(low + 1) ?? from;
     if (from == null || to == null) return;
-    final rect = Rect.lerp(from, to, page - low)!;
+    final rect = Rect.lerp(from, to, projected - low)!;
     canvas.drawRRect(
       RRect.fromRectAndCorners(
         Rect.fromLTWH(rect.left, size.height - 3, rect.width, 3),
